@@ -12,11 +12,10 @@
 // ---- jet energy corrections ----
 // Applied to rawpt for every jet before any selection.
 // L2Relative removes detector non-uniformities; L2Residuals is what we are measuring.
-// For the asymmetry generator, include L2L3 through the current residuals iteration.
-// EOS: /afs/cern.ch/user/n/nbarnett/public/txt_files/L2L3_ppReco_2024ppRef/
+// For iteration 0 only L2Relative is applied. Once a residuals file exists, add it here.
 inline const std::vector<std::string> kJECFiles = {
-    "data/jec/2024ppRef_withPU_L2Relative_AK4PF.txt",
-    "data/jec/L2Residuals_2024ppRef_12_15_2025.txt",
+    "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK4PF.txt",
+    // "data/jec/L2Residuals_2024ppRef_iter1.txt",  // uncomment after iteration 0
 };
 
 // ---- veto map (DATA only) ----

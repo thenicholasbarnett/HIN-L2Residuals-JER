@@ -9,7 +9,8 @@
 
 #include "JetCorrector.h"
 #include "JetSelection.h"
-// #include "JSON_handler.h"   // requires: sudo pacman -S nlohmann-json
+// Requires nlohmann-json (sudo pacman -S nlohmann-json) before first build.
+#include "JSON_handler.h"
 
 #include "BranchMapping.h"
 #include "EventStructs.h"
@@ -21,6 +22,7 @@
 
 #include "2024ppRef.h"
 
+#include <memory>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -48,7 +50,8 @@ void runAsymmetry(TString input, TString output, TString modeFlag) {
 
     JetCorrector jec(kJECFiles);
     JetSelect js(kVetoMapPath);
-    // JSON_handler dcs(kJSONPath);   // requires: sudo pacman -S nlohmann-json
+    std::unique_ptr<JSON_handler> dcs;
+    if (mode != RunMode::MC) dcs = std::make_unique<JSON_handler>(kJSONPath.Data());
 
     // ---- TTree branch structs ----
     JetStruct<kNRefMax> jets;
@@ -154,8 +157,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag) {
         for (size_t c = 0; c < nJetTrees; c++) trees[c]->GetEntry(i);
         if (jets.reco.nref < 2) continue;
 
-        // DATA modes: golden JSON — uncomment after: sudo pacman -S nlohmann-json
-        // if (mode != RunMode::MC && !dcs.isGood(event.run, event.lumi)) continue;
+        if (dcs && !dcs->isGood(event.run, event.lumi)) continue;
 
         const float weight = event.w;
 
