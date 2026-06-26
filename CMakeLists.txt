@@ -20,8 +20,8 @@ else()
     target_link_libraries(l2residuals INTERFACE ${ROOT_LIBRARIES})
 endif()
 
-# build each macro as an executable
-file(GLOB MACROS macros/*.C)
+# build each entry-point in bin/ as an executable
+file(GLOB MACROS bin/*.C)
 foreach(macro ${MACROS})
     get_filename_component(name ${macro} NAME_WE)
     add_executable(${name} ${macro})

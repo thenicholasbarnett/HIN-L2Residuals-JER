@@ -28,22 +28,24 @@ inline const TString kJSONPath =
 // ---- TTree paths ----
 // DATA has three main trees + a separate HLT decision tree.
 // MC has two trees (no filter tree, no trigger tree).
-inline const TString kHiTreePath       = "hiEvtAnalyzer/HiTree";
-inline const TString kSkimTreePath     = "skimanalysis/HltTree";   // ppvF filter lives here
-inline const TString kJetTreePath      = "ak4PFJetAnalyzer/t";
-inline const TString kTrigTreePath     = "hltanalysis/HltTree";    // HLT decisions (DATA only)
+inline const TString kHiTreePath   = "hiEvtAnalyzer/HiTree";
+inline const TString kSkimTreePath = "skimanalysis/HltTree";   // ppvF filter (DATA modes)
+inline const TString kTrigTreePath = "hltanalysis/HltTree";    // HLT decisions (HardProbes only)
 // TODO: confirm kTrigTreePath from the HiForest file — check with TFile::ls()
 
-// ---- triggers (DATA only) ----
-// Branch names in the HLT tree.  Version suffix (_v*) may change between
-// runs — check the trigger menu for the 2024 pp reference period.
-inline const TString kHLTJ40Branch     = "HLT_AK4PFJet40_v1";
-inline const TString kHLTJ80Branch     = "HLT_AK4PFJet80_v1";
-// TODO: confirm branch names from trigger menu / TTree::Print()
+// Jet tree paths indexed by cone size — parallel to kConeLabels
+inline const std::vector<TString> kJetTreePaths = {
+    "ak4PFJetAnalyzer/t",
+};
 
-// Efficiency thresholds: the trigger is fully efficient above these pT values.
-static constexpr float kHLTJ40Thresh  = 45.0f;   // GeV
-static constexpr float kHLTJ80Thresh  = 95.0f;   // GeV
+// ---- trigger (HardProbes mode only) ----
+// Branch name in the HLT tree.  Version suffix (_v*) may change between
+// runs — check the trigger menu for the 2024 pp reference period.
+inline const TString kHLTJ80Branch    = "HLT_AK4PFJet80_v1";
+// TODO: confirm branch name from trigger menu / TTree::Print()
+
+// Leading jet pT must exceed this threshold for the trigger to be fully efficient.
+static constexpr float kHLTJ80Thresh = 95.0f;   // GeV
 
 // ---- cone sizes ----
 // Labels used to prefix histogram names; one ConeHistograms instance per entry.

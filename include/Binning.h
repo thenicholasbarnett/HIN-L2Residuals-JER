@@ -70,7 +70,7 @@ struct BinningConfig {
 
     // 4D THnSparse axes — listed in axis order (0 through 3)
     AxisBins eta       = AxisBinsFromEdges(kEtaEdges,    "#eta_{probe}");
-    AxisBins ptavg     = {990, 10.0, 1000.0, "p_{T,avg} (GeV)"};
+    AxisBins ptavg     = {990, 10.0, 1000.0, "p_{T,avg} [GeV/c]"};
     AxisBins alpha     = {50, 0.0, 0.5, "#alpha = p_{T,3} / p_{T,avg}"};
     AxisBins asymmetry = {100, -1.0, 1.0, "A"};
 
@@ -79,7 +79,7 @@ struct BinningConfig {
 
     // control histogram axes
     AxisBins vz  = {40, -20.0, 20.0, "v_{z} (cm)"};
-    AxisBins pt  = {500, 0.0, 1000.0, "p_{T} (GeV)"};
+    AxisBins pt  = {100, 0.0, 1000.0, "p_{T} (GeV)"};
     AxisBins phi = {64, -3.2, 3.2, "#phi (rad)"};
     AxisBins trig = {2, 0, 2, "trigger decision"};
 

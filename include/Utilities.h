@@ -5,6 +5,7 @@
 #include "TH1I.h"
 #include "TH1.h"
 #include "TH2D.h"
+#include "TH3.h"
 #include "THnSparse.h"
 #include "TMath.h"
 #include "TString.h"
@@ -166,6 +167,24 @@ template<typename T>
 T* MakeTH1(const TString& hname, const AxisBins& bins){
     T* h = new T(hname, hname, bins.nBins, bins.lo, bins.hi);
     h->SetTitle(bins.title);
+    return h;
+}
+
+// TH3D(eta, phi, pT) with variable-width CMS JEC eta bins on X.
+// Pass kEtaEdges for full eta or kAbsEtaEdges for |eta|.
+inline TH3D* MakeTH3DEtaPhiPt(const TString& name,
+                                const std::vector<Double_t>& etaEdges,
+                                const AxisBins& phi,
+                                const AxisBins& pt,
+                                const TString& etaTitle = "#eta"){
+    TH3D* h = new TH3D(name, "",
+        (Int_t)etaEdges.size() - 1, etaEdges.data(),
+        phi.nBins, (Double_t)phi.lo, (Double_t)phi.hi,
+        pt.nBins,  (Double_t)pt.lo,  (Double_t)pt.hi);
+    h->GetXaxis()->SetTitle(etaTitle);
+    h->GetYaxis()->SetTitle(phi.title);
+    h->GetZaxis()->SetTitle(pt.title);
+    h->Sumw2();
     return h;
 }
 

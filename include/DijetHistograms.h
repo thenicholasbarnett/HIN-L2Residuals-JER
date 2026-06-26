@@ -1,7 +1,7 @@
 #ifndef DIJETHISTOGRAMS_H
 #define DIJETHISTOGRAMS_H
 
-#include "TH1D.h"
+#include "TH3.h"
 #include "THnSparse.h"
 #include "TString.h"
 
@@ -9,76 +9,56 @@
 #include "Utilities.h"
 #include "Dijet.h"
 
-// One instance per cone size. Each instance owns a single 4D THnSparse filled
-// once per valid dijet event at the event's actual (etaProbe, pT_avg, alpha, A).
-// Alpha slices are extracted cumulatively at analysis time via SetRangeUser —
-// see BinningConfig::alphaSlices.
+// One instance per cone size. Each instance owns:
+//   hAsym    — 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet event
+//   hInclJet — TH3D (eta, phi, pT) for all corrected jets passing kMinPt
+//   hTagJet  — TH3D (eta, phi, pT) for the tag jet of each valid dijet
+//   hProbeJet — TH3D (eta, phi, pT) for the probe jet of each valid dijet
+//
+// The TH3Ds use variable-width CMS JEC eta bins on X, enabling eta-phi maps
+// at arbitrary pT thresholds via SetRangeUser on Z + Project3D("yx").
 
 struct ConeHistograms {
 
-    // axis indices into hAsym — used by extraction code for SetRangeUser and Projection
     static constexpr int kEtaAxis   = 0;
     static constexpr int kPtAvgAxis = 1;
     static constexpr int kAlphaAxis = 2;
     static constexpr int kAAxis     = 3;
 
-    // main physics histogram: 4D (eta_probe, pT_avg, alpha, A)
-    THnSparse* hAsym = nullptr;
+    THnSparse* hAsym     = nullptr;
+    TH3D*      hInclJet  = nullptr;
+    TH3D*      hTagJet   = nullptr;
+    TH3D*      hProbeJet = nullptr;
 
-    // control histograms — inclusive jets (all corrected jets in event), tag, probe
-    TH1D* hPtIncl    = nullptr;
-    TH1D* hEtaIncl   = nullptr;
-    TH1D* hPhiIncl   = nullptr;
-    TH1D* hPtTag     = nullptr;
-    TH1D* hEtaTag    = nullptr;
-    TH1D* hPhiTag    = nullptr;
-    TH1D* hPtProbe   = nullptr;
-    TH1D* hEtaProbe  = nullptr;
-    TH1D* hPhiProbe  = nullptr;
-
-    // prefix is the cone size label, e.g. "ak4PF" — prepended to all histogram names
     void Init(const TString& prefix, const BinningConfig& bins) {
         hAsym = MakeTHnSparse<THnSparseD>(prefix + "_asym", "",
             {bins.eta, bins.ptavg, bins.alpha, bins.asymmetry});
         SetEtaBins(hAsym, kEtaAxis);
         hAsym->Sumw2();
 
-        hPtIncl   = MakeTH1<TH1D>(prefix + "_pt_incl",   bins.pt);
-        hEtaIncl  = MakeTH1<TH1D>(prefix + "_eta_incl",  bins.eta);
-        hPhiIncl  = MakeTH1<TH1D>(prefix + "_phi_incl",  bins.phi);
-        hPtTag    = MakeTH1<TH1D>(prefix + "_pt_tag",    bins.pt);
-        hEtaTag   = MakeTH1<TH1D>(prefix + "_eta_tag",   bins.eta);
-        hPhiTag   = MakeTH1<TH1D>(prefix + "_phi_tag",   bins.phi);
-        hPtProbe  = MakeTH1<TH1D>(prefix + "_pt_probe",  bins.pt);
-        hEtaProbe = MakeTH1<TH1D>(prefix + "_eta_probe", bins.eta);
-        hPhiProbe = MakeTH1<TH1D>(prefix + "_phi_probe", bins.phi);
+        hInclJet  = MakeTH3DEtaPhiPt(prefix + "_incl",  kEtaEdges, bins.phi, bins.pt);
+        hTagJet   = MakeTH3DEtaPhiPt(prefix + "_tag",   kEtaEdges, bins.phi, bins.pt);
+        hProbeJet = MakeTH3DEtaPhiPt(prefix + "_probe", kEtaEdges, bins.phi, bins.pt);
     }
 
-    // called once per valid dijet event
-    void Fill(const DijetResult& d, const float* pt, const float* eta, const float* phi, float weight) {
+    void Fill(const DijetResult& d, const float* pt, const float* eta,
+              const float* phi, float weight) {
         double x[4] = {eta[d.probeIdx], d.ptavg, d.alpha, d.A};
         hAsym->Fill(x, weight);
 
-        hPtTag   ->Fill(pt [d.tagIdx],   weight);
-        hEtaTag  ->Fill(eta[d.tagIdx],   weight);
-        hPhiTag  ->Fill(phi[d.tagIdx],   weight);
-        hPtProbe ->Fill(pt [d.probeIdx], weight);
-        hEtaProbe->Fill(eta[d.probeIdx], weight);
-        hPhiProbe->Fill(phi[d.probeIdx], weight);
+        hTagJet  ->Fill(eta[d.tagIdx],   phi[d.tagIdx],   pt[d.tagIdx],   weight);
+        hProbeJet->Fill(eta[d.probeIdx], phi[d.probeIdx], pt[d.probeIdx], weight);
     }
 
-    // called per corrected jet in the inclusive jet loop
     void FillInclJet(float corrPt, float jetEta, float jetPhi, float weight) {
-        hPtIncl ->Fill(corrPt,  weight);
-        hEtaIncl->Fill(jetEta,  weight);
-        hPhiIncl->Fill(jetPhi,  weight);
+        hInclJet->Fill(jetEta, jetPhi, corrPt, weight);
     }
 
     void Write() {
         WriteAll(hAsym);
-        WriteAll(hPtIncl);   WriteAll(hEtaIncl);   WriteAll(hPhiIncl);
-        WriteAll(hPtTag);    WriteAll(hEtaTag);     WriteAll(hPhiTag);
-        WriteAll(hPtProbe);  WriteAll(hEtaProbe);   WriteAll(hPhiProbe);
+        WriteAll(hInclJet);
+        WriteAll(hTagJet);
+        WriteAll(hProbeJet);
     }
 };
 
