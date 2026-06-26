@@ -1,14 +1,13 @@
 // Asymmetry generator for 2024 pp reference run L2 Residual JEC.
 //
-// Unified MC / zero-bias / hard-probes entry point.  Compile via CMake then run:
-//   ./runAsymmetry <input.root> <output.root> --mc
-//   ./runAsymmetry <input.root> <output.root> --zero-bias
-//   ./runAsymmetry <input.root> <output.root> --hard-probes
+// Compiled:    ./runAsymmetry <input.root> <output.root> --mc|--zero-bias|--hard-probes
+// Interpreted: root -l -b -q 'bin/runAsymmetry.C("input.root","output.root","--mc")'
+//              (run from the repo root so R__ADD_INCLUDE_PATH resolves correctly)
 //
 // Run modes:
-//   MC          — no trigger, no ppvF filter, pthat-weighted fills
-//   ZeroBias    — ppvF filter, no trigger cut (unbiased dataset)
-//   HardProbes  — ppvF filter, HLT_AK4PFJet80 only
+//   --mc           no trigger, no ppvF filter, pthat-weighted fills
+//   --zero-bias    ppvF filter, no trigger cut (unbiased dataset)
+//   --hard-probes  ppvF filter, HLT_AK4PFJet80 only (default)
 //
 // TTree layout in trees[]:
 //   [0 .. nJetTrees-1]  jet trees, one per cone size (kConeLabels / kJetTreePaths)
@@ -17,7 +16,11 @@
 //   [kTrigIdx]          hltanalysis/HltTree   (HardProbes only)
 //
 // JSON_handler.h requires nlohmann/json — install with: sudo pacman -S nlohmann-json
-// All other dependencies are in include/.
+
+#ifdef __CLING__
+R__ADD_INCLUDE_PATH(include)
+R__ADD_INCLUDE_PATH(configs)
+#endif
 
 #include "TFile.h"
 #include "TTree.h"
@@ -42,40 +45,28 @@
 
 #include <vector>
 #include <string>
-#include <stdexcept>
 #include <iostream>
 
 enum class RunMode { MC, ZeroBias, HardProbes };
 
-static constexpr Int_t   kNRefMax  = 200;
-static constexpr float   kVzCut    = 15.0f;
-static constexpr float   kMinPt    = 10.0f;
-static constexpr float   kMaxAbsA  = 0.7f;
+static constexpr Int_t  kNRefMax = 200;
+static constexpr float  kVzCut   = 15.0f;
+static constexpr float  kMinPt   = 10.0f;
+static constexpr float  kMaxAbsA = 0.7f;
 
-int main(int argc, char* argv[]) {
-
-    if (argc < 4) {
-        std::cerr << "Usage: runAsymmetry <input.root> <output.root> --mc|--zero-bias|--hard-probes\n";
-        return 1;
-    }
-
-    TString input  = argv[1];
-    TString output = argv[2];
+void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-probes") {
 
     RunMode mode = RunMode::HardProbes;
-    for (int i = 3; i < argc; i++) {
-        std::string arg = argv[i];
-        if      (arg == "--mc")           mode = RunMode::MC;
-        else if (arg == "--zero-bias")    mode = RunMode::ZeroBias;
-        else if (arg == "--hard-probes")  mode = RunMode::HardProbes;
-    }
+    if      (modeFlag == "--mc")          mode = RunMode::MC;
+    else if (modeFlag == "--zero-bias")   mode = RunMode::ZeroBias;
+    else if (modeFlag == "--hard-probes") mode = RunMode::HardProbes;
 
-    const char* modeStr = (mode == RunMode::MC)        ? "MC"
-                        : (mode == RunMode::ZeroBias)   ? "zero bias"
-                                                        : "hard probes";
-    std::cout << "Mode:   " << modeStr  << "\n";
-    std::cout << "Input:  " << input    << "\n";
-    std::cout << "Output: " << output   << "\n";
+    const char* modeStr = (mode == RunMode::MC)       ? "MC"
+                        : (mode == RunMode::ZeroBias)  ? "zero bias"
+                                                       : "hard probes";
+    std::cout << "Mode:   " << modeStr << "\n";
+    std::cout << "Input:  " << input   << "\n";
+    std::cout << "Output: " << output  << "\n";
 
     // ---- jet energy corrections ----
     JetCorrector jec(kJECFiles);
@@ -91,13 +82,13 @@ int main(int argc, char* argv[]) {
     JetStruct<kNRefMax> jets;
     EventStruct         event;
     FiltersStruct       filters;
-    Int_t               hlt_j80 = 0;   // HardProbes only
+    Int_t               hlt_j80 = 0;
 
     // ---- open input file ----
     TFile* fi = TFile::Open(input, "read");
     if (!fi || fi->IsZombie()) {
         std::cerr << "Cannot open " << input << "\n";
-        return 1;
+        return;
     }
 
     // ---- TTree array: jet trees first, then event / skim / trig ----
@@ -112,20 +103,20 @@ int main(int argc, char* argv[]) {
         trees[c] = (TTree*)fi->Get(kJetTreePaths[c]);
         if (!trees[c]) {
             std::cerr << "Missing jet tree " << kJetTreePaths[c] << " in " << input << "\n";
-            return 1;
+            return;
         }
     }
     trees[kEvtIdx] = (TTree*)fi->Get(kHiTreePath);
     if (!trees[kEvtIdx]) {
         std::cerr << "Missing HiTree in " << input << "\n";
-        return 1;
+        return;
     }
     if (mode != RunMode::MC) {
         trees[kSkimIdx] = (TTree*)fi->Get(kSkimTreePath);
         if (!trees[kSkimIdx]) {
             std::cerr << "Missing skim tree in " << input
                       << "\n(check kSkimTreePath in configs/2024ppRef.h)\n";
-            return 1;
+            return;
         }
     }
     if (mode == RunMode::HardProbes) {
@@ -133,12 +124,11 @@ int main(int argc, char* argv[]) {
         if (!trees[kTrigIdx]) {
             std::cerr << "Missing HLT tree in " << input
                       << "\n(check kTrigTreePath in configs/2024ppRef.h)\n";
-            return 1;
+            return;
         }
     }
 
     // ---- branch setup ----
-    // TODO: when adding cone sizes beyond the first, loop over c and bind jets[c] to trees[c]
     const bool isMC = (mode == RunMode::MC);
     SetBranches(trees[kEvtIdx], event.BranchMap(isMC));
     SetBranches(trees[0],       jets.BranchMap(isMC));
@@ -154,15 +144,13 @@ int main(int argc, char* argv[]) {
     // ---- QA histograms ----
     TH1D* hvz_all = new TH1D("hvz_all", "all events;v_{z} (cm);N",         40, -20, 20);
     TH1D* hvz     = new TH1D("hvz",     "after vz+filter;v_{z} (cm);N",    40, -20, 20);
-    TH1I* hfilt   = (mode != RunMode::MC)        ? new TH1I("hfilt",    "ppvF;filter;N",         2, 0, 2) : nullptr;
-    TH1I* h_j80   = (mode == RunMode::HardProbes) ? new TH1I("h_hlt_j80","HLT_AK4PFJet80;bit;N", 2, 0, 2) : nullptr;
+    TH1I* hfilt   = (mode != RunMode::MC)         ? new TH1I("hfilt",     "ppvF;filter;N",         2, 0, 2) : nullptr;
+    TH1I* h_j80   = (mode == RunMode::HardProbes) ? new TH1I("h_hlt_j80", "HLT_AK4PFJet80;bit;N", 2, 0, 2) : nullptr;
 
     // ---- physics histograms ----
     BinningConfig bins;
     std::vector<ConeHistograms> cones(nJetTrees);
-    for (size_t c = 0; c < nJetTrees; c++) {
-        cones[c].Init(kConeLabels[c], bins);
-    }
+    for (size_t c = 0; c < nJetTrees; c++) cones[c].Init(kConeLabels[c], bins);
 
     // ---- corrected pT buffer ----
     float corrPt[kNRefMax] = {};
@@ -176,7 +164,6 @@ int main(int argc, char* argv[]) {
 
         trees[kEvtIdx]->GetEntry(i);
         hvz_all->Fill(event.vz);
-
         if (TMath::Abs(event.vz) > kVzCut) continue;
 
         if (mode != RunMode::MC) {
@@ -192,7 +179,6 @@ int main(int argc, char* argv[]) {
             h_j80->Fill(hlt_j80);
         }
 
-        // load jets (loop is trivial for now — extend for multiple cone sizes)
         for (size_t c = 0; c < nJetTrees; c++) trees[c]->GetEntry(i);
         if (jets.reco.nref < 2) continue;
 
@@ -214,7 +200,6 @@ int main(int argc, char* argv[]) {
         SortedJets sorted = FindLeadingJets(corrPt, jets.reco.nref);
         if (sorted.lead == -1 || sorted.sublead == -1) continue;
 
-        // HardProbes: require HLT_AK4PFJet80 and leading jet above its efficiency threshold
         if (mode == RunMode::HardProbes) {
             bool noTrig     = (hlt_j80 == 0);
             bool j80Ineffic = (hlt_j80 == 1 && corrPt[sorted.lead] <= kHLTJ80Thresh);
@@ -248,9 +233,8 @@ int main(int argc, char* argv[]) {
         if (!dijet.valid) continue;
         if (TMath::Abs(dijet.A) > kMaxAbsA) continue;
 
-        for (size_t c = 0; c < cones.size(); c++) {
+        for (size_t c = 0; c < cones.size(); c++)
             cones[c].Fill(dijet, corrPt, jets.reco.eta, jets.reco.phi, weight);
-        }
     }
 
     pb.Finish();
@@ -258,15 +242,22 @@ int main(int argc, char* argv[]) {
     // ---- write output ----
     TFile* fo = new TFile(output, "recreate");
     fo->cd();
-
     hvz_all->Write();
     hvz->Write();
     if (hfilt) hfilt->Write();
     if (h_j80) h_j80->Write();
     for (auto& cone : cones) cone.Write();
-
     fo->Close();
     fi->Close();
+}
 
+#ifndef __CLING__
+int main(int argc, char* argv[]) {
+    if (argc < 3) {
+        std::cerr << "Usage: runAsymmetry <input.root> <output.root> [--mc|--zero-bias|--hard-probes]\n";
+        return 1;
+    }
+    runAsymmetry(argv[1], argv[2], argc > 3 ? argv[3] : "--hard-probes");
     return 0;
 }
+#endif
