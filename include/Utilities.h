@@ -172,15 +172,23 @@ T* MakeTH1(const TString& hname, const AxisBins& bins){
 
 // TH3D(eta, phi, pT) with variable-width CMS JEC eta bins on X.
 // Pass kEtaEdges for full eta or kAbsEtaEdges for |eta|.
+// TH3D has no mixed uniform/variable constructor, so uniform phi and pT
+// edge arrays are built from the AxisBins and the all-variable overload is used.
 inline TH3D* MakeTH3DEtaPhiPt(const TString& name,
                                 const std::vector<Double_t>& etaEdges,
                                 const AxisBins& phi,
                                 const AxisBins& pt,
                                 const TString& etaTitle = "#eta"){
-    TH3D* h = new TH3D(name, "",
+    std::vector<Double_t> phiEdges(phi.nBins + 1), ptEdges(pt.nBins + 1);
+    for (int i = 0; i <= phi.nBins; i++)
+        phiEdges[i] = phi.lo + i * (phi.hi - phi.lo) / phi.nBins;
+    for (int i = 0; i <= pt.nBins; i++)
+        ptEdges[i] = pt.lo + i * (pt.hi - pt.lo) / pt.nBins;
+
+    TH3D* h = new TH3D(name.Data(), "",
         (Int_t)etaEdges.size() - 1, etaEdges.data(),
-        phi.nBins, (Double_t)phi.lo, (Double_t)phi.hi,
-        pt.nBins,  (Double_t)pt.lo,  (Double_t)pt.hi);
+        phi.nBins, phiEdges.data(),
+        pt.nBins,  ptEdges.data());
     h->GetXaxis()->SetTitle(etaTitle);
     h->GetYaxis()->SetTitle(phi.title);
     h->GetZaxis()->SetTitle(pt.title);

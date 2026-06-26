@@ -162,29 +162,31 @@ int main(){
 
     // ----------------------------------------------------------------
     // Test 6: negative and positive fills at different |eta| values
-    //   fill eta = +0.5 (|eta| bin 2) and eta = -2.5 (|eta| bin 12)
-    //   these should NOT add together — they land in different |eta| bins
+    //   fill eta = +0.5 (|eta| bin 2) and eta = -2.6 (|eta| bin 12, interior)
+    //   these should NOT add together — they land in different |eta| bins.
+    //   Note: -2.5 is exactly on edge kEtaEdges[7] and would go to the
+    //   adjacent bin due to ROOT's bin-edge convention, so -2.6 is used instead.
     // ----------------------------------------------------------------
     std::cout << "\n[6] Fills at different |eta| values stay separate" << std::endl;
     {
         THnSparse* h = MakeTestSparse("h6");
         Double_t xA[3] = { 0.5, 0.0, 100.0};
-        Double_t xB[3] = {-2.5, 0.0, 100.0};
+        Double_t xB[3] = {-2.6, 0.0, 100.0};
         h->Fill(xA, 2.0);
         h->Fill(xB, 7.0);
 
         THnSparse* hf = FoldEtaAxis(h, 0);
 
         Int_t binA  = hf->GetAxis(0)->FindBin(0.5);
-        Int_t binB  = hf->GetAxis(0)->FindBin(2.5);
+        Int_t binB  = hf->GetAxis(0)->FindBin(2.6);
         Int_t aBin  = hf->GetAxis(1)->FindBin(0.0);
         Int_t ptBin = hf->GetAxis(2)->FindBin(100.0);
         Int_t cA[3] = {binA, aBin, ptBin};
         Int_t cB[3] = {binB, aBin, ptBin};
 
-        Check(binA != binB,                                     "eta=0.5 and eta=-2.5 map to different |eta| bins");
+        Check(binA != binB,                                     "eta=0.5 and eta=-2.6 map to different |eta| bins");
         Check(std::abs(hf->GetBinContent(cA) - 2.0) < kEps,   "eta=+0.5 bin has content 2.0");
-        Check(std::abs(hf->GetBinContent(cB) - 7.0) < kEps,   "eta=-2.5 bin has content 7.0");
+        Check(std::abs(hf->GetBinContent(cB) - 7.0) < kEps,   "eta=-2.6 bin has content 7.0");
 
         delete h; delete hf;
     }
