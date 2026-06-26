@@ -1,26 +1,4 @@
-// Asymmetry generator for 2024 pp reference run L2 Residual JEC.
-//
-// Compiled:    ./runAsymmetry <input.root> <output.root> --mc|--zero-bias|--hard-probes
-// Interpreted: root -l -b -q 'bin/runAsymmetry.C("input.root","output.root","--mc")'
-//              (run from the repo root so R__ADD_INCLUDE_PATH resolves correctly)
-//
-// Run modes:
-//   --mc           no trigger, no ppvF filter, pthat-weighted fills
-//   --zero-bias    ppvF filter, no trigger cut (unbiased dataset)
-//   --hard-probes  ppvF filter, HLT_AK4PFJet80 only (default)
-//
-// TTree layout in trees[]:
-//   [0 .. nJetTrees-1]  jet trees, one per cone size (kConeLabels / kJetTreePaths)
-//   [kEvtIdx]           hiEvtAnalyzer/HiTree
-//   [kSkimIdx]          skimanalysis/HltTree  (DATA modes only)
-//   [kTrigIdx]          hltanalysis/HltTree   (HardProbes only)
-//
-// JSON_handler.h requires nlohmann/json — install with: sudo pacman -S nlohmann-json
-
-#ifdef __CLING__
-R__ADD_INCLUDE_PATH(include)
-R__ADD_INCLUDE_PATH(configs)
-#endif
+#include "RunAsymmetry.h"
 
 #include "TFile.h"
 #include "TTree.h"
@@ -54,7 +32,7 @@ static constexpr float  kVzCut   = 15.0f;
 static constexpr float  kMinPt   = 10.0f;
 static constexpr float  kMaxAbsA = 0.7f;
 
-void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-probes") {
+void runAsymmetry(TString input, TString output, TString modeFlag) {
 
     RunMode mode = RunMode::HardProbes;
     if      (modeFlag == "--mc")          mode = RunMode::MC;
@@ -68,15 +46,9 @@ void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-prob
     std::cout << "Input:  " << input   << "\n";
     std::cout << "Output: " << output  << "\n";
 
-    // ---- jet energy corrections ----
     JetCorrector jec(kJECFiles);
-
-    // ---- jet ID + veto map ----
     JetSelect js(kVetoMapPath);
-
-    // ---- golden JSON (DATA modes only) ----
-    // Requires nlohmann-json: sudo pacman -S nlohmann-json
-    // JSON_handler dcs(kJSONPath);
+    // JSON_handler dcs(kJSONPath);   // requires: sudo pacman -S nlohmann-json
 
     // ---- TTree branch structs ----
     JetStruct<kNRefMax> jets;
@@ -115,7 +87,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-prob
         trees[kSkimIdx] = (TTree*)fi->Get(kSkimTreePath);
         if (!trees[kSkimIdx]) {
             std::cerr << "Missing skim tree in " << input
-                      << "\n(check kSkimTreePath in configs/2024ppRef.h)\n";
+                      << "\n(check kSkimTreePath in cfg/2024ppRef.h)\n";
             return;
         }
     }
@@ -123,7 +95,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-prob
         trees[kTrigIdx] = (TTree*)fi->Get(kTrigTreePath);
         if (!trees[kTrigIdx]) {
             std::cerr << "Missing HLT tree in " << input
-                      << "\n(check kTrigTreePath in configs/2024ppRef.h)\n";
+                      << "\n(check kTrigTreePath in cfg/2024ppRef.h)\n";
             return;
         }
     }
@@ -250,14 +222,3 @@ void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-prob
     fo->Close();
     fi->Close();
 }
-
-#ifndef __CLING__
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: runAsymmetry <input.root> <output.root> [--mc|--zero-bias|--hard-probes]\n";
-        return 1;
-    }
-    runAsymmetry(argv[1], argv[2], argc > 3 ? argv[3] : "--hard-probes");
-    return 0;
-}
-#endif
