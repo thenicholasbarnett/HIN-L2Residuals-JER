@@ -6,7 +6,7 @@
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
-R__LOAD_LIBRARY(libl2residuals)
+R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "RunAsymmetry.h"
