@@ -6,7 +6,11 @@
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
+#if defined(__APPLE__)
+R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+#else
 R__LOAD_LIBRARY(lib/libl2residuals.so)
+#endif
 #endif
 
 #include "ResidualsExtractor.h"
