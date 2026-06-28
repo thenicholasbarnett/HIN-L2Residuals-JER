@@ -1,6 +1,7 @@
 #include "RunAsymmetry.h"
 
 #include "TFile.h"
+#include "TSystem.h"
 #include "TTree.h"
 #include "TH1.h"
 #include "TMath.h"
@@ -40,12 +41,12 @@ static constexpr float  kMaxAbsA = 0.7f;
 void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxEvents) {
 
     RunMode mode = RunMode::HardProbes;
-    if      (modeFlag == "--mc")          mode = RunMode::MC;
-    else if (modeFlag == "--zero-bias")   mode = RunMode::ZeroBias;
-    else if (modeFlag == "--hard-probes") mode = RunMode::HardProbes;
+    if      (modeFlag == "--monte-carlo"  || modeFlag == "-mc") mode = RunMode::MC;
+    else if (modeFlag == "--zero-bias"   || modeFlag == "-zb") mode = RunMode::ZeroBias;
+    else if (modeFlag == "--hard-probes" || modeFlag == "-hp") mode = RunMode::HardProbes;
     else {
         throw std::invalid_argument(
-            Form("ERROR: invalid runAsymmetry mode '%s'. Expected --mc, --zero-bias, or --hard-probes.",
+            Form("ERROR: invalid runAsymmetry mode '%s'. Expected --monte-carlo/-mc, --zero-bias/-zb, or --hard-probes/-hp.",
                  modeFlag.Data()));
     }
 
@@ -248,6 +249,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxE
     }
 
     // ---- write output ----
+    gSystem->mkdir(TString(output).Remove(TString(output).Last('/')), kTRUE);
     TFile* fo = new TFile(output, "recreate");
     fo->cd();
     hvz_all->Write();

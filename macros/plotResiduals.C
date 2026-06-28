@@ -263,7 +263,7 @@ static TLine* VLine(double x, Color_t col, int style = 3) {
 // Skips bins with fewer than kMinEntriesPlot entries.
 // ============================================================
 
-static constexpr int kMinEntriesPlot = 100;
+static constexpr int kMinEntriesPlot = 10;
 
 static void PlotAsymDist(TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
@@ -1028,17 +1028,115 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
 }
 
 // ============================================================
+// Plot type: Event-level QA
+//
+// Reads event-level control histograms written by runAsymmetry:
+//   hvz_all   — vz before any cuts
+//   hvz       — vz after vz + vertex filter cuts
+//   hfilt     — pprimaryVertexFilter (DATA only)
+//   h_hlt_j80 — HLT_AK4PFJet80 bits (hard-probe DATA only)
+//
+// Expects a Step-1 runAsymmetry output file; gracefully skips
+// histograms that are absent (e.g. hfilt/h_hlt_j80 on MC).
+// ============================================================
+
+static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
+
+    // ---- vz: all events vs after cuts ----
+    {
+        TH1D* hall = (TH1D*)fIn->Get("hvz_all");
+        TH1D* hvz  = (TH1D*)fIn->Get("hvz");
+        if (hall && hvz) {
+            TH1D* hallc = (TH1D*)hall->Clone("hvz_all_c"); hallc->SetDirectory(0);
+            TH1D* hvzc  = (TH1D*)hvz ->Clone("hvz_c");     hvzc ->SetDirectory(0);
+
+            hallc->SetLineColor(kGray + 2);
+            hallc->SetFillColor(kGray + 1);
+            hallc->SetFillStyle(1001);
+            hallc->SetLineWidth(1);
+            StyleH(hvzc, HiroshigeNightBlue, 20, 2.0f);
+
+            double ymax = std::max(hallc->GetMaximum(), hvzc->GetMaximum()) * 1.2;
+            hallc->SetMaximum(ymax);
+            hallc->SetTitle("");
+            hallc->GetXaxis()->SetTitle("v_{z} [cm]");
+            hallc->GetYaxis()->SetTitle("Events");
+            hallc->GetXaxis()->CenterTitle();
+            hallc->GetYaxis()->CenterTitle();
+
+            TCanvas* c = new TCanvas("event_vz", "", 800, 600);
+            c->SetLeftMargin(0.13); c->SetGridx(); c->SetGridy();
+            hallc->Draw("hist");
+            hvzc->Draw("E1 same");
+
+            TLegend* leg = new TLegend(0.62, 0.76, 0.93, 0.90);
+            leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.034);
+            leg->AddEntry(hallc, Form("All events (N = %lld)", (Long64_t)hall->GetEntries()), "f");
+            leg->AddEntry(hvzc,  Form("After cuts  (N = %lld)", (Long64_t)hvz->GetEntries()),  "lp");
+            leg->Draw();
+
+            SavePlot(c, outDir, "", "event", {}, "event_vz");
+            delete c;
+        }
+        pb.Update();
+    }
+
+    // ---- primary vertex filter ----
+    {
+        TH1I* hfilt = (TH1I*)fIn->Get("hfilt");
+        if (hfilt) {
+            TCanvas* c = new TCanvas("event_ppvF", "", 600, 500);
+            c->SetLeftMargin(0.15);
+            hfilt->SetTitle("");
+            hfilt->GetXaxis()->SetTitle("pprimaryVertexFilter");
+            hfilt->GetYaxis()->SetTitle("Events");
+            hfilt->GetXaxis()->CenterTitle();
+            hfilt->GetYaxis()->CenterTitle();
+            hfilt->SetLineColor(HiroshigeNightBlue);
+            hfilt->SetFillColor(HiroshigeLightBlue);
+            hfilt->SetFillStyle(1001);
+            hfilt->Draw("hist");
+            SavePlot(c, outDir, "", "event", {}, "event_ppvF");
+            delete c;
+        }
+        pb.Update();
+    }
+
+    // ---- HLT trigger ----
+    {
+        TH1I* htrig = (TH1I*)fIn->Get("h_hlt_j80");
+        if (htrig) {
+            TCanvas* c = new TCanvas("event_hlt", "", 600, 500);
+            c->SetLeftMargin(0.15);
+            htrig->SetTitle("");
+            htrig->GetXaxis()->SetTitle("HLT_AK4PFJet80");
+            htrig->GetYaxis()->SetTitle("Events");
+            htrig->GetXaxis()->CenterTitle();
+            htrig->GetYaxis()->CenterTitle();
+            htrig->SetLineColor(HiroshigeNightBlue);
+            htrig->SetFillColor(HiroshigeLightBlue);
+            htrig->SetFillStyle(1001);
+            htrig->Draw("hist");
+            SavePlot(c, outDir, "", "event", {}, "event_hlt_j80");
+            delete c;
+        }
+        pb.Update();
+    }
+}
+
+// ============================================================
 // Entry point
 //
 // flags (space-separated keywords, default "all"):
-//   "etasym"   — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
-//   "methods"  — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
-//   "finals"   — final R_data/R_MC at alpha→0, all pT slices overlaid (PlotFinals)
-//   "adist"    — asymmetry distributions per bin with log-y and truncation lines
-//   "roverlay" — R_data and R_MC overlay with ratio panel per alpha/pT
-//   "alpha"    — alpha fit plots: all 9 points, fit line through 0.05–0.30
+//   "etasym"     — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
+//   "methods"    — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
+//   "finals"     — final R_data/R_MC at alpha→0, all pT slices overlaid (PlotFinals)
+//   "adist"      — asymmetry distributions per bin with log-y and truncation lines
+//   "roverlay"   — R_data and R_MC overlay with ratio panel per alpha/pT
+//   "alpha"      — alpha fit plots: all 9 points, fit line through 0.05–0.30
 //   "kinematics" — Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
-//   "all"      — run all Step-2 residual plots (default); kinematics is explicit
+//   "event"      — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
+//   "all"        — run all plots including kinematics and event (default)
 // ============================================================
 
 void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "all") {
@@ -1072,7 +1170,8 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     const bool doAdist   = doAll || flags.Contains("adist");
     const bool doRover   = doAll || flags.Contains("roverlay");
     const bool doAlpha   = doAll || flags.Contains("alpha");
-    const bool doKine    = flags.Contains("kinematics");
+    const bool doKine    = doAll || flags.Contains("kinematics");
+    const bool doEvent   = doAll || flags.Contains("event");
 
     int totalPlots = 0;
     if (doEtaSym)  totalPlots += nCones * kNMethods * nPtSlices;
@@ -1082,8 +1181,11 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
     if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
     if (doKine)    totalPlots += nCones * kNKinematicsCollections * (3 + kNKinematicsPtMins);
+    if (doEvent)   totalPlots += 3;
 
     ProgressBar pb("Saving plots:", totalPlots);
+
+    if (doEvent) PlotEvent(fIn, outDir, pb);
 
     for (const TString& cone : kConeLabels) {
         if (doEtaSym)  PlotEtaSym   (fIn, outDir, cone, bins,        pb);
@@ -1105,7 +1207,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
-                  << "  flags: all etasym methods finals adist roverlay alpha kinematics (space-separated)\n";
+                  << "  flags: all etasym methods finals adist roverlay alpha kinematics event (space-separated)\n";
         return 1;
     }
     plotResiduals(argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all");
