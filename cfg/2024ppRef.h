@@ -29,7 +29,7 @@ inline const std::vector<TString> kJetTreePaths = {
 };
 
 // trigger
-inline const TString  kHLTJ80Branch = "HLT_AK4PFJet80_v1";
+inline const TString  kHLTJ80Branch = "HLT_AK4PFJet80_v8";
 static constexpr float kHLTJ80Thresh = 100.0f;
 
 // cone sizes

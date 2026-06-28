@@ -15,7 +15,6 @@
 #include "BranchMapping.h"
 #include "EventStructs.h"
 #include "JetStruct.h"
-#include "ProgressBar.h"
 #include "Binning.h"
 #include "Dijet.h"
 #include "DijetHistograms.h"
@@ -37,19 +36,12 @@ static constexpr float  kVzCut   = 15.0f;
 static constexpr float  kMinPt   = 10.0f;
 static constexpr float  kMaxAbsA = 0.7f;
 
-void runAsymmetry(TString input, TString output, TString modeFlag) {
+void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxEvents) {
 
     RunMode mode = RunMode::HardProbes;
     if      (modeFlag == "--mc")          mode = RunMode::MC;
     else if (modeFlag == "--zero-bias")   mode = RunMode::ZeroBias;
     else if (modeFlag == "--hard-probes") mode = RunMode::HardProbes;
-
-    const char* modeStr = (mode == RunMode::MC)       ? "MC"
-                        : (mode == RunMode::ZeroBias)  ? "zero bias"
-                                                       : "hard probes";
-    std::cout << "Mode:   " << modeStr << "\n";
-    std::cout << "Input:  " << input   << "\n";
-    std::cout << "Output: " << output  << "\n";
 
     const size_t nCones = kConeLabels.size();
 
@@ -68,9 +60,6 @@ void runAsymmetry(TString input, TString output, TString modeFlag) {
         return;
     }
 
-    std::cout << "Cones: ";
-    for (size_t c = 0; c < nCones; c++)
-        std::cout << kConeLabels[c] << (c + 1 < nCones ? " " : "\n");
 
     // ---- one JetCorrector per cone, loaded from its L2Relative file ----
     std::vector<JetCorrector> jecs;
@@ -156,10 +145,9 @@ void runAsymmetry(TString input, TString output, TString modeFlag) {
 
     // ---- event loop ----
     const Long64_t nEvents = trees[kEvtIdx]->GetEntries();
-    ProgressBar pb(modeStr, (int)nEvents);
+    const Long64_t nLoop   = (maxEvents < 0) ? nEvents : std::min(maxEvents, nEvents);
 
-    for (Long64_t i = 0; i < nEvents; i++) {
-        pb.Update();
+    for (Long64_t i = 0; i < nLoop; i++) {
 
         // vz
         trees[kEvtIdx]->GetEntry(i);
@@ -254,8 +242,6 @@ void runAsymmetry(TString input, TString output, TString modeFlag) {
             cones[c].Fill(dijet, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi, weight);
         }
     }
-
-    pb.Finish();
 
     // ---- write output ----
     TFile* fo = new TFile(output, "recreate");

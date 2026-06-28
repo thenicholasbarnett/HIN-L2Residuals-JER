@@ -14,6 +14,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 #include "TFile.h"
 #include "TH1D.h"
+#include "TGraphErrors.h"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "TLegend.h"
@@ -27,6 +28,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include "Binning.h"
 #include "Colors.h"
 #include "Utilities.h"
+#include "ProgressBar.h"
 #include "2024ppRef.h"
 
 #include <vector>
@@ -183,8 +185,327 @@ static TString SafeKey(const TString& s) {
     return s.BeginsWith("_") ? s(1, s.Length() - 1) : s;
 }
 
+// Return the x-values at the low and high truncation boundaries for `fraction` of the area.
+static std::pair<double, double> TruncBounds(TH1D* h, double fraction) {
+    if (!h || h->Integral() <= 0) return {0, 0};
+    double total = h->Integral();
+    double tailN = 0.5 * (1.0 - fraction) * total;
+    int nBins = h->GetNbinsX();
+    double cum = 0; int binLo = 1;
+    for (int b = 1; b <= nBins; b++) { cum += h->GetBinContent(b); if (cum > tailN) { binLo = b; break; } }
+    cum = 0; int binHi = nBins;
+    for (int b = nBins; b >= 1; b--) { cum += h->GetBinContent(b); if (cum > tailN) { binHi = b; break; } }
+    return { h->GetBinLowEdge(binLo), h->GetBinLowEdge(binHi) + h->GetBinWidth(binHi) };
+}
+
+static TLine* VLine(double x, Color_t col, int style = 3) {
+    // vertical line placeholder — actual y range set by caller after drawing histogram
+    TLine* l = new TLine(x, 0, x, 1);
+    l->SetLineColor(col);
+    l->SetLineStyle(style);
+    l->SetLineWidth(2);
+    return l;
+}
+
 // ============================================================
-// Plot type 1: |eta| reflected vs full eta
+// Plot type 3: Asymmetry distributions
+//
+// For each (cone, pT slice, alpha slice, eta bin): one canvas with
+//   data (black) and MC (red) overlaid, log-y scale,
+//   dotted vertical lines at trunc90 and trunc95 boundaries.
+// Skips bins with fewer than kMinEntriesPlot entries.
+// ============================================================
+
+static constexpr int kMinEntriesPlot = 100;
+
+static void PlotAsymDist(TFile* fIn, const TString& outDir,
+                         const TString& cone, const BinningConfig& bins,
+                         ProgressBar& pb) {
+    TDirectory* dData = (TDirectory*)fIn->Get(cone + "_QA_data");
+    TDirectory* dMC   = (TDirectory*)fIn->Get(cone + "_QA_mc");
+
+    const int nPt    = (int)bins.ptavgSlices.size();
+    const int nAlpha = (int)bins.alphaSlices.size();
+    const int nEta   = (int)kAbsEtaEdges.size() - 1;
+
+    for (int ip = 0; ip < nPt; ip++) {
+        const auto& ptSl = bins.ptavgSlices[ip];
+        for (int ia = 0; ia < nAlpha; ia++) {
+            const auto& aSl = bins.alphaSlices[ia];
+            for (int ie = 0; ie < nEta; ie++) {
+                TString sfx = Form("%s%s_eta%02d",
+                    ptSl.shortName.Data(), aSl.shortName.Data(), ie);
+                TString dname = cone + "_A_data_" + sfx;
+                TString mname = cone + "_A_mc_"   + sfx;
+
+                TH1D* hd = dData ? (TH1D*)dData->Get(dname) : nullptr;
+                TH1D* hm = dMC   ? (TH1D*)dMC  ->Get(mname) : nullptr;
+
+                if (!hd || !hm || hd->GetEntries() < kMinEntriesPlot) {
+                    if (hd) delete hd;
+                    if (hm) delete hm;
+                    pb.Update();
+                    continue;
+                }
+
+                Long64_t nData = (Long64_t)hd->GetEntries();
+                Long64_t nMC   = (Long64_t)hm->GetEntries();
+
+                TH1D* hdc = (TH1D*)hd->Clone(dname + "_c"); hdc->SetDirectory(0);
+                TH1D* hmc = (TH1D*)hm->Clone(mname + "_c"); hmc->SetDirectory(0);
+
+                // self-normalize so data and MC overlay on the same scale
+                if (hdc->Integral() > 0) hdc->Scale(1.0 / hdc->Integral());
+                if (hmc->Integral() > 0) hmc->Scale(1.0 / hmc->Integral());
+
+                // truncation boundaries from the normalized data distribution
+                auto [t90lo, t90hi] = TruncBounds(hdc, 0.90);
+                auto [t95lo, t95hi] = TruncBounds(hdc, 0.95);
+
+                TString cvName = Form("adist_%s_%s_%s_eta%02d",
+                    cone.Data(), SafeKey(ptSl.shortName).Data(),
+                    SafeKey(aSl.shortName).Data(), ie);
+                TCanvas* c = new TCanvas(cvName, "", 800, 600);
+                c->SetLogy();
+                c->SetLeftMargin(0.13);
+
+                StyleH(hdc, kBlack, 1, 1.5f);
+                StyleH(hmc, kRed+1, 1, 1.5f);
+
+                hdc->SetTitle("");
+                hdc->GetXaxis()->SetTitle("A");
+                hdc->GetXaxis()->CenterTitle();
+                hdc->GetYaxis()->SetTitle("Normalized");
+                hdc->GetYaxis()->CenterTitle();
+
+                // y range after normalization
+                double ymax = std::max(hdc->GetMaximum(), hmc->GetMaximum()) * 5.0;
+                double ymin = 1e-4;
+                hdc->SetMaximum(ymax);
+                hdc->SetMinimum(ymin);
+
+                hdc->Draw("E1");
+                hmc->Draw("E1 same");
+
+                // trunc90 boundaries — blue dotted
+                TLine* l90lo = new TLine(t90lo, ymin, t90lo, ymax);
+                TLine* l90hi = new TLine(t90hi, ymin, t90hi, ymax);
+                l90lo->SetLineColor(kBlue); l90lo->SetLineStyle(3); l90lo->SetLineWidth(2);
+                l90hi->SetLineColor(kBlue); l90hi->SetLineStyle(3); l90hi->SetLineWidth(2);
+                l90lo->Draw(); l90hi->Draw();
+
+                // trunc95 boundaries — orange dotted
+                TLine* l95lo = new TLine(t95lo, ymin, t95lo, ymax);
+                TLine* l95hi = new TLine(t95hi, ymin, t95hi, ymax);
+                l95lo->SetLineColor(kOrange+7); l95lo->SetLineStyle(3); l95lo->SetLineWidth(2);
+                l95hi->SetLineColor(kOrange+7); l95hi->SetLineStyle(3); l95hi->SetLineWidth(2);
+                l95lo->Draw(); l95hi->Draw();
+
+                double etalo = kAbsEtaEdges[ie];
+                double etahi = kAbsEtaEdges[ie + 1];
+
+                TLegend* leg = new TLegend(0.52, 0.52, 0.93, 0.90);
+                leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.036);
+                leg->AddEntry((TObject*)nullptr, cone,                                                    "");
+                leg->AddEntry((TObject*)nullptr, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi),      "");
+                leg->AddEntry((TObject*)nullptr, ptSl.title.Data(),                                       "");
+                leg->AddEntry((TObject*)nullptr, aSl.title.Data(),                                        "");
+                leg->AddEntry(hdc, Form("Data  (N = %lld)", nData), "l");
+                leg->AddEntry(hmc, Form("MC    (N = %lld)", nMC),   "l");
+                leg->AddEntry(l90lo, "Trunc 90%", "l");
+                leg->AddEntry(l95lo, "Trunc 95%", "l");
+                leg->Draw();
+
+                c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                pb.Update();
+
+                delete c;   // cascade-deletes hdc, hmc, lines, leg
+                delete hd;
+                delete hm;
+            }
+        }
+    }
+}
+
+// ============================================================
+// Plot type 4: R_data and R_MC overlay with ratio panel
+//
+// For each (cone, method, alpha slice, pT slice): one two-panel canvas with
+//   top panel  — R_data (blue) and R_MC (red) vs |eta|, reference at 1
+//   bottom panel — R_data/R_MC vs |eta|, reference at 1
+// ============================================================
+
+static void PlotROverlay(TFile* fIn, const TString& outDir,
+                         const TString& cone, const BinningConfig& bins,
+                         ProgressBar& pb) {
+    TDirectory* dRvals = (TDirectory*)fIn->Get(cone + "_Rvals");
+
+    const int nPt    = (int)bins.ptavgSlices.size();
+    const int nAlpha = (int)bins.alphaSlices.size();
+
+    for (int m = 0; m < kNMethods; m++) {
+        for (int ia = 0; ia < nAlpha; ia++) {
+            const auto& aSl = bins.alphaSlices[ia];
+            for (int ip = 0; ip < nPt; ip++) {
+                const auto& ptSl = bins.ptavgSlices[ip];
+
+                TString rdName = Form("%s_R_data_%s%s%s",
+                    cone.Data(), kMethodKeys[m],
+                    ptSl.shortName.Data(), aSl.shortName.Data());
+                TString rmName = Form("%s_R_mc_%s%s%s",
+                    cone.Data(), kMethodKeys[m],
+                    ptSl.shortName.Data(), aSl.shortName.Data());
+
+                TH1D* hRd = dRvals ? (TH1D*)dRvals->Get(rdName) : nullptr;
+                TH1D* hRm = dRvals ? (TH1D*)dRvals->Get(rmName) : nullptr;
+
+                if (!hRd || !hRm) {
+                    if (hRd) delete hRd;
+                    if (hRm) delete hRm;
+                    pb.Update();
+                    continue;
+                }
+
+                TH1D* hRdc = (TH1D*)hRd->Clone(rdName + "_c"); hRdc->SetDirectory(0);
+                TH1D* hRmc = (TH1D*)hRm->Clone(rmName + "_c"); hRmc->SetDirectory(0);
+                TH1D* hRat = RatioH(hRdc, hRmc, rdName + "_rat");
+
+                const TString cvName = Form("roverlay_%s_%s_%s_%s",
+                    cone.Data(), kMethodKeys[m],
+                    SafeKey(ptSl.shortName).Data(), SafeKey(aSl.shortName).Data());
+                TwoPad cv = MakeTwoPad(cvName);
+
+                // ---- main pad ----
+                cv.main->cd();
+                cv.main->SetGridx(); cv.main->SetGridy();
+
+                StyleH(hRdc, kBlue+1,  20, 1.5f);
+                StyleH(hRmc, kRed+1,   21, 1.5f);
+
+                auto [ylo, yhi] = YRange({hRdc, hRmc});
+                hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
+                hRmc->GetYaxis()->SetTitle("R");
+                hRmc->GetYaxis()->SetTitleSize(0.065);
+                hRmc->GetYaxis()->SetTitleOffset(1.0);
+                hRmc->GetYaxis()->SetLabelSize(0.055);
+                hRmc->GetXaxis()->SetLabelSize(0.0);
+                hRmc->GetXaxis()->SetTitle("");
+                hRmc->SetTitle("");
+
+                hRmc->Draw("E1");
+                hRdc->Draw("E1 same");
+                RefLine(cv.main, (double)kAbsEtaEdges.front(), (double)kAbsEtaEdges.back(), 1.0);
+
+                TLegend* leg = new TLegend(0.16, 0.14, 0.50, 0.28);
+                leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.048);
+                leg->AddEntry(hRmc, "R_{MC}",   "lp");
+                leg->AddEntry(hRdc, "R_{data}", "lp");
+                leg->Draw();
+
+                TLatex* tex = new TLatex();
+                tex->SetNDC(); tex->SetTextSize(0.050); tex->SetTextFont(62);
+                tex->DrawLatex(0.16, 0.91, Form("%s  |  %s  |  %s  |  %s",
+                    cone.Data(), kMethodLabels[m], ptSl.title.Data(), aSl.title.Data()));
+
+                // ---- ratio pad ----
+                cv.ratio->cd();
+                cv.ratio->SetGridx(); cv.ratio->SetGridy();
+
+                StyleH(hRat, kBlack, 20, 1.5f);
+                TuneRatio(hRat, "|#eta|", "Data/MC", 0.93, 1.07);
+                hRat->Draw("E1");
+                RefLine(cv.ratio, (double)kAbsEtaEdges.front(), (double)kAbsEtaEdges.back(), 1.0);
+
+                cv.c->cd();
+                cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                pb.Update();
+
+                delete hRd; delete hRm;
+                delete cv.c;   // cascade-deletes hRdc, hRmc, hRat, leg, tex
+            }
+        }
+    }
+}
+
+// ============================================================
+// Plot type 5: Alpha fit plots
+//
+// For each (cone, method, pT slice, eta bin): one canvas showing
+//   all 9 alpha threshold points with fit line drawn only through [0, 0.31],
+//   points at alpha > 0.30 are shown but outside the fit line.
+// ============================================================
+
+static void PlotAlphaFit(TFile* fIn, const TString& outDir,
+                         const TString& cone, const BinningConfig& bins,
+                         ProgressBar& pb) {
+    TDirectory* dGraphs = (TDirectory*)fIn->Get(cone + "_graphs");
+
+    const int nPt  = (int)bins.ptavgSlices.size();
+    const int nEta = (int)kAbsEtaEdges.size() - 1;
+
+    for (int m = 0; m < kNMethods; m++) {
+        for (int ip = 0; ip < nPt; ip++) {
+            const auto& ptSl = bins.ptavgSlices[ip];
+            for (int ie = 0; ie < nEta; ie++) {
+                TString gname = Form("%s_R_%s%s_eta%02d",
+                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), ie);
+
+                TGraphErrors* gr = nullptr;
+                if (dGraphs) gr = (TGraphErrors*)dGraphs->Get(gname);
+
+                if (!gr || gr->GetN() < 2) {
+                    pb.Update();
+                    continue;
+                }
+                TGraphErrors* gc = (TGraphErrors*)gr->Clone(gname + "_c");
+
+                const TString cvName = Form("alphafit_%s_%s_%s_eta%02d",
+                    cone.Data(), kMethodKeys[m],
+                    SafeKey(ptSl.shortName).Data(), ie);
+                TCanvas* c = new TCanvas(cvName, "", 800, 600);
+                c->SetLeftMargin(0.13);
+                c->SetGridx(); c->SetGridy();
+
+                gc->SetMarkerStyle(20);
+                gc->SetMarkerColor(ptSl.color);
+                gc->SetLineColor(ptSl.color);
+                gc->SetMarkerSize(0.9);
+
+                gc->GetXaxis()->SetTitle("#alpha threshold");
+                gc->GetYaxis()->SetTitle("R_{data}/R_{MC}");
+                gc->GetXaxis()->CenterTitle();
+                gc->GetYaxis()->CenterTitle();
+                gc->GetXaxis()->SetLimits(0.0, 0.50);
+                gc->SetTitle("");
+
+                gc->Draw("AP");   // embedded fit function draws automatically
+
+                // vertical reference at x=0.30 to mark the fit boundary
+                double ylo = gc->GetHistogram()->GetMinimum();
+                double yhi = gc->GetHistogram()->GetMaximum();
+                TLine* vl = new TLine(0.30, ylo, 0.30, yhi);
+                vl->SetLineStyle(2); vl->SetLineColor(kGray+2); vl->SetLineWidth(1);
+                vl->Draw();
+
+                // horizontal reference at y=1
+                TLine* hl = new TLine(0.0, 1.0, 0.50, 1.0);
+                hl->SetLineStyle(2); hl->SetLineColor(kGray+2); hl->SetLineWidth(1);
+                hl->Draw();
+
+                TLatex* tex = new TLatex();
+                tex->SetNDC(); tex->SetTextSize(0.042); tex->SetTextFont(62);
+                tex->DrawLatex(0.14, 0.92, Form("%s  |  %s  |  %s  |  |#eta| bin %d",
+                    cone.Data(), kMethodLabels[m], ptSl.title.Data(), ie));
+
+                c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                pb.Update();
+
+                delete gc;
+                delete c;
+            }
+        }
+    }
+}
 //
 // For each (cone, method, ptavg slice): one canvas with
 //   top panel  — full-eta corrections + |eta| reflected, reference at 1
@@ -192,7 +513,8 @@ static TString SafeKey(const TString& s) {
 // ============================================================
 
 static void PlotEtaSym(TFile* fIn, const TString& outDir,
-                       const TString& cone, const BinningConfig& bins) {
+                       const TString& cone, const BinningConfig& bins,
+                       ProgressBar& pb) {
     for (int m = 0; m < kNMethods; m++) {
         for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
             const auto& sl = bins.ptavgSlices[ip];
@@ -205,8 +527,9 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
             TH1D* hFull = GetH(fIn, nameFull);
 
             if (!hAbs || !hFull) {
-                std::cout << "  skip eta-sym: " << nameAbs << "\n";
+                std::cerr << "skip eta-sym: " << nameAbs << "\n";
                 delete hAbs; delete hFull;
+                pb.Update();
                 continue;
             }
 
@@ -268,6 +591,7 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
 
             cv.c->cd();
             cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+            pb.Update();
 
             // hAbs was not drawn — delete manually
             delete hAbs;
@@ -287,7 +611,7 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
 
 static void PlotMethodComp(TFile* fIn, const TString& outDir,
                            const TString& cone, const BinningConfig& bins,
-                           bool fullEta) {
+                           bool fullEta, ProgressBar& pb) {
     const TString suffix   = fullEta ? "_fulleta" : "";
     const TString etaLabel = fullEta ? "Full #eta" : "|#eta|";
     const double  xMin     = fullEta ? kEtaEdges.front()    : (double)kAbsEtaEdges.front();
@@ -305,9 +629,10 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
         }
 
         if (!hists[0]) {
-            std::cout << "  skip method-comp: gauss missing for " << cone
+            std::cerr << "skip method-comp: gauss missing for " << cone
                       << " " << sl.shortName << suffix << "\n";
             for (auto* h : hists) delete h;
+            pb.Update();
             continue;
         }
 
@@ -391,6 +716,7 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
 
         cv.c->cd();
         cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+        pb.Update();
 
         // ratios and hists were drawn on pads — canvas cascade deletes them
         // rleg, leg, tex also drawn — also cascade-deleted
@@ -399,16 +725,120 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
 }
 
 // ============================================================
-// Entry point
+// Plot type 6: Final extrapolated values — all pT slices overlaid
+//
+// For each (cone, method): two canvases
+//   finals_{cone}_{method}_abseta  — R_data/R_MC at alpha→0 vs |eta|, all pT bins overlaid
+//   finals_{cone}_{method}_fulleta — same vs full eta
+// PlotEtaSym does the |eta|-vs-fulleta symmetry check per pT slice; this overlays pT slices.
 // ============================================================
 
-void plotResiduals(TString residualsFile, TString outDir = "") {
+static void PlotFinals(TFile* fIn, const TString& outDir,
+                       const TString& cone, const BinningConfig& bins,
+                       ProgressBar& pb) {
+    for (int m = 0; m < kNMethods; m++) {
+        for (int ieta = 0; ieta < 2; ieta++) {   // 0 = |eta|, 1 = full eta
+            const bool   fullEta  = (ieta == 1);
+            const TString suffix  = fullEta ? "_fulleta" : "";
+            const TString xTitle  = fullEta ? "#eta" : "|#eta|";
+            const double  xMin    = fullEta ? kEtaEdges.front()    : (double)kAbsEtaEdges.front();
+            const double  xMax    = fullEta ? kEtaEdges.back()     : (double)kAbsEtaEdges.back();
+
+            std::vector<TH1D*> hists;
+            for (const auto& ptSl : bins.ptavgSlices) {
+                TString name = Form("%s_intercept_%s%s%s",
+                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), suffix.Data());
+                hists.push_back(GetH(fIn, name));
+            }
+
+            bool anyValid = false;
+            for (auto* h : hists) if (h) { anyValid = true; break; }
+            if (!anyValid) {
+                for (auto* h : hists) delete h;
+                pb.Update();
+                continue;
+            }
+
+            const TString cvName = Form("finals_%s_%s%s",
+                cone.Data(), kMethodKeys[m],
+                fullEta ? "_fulleta" : "_abseta");
+            TCanvas* c = new TCanvas(cvName, "", 900, 600);
+            c->SetLeftMargin(0.13);
+            c->SetGridx();
+            c->SetGridy();
+
+            auto [ylo, yhi] = YRange(hists);
+
+            TLegend* leg = new TLegend(0.60, 0.68, 0.93, 0.88);
+            leg->SetBorderSize(0);
+            leg->SetFillStyle(0);
+            leg->SetTextSize(0.038);
+
+            bool first = true;
+            for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+                if (!hists[ip]) continue;
+                const auto& ptSl = bins.ptavgSlices[ip];
+                StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
+                hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
+                hists[ip]->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha#rightarrow0");
+                hists[ip]->GetYaxis()->SetTitleSize(0.052);
+                hists[ip]->GetYaxis()->SetTitleOffset(1.15);
+                hists[ip]->GetYaxis()->SetLabelSize(0.048);
+                hists[ip]->GetXaxis()->SetTitle(xTitle);
+                hists[ip]->GetXaxis()->SetTitleSize(0.052);
+                hists[ip]->GetXaxis()->SetLabelSize(0.048);
+                hists[ip]->GetXaxis()->CenterTitle();
+                hists[ip]->GetYaxis()->CenterTitle();
+                hists[ip]->SetTitle("");
+                hists[ip]->Draw(first ? "E1" : "E1 same");
+                first = false;
+                leg->AddEntry(hists[ip], ptSl.title, "lp");
+            }
+
+            TLine* rl = new TLine(xMin, 1.0, xMax, 1.0);
+            rl->SetLineStyle(2);
+            rl->SetLineColor(kGray + 2);
+            rl->SetLineWidth(1);
+            rl->Draw();
+
+            leg->Draw();
+
+            TLatex* tex = new TLatex();
+            tex->SetNDC();
+            tex->SetTextSize(0.048);
+            tex->SetTextFont(62);
+            tex->DrawLatex(0.14, 0.92, Form("%s  |  %s  |  %s",
+                cone.Data(), kMethodLabels[m], xTitle.Data()));
+
+            c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+            pb.Update();
+
+            delete c;   // cascade-deletes hists, leg, tex, rl
+        }
+    }
+}
+
+// ============================================================
+// Entry point
+//
+// flags (space-separated keywords, default "all"):
+//   "etasym"   — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
+//   "methods"  — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
+//   "finals"   — final R_data/R_MC at alpha→0, all pT slices overlaid (PlotFinals)
+//   "adist"    — asymmetry distributions per bin with log-y and truncation lines
+//   "roverlay" — R_data and R_MC overlay with ratio panel per alpha/pT
+//   "alpha"    — alpha fit plots: all 9 points, fit line through 0.05–0.30
+//   "all"      — run everything (default)
+// ============================================================
+
+void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "all") {
     gStyle->SetOptStat(0);
     gStyle->SetPadTickX(1);
     gStyle->SetPadTickY(1);
     gStyle->SetGridColor(kGray + 1);
     gStyle->SetGridStyle(3);
     gStyle->SetGridWidth(1);
+    gErrorIgnoreLevel = kWarning;
 
     TFile* fIn = TFile::Open(residualsFile, "read");
     if (!fIn || fIn->IsZombie()) {
@@ -418,35 +848,54 @@ void plotResiduals(TString residualsFile, TString outDir = "") {
 
     if (outDir.IsNull()) outDir = MakePlotDir("plots_residuals");
     gSystem->mkdir(outDir, true);
-    std::cout << "Writing plots to: " << outDir << "\n";
 
     BinningConfig bins;
+    const int nCones    = (int)kConeLabels.size();
+    const int nPtSlices = (int)bins.ptavgSlices.size();
+    const int nAlpha    = (int)bins.alphaSlices.size();
+    const int nEta      = (int)kAbsEtaEdges.size() - 1;
+
+    const bool doAll     = flags.IsNull() || flags == "all";
+    const bool doEtaSym  = doAll || flags.Contains("etasym");
+    const bool doMethods = doAll || flags.Contains("methods");
+    const bool doFinals  = doAll || flags.Contains("finals");
+    const bool doAdist   = doAll || flags.Contains("adist");
+    const bool doRover   = doAll || flags.Contains("roverlay");
+    const bool doAlpha   = doAll || flags.Contains("alpha");
+
+    int totalPlots = 0;
+    if (doEtaSym)  totalPlots += nCones * kNMethods * nPtSlices;
+    if (doMethods) totalPlots += nCones * 2 * nPtSlices;
+    if (doFinals)  totalPlots += nCones * kNMethods * 2;
+    if (doAdist)   totalPlots += nCones * nAlpha * nPtSlices * nEta;
+    if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
+    if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
+
+    ProgressBar pb("Saving plots:", totalPlots);
 
     for (const TString& cone : kConeLabels) {
-        std::cout << "\n=== " << cone << " ===\n";
-
-        std::cout << "  eta symmetry...\n";
-        PlotEtaSym(fIn, outDir, cone, bins);
-
-        std::cout << "  method comparison (|eta|)...\n";
-        PlotMethodComp(fIn, outDir, cone, bins, false);
-
-        std::cout << "  method comparison (full eta)...\n";
-        PlotMethodComp(fIn, outDir, cone, bins, true);
+        if (doEtaSym)  PlotEtaSym   (fIn, outDir, cone, bins,        pb);
+        if (doMethods) PlotMethodComp(fIn, outDir, cone, bins, false, pb);
+        if (doMethods) PlotMethodComp(fIn, outDir, cone, bins, true,  pb);
+        if (doFinals)  PlotFinals   (fIn, outDir, cone, bins,        pb);
+        if (doAdist)   PlotAsymDist (fIn, outDir, cone, bins,        pb);
+        if (doRover)   PlotROverlay (fIn, outDir, cone, bins,        pb);
+        if (doAlpha)   PlotAlphaFit (fIn, outDir, cone, bins,        pb);
     }
 
+    pb.Finish();
     fIn->Close();
-    std::cout << "\nDone. Plots in: " << outDir << "\n";
 }
 
 #ifndef __CLING__
 #include <iostream>
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: plotResiduals <residuals.root> [out_dir]\n";
+        std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
+                  << "  flags: all etasym methods finals adist roverlay alpha (space-separated)\n";
         return 1;
     }
-    plotResiduals(argv[1], argc >= 3 ? argv[2] : "");
+    plotResiduals(argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all");
     return 0;
 }
 #endif

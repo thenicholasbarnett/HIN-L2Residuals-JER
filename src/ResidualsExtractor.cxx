@@ -12,6 +12,7 @@
 
 #include "Binning.h"
 #include "Utilities.h"
+#include "ProgressBar.h"
 #include "2024ppRef.h"
 
 #include <vector>
@@ -22,12 +23,12 @@
 // ---- constants ----
 
 static constexpr int    kMinEntries   = 100;
-static constexpr int    kNAlphaFit    = 6;     // alpha thresholds 0.05–0.30 only
+static constexpr int    kNAlphaFit    = 6;     // alpha thresholds 0.05–0.30 used for linear fit
 static constexpr double kGausFitHW    = 0.5;
 static constexpr double kMaxAbsA_fit  = 0.9;
-static constexpr double kAlphaFitHi   = 0.31;
+static constexpr double kAlphaFitHi   = 0.31;  // TF1 upper bound; "R" fit option excludes >0.30
 
-// ---- axis indices — same before and after FoldEtaAxis ----
+// ---- axis indices ----
 static constexpr int kEtaAxis   = 0;
 static constexpr int kPtAvgAxis = 1;
 static constexpr int kAlphaAxis = 2;
@@ -127,7 +128,18 @@ static void ResetRange(THnSparse* h, int axis) { h->GetAxis(axis)->SetRange(0, 0
 //
 // etaEdges:   kAbsEtaEdges (18 bins) or kEtaEdges (36 bins)
 // nameSuffix: "" for |eta|, "_fulleta" for full eta
-//             appended to graph names and intercept TH1D names
+// pb:         progress bar updated once per pT slice
+//
+// Outputs per (method, ptSlice):
+//   {cone}_intercept_{method}{ptSlice}{suffix}      — direct linear extrapolation to alpha=0
+//   {cone}_intercept_{method}{ptSlice}{suffix}_norm — same but normalized by value at alpha=0.30
+//
+// Outputs in dRvals per (method, alphaSlice, ptSlice):
+//   {cone}_R_data_{method}{ptSlice}{alphaSlice}{suffix} — R_data vs eta
+//   {cone}_R_mc_{method}{ptSlice}{alphaSlice}{suffix}   — R_MC  vs eta
+//
+// Outputs in dGraphs per (method, ptSlice, etaBin):
+//   TGraphErrors of R_data/R_MC vs alpha (all 9 bins), with fit function [0,0.31] embedded
 // ============================================================
 
 static void ExtractAndFit(
@@ -136,23 +148,45 @@ static void ExtractAndFit(
     const BinningConfig& bins,
     TDirectory* dQA_data, TDirectory* dQA_mc,
     TDirectory* dGraphs,
+    TDirectory* dRvals,
     TFile* fOut,
     const std::vector<Double_t>& etaEdges,
-    const TString& nameSuffix)
+    const TString& nameSuffix,
+    ProgressBar& pb)
 {
     const int nPt    = (int)bins.ptavgSlices.size();
     const int nAlpha = (int)bins.alphaSlices.size();
     const int nEta   = hData->GetAxis(kEtaAxis)->GetNbins();
 
     struct RPoint { double alpha, val, err; };
+    // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within [0, kAlphaFitHi]
     std::vector<std::vector<std::vector<std::vector<RPoint>>>>
         rpts(kNMethods,
             std::vector<std::vector<std::vector<RPoint>>>(nPt,
                 std::vector<std::vector<RPoint>>(nEta)));
 
+    // R_data and R_mc TH1Ds per (method, ialpha, ipt) — eta on x-axis
+    using RH = std::vector<std::vector<std::vector<TH1D*>>>;
+    RH hRd(kNMethods, std::vector<std::vector<TH1D*>>(nAlpha, std::vector<TH1D*>(nPt, nullptr)));
+    RH hRm(kNMethods, std::vector<std::vector<TH1D*>>(nAlpha, std::vector<TH1D*>(nPt, nullptr)));
+
+    for (int m = 0; m < kNMethods; m++)
+        for (int ia = 0; ia < nAlpha; ia++)
+            for (int ip = 0; ip < nPt; ip++) {
+                TString bn = Form("%s_R_data_%s%s%s%s", cone.Data(), kMethodNames[m],
+                    bins.ptavgSlices[ip].shortName.Data(),
+                    bins.alphaSlices[ia].shortName.Data(), nameSuffix.Data());
+                hRd[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
+                bn = Form("%s_R_mc_%s%s%s%s", cone.Data(), kMethodNames[m],
+                    bins.ptavgSlices[ip].shortName.Data(),
+                    bins.alphaSlices[ia].shortName.Data(), nameSuffix.Data());
+                hRm[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
+            }
+
+    // ---- main extraction loop ----
+
     for (int ipt = 0; ipt < nPt; ipt++) {
         const auto& ptSlice = bins.ptavgSlices[ipt];
-        std::cout << "    " << ptSlice.title << "\n";
 
         for (int ialpha = 0; ialpha < nAlpha; ialpha++) {
             const auto& aSlice = bins.alphaSlices[ialpha];
@@ -168,13 +202,20 @@ static void ExtractAndFit(
                 hData->GetAxis(kEtaAxis)->SetRange(etaBin, etaBin);
                 hMC  ->GetAxis(kEtaAxis)->SetRange(etaBin, etaBin);
 
-                TH1D* hAData = (TH1D*)hData->Projection(kAAxis);
-                TH1D* hAMC   = (TH1D*)hMC  ->Projection(kAAxis);
+                // Projection() registers the result in gDirectory using the sparse's base name.
+                // Suppress registration by setting gDirectory to null for the call.
+                TH1D* hAData;
+                TH1D* hAMC;
+                {
+                    TDirectory::TContext nodir(nullptr);
+                    hAData = (TH1D*)hData->Projection(kAAxis);
+                    hAMC   = (TH1D*)hMC  ->Projection(kAAxis);
+                }
 
-                TString suffix = Form("%s%s_eta%02d",
+                TString sfx = Form("%s%s_eta%02d",
                     ptSlice.shortName.Data(), aSlice.shortName.Data(), ieta);
-                hAData->SetName(cone + nameSuffix + "_A_data_" + suffix);
-                hAMC  ->SetName(cone + nameSuffix + "_A_mc_"   + suffix);
+                hAData->SetName(cone + nameSuffix + "_A_data_" + sfx);
+                hAMC  ->SetName(cone + nameSuffix + "_A_mc_"   + sfx);
 
                 dQA_data->cd(); hAData->Write();
                 dQA_mc  ->cd(); hAMC  ->Write();
@@ -186,26 +227,29 @@ static void ExtractAndFit(
                 TruncResult td95 = TruncMean(hAData, 0.95);
                 TruncResult tm95 = TruncMean(hAMC,   0.95);
 
-                if (ialpha < kNAlphaFit) {
-                    double alphaX = aSlice.hi;
+                double alphaX = aSlice.hi;
 
-                    auto accum = [&](int method, double Ad, double eAd,
-                                                 double Am, double eAm, bool ok) {
-                        if (!ok) return;
-                        if (std::abs(Ad) > kMaxAbsA_fit || std::abs(Am) > kMaxAbsA_fit) return;
-                        double Rd = ToR(Ad), Rm = ToR(Am);
-                        double eRd = ToRErr(Ad, eAd), eRm = ToRErr(Am, eAm);
-                        if (std::abs(Rm) < 1e-6) return;
-                        double ratio  = Rd / Rm;
-                        double eRatio = ratio * TMath::Sqrt(
-                            (eRd/Rd)*(eRd/Rd) + (eRm/Rm)*(eRm/Rm));
-                        rpts[method][ipt][ieta].push_back({alphaX, ratio, eRatio});
-                    };
+                // accumulate all 9 alpha bins; "QR" fit later selects only those within [0, kAlphaFitHi]
+                auto accum = [&](int method, double Ad, double eAd,
+                                             double Am, double eAm, bool ok) {
+                    if (!ok) return;
+                    if (std::abs(Ad) > kMaxAbsA_fit || std::abs(Am) > kMaxAbsA_fit) return;
+                    double Rd = ToR(Ad), Rm = ToR(Am);
+                    double eRd = ToRErr(Ad, eAd), eRm = ToRErr(Am, eAm);
+                    if (std::abs(Rm) < 1e-6) return;
+                    double ratio  = Rd / Rm;
+                    double eRatio = ratio * TMath::Sqrt(
+                        (eRd/Rd)*(eRd/Rd) + (eRm/Rm)*(eRm/Rm));
+                    rpts[method][ipt][ieta].push_back({alphaX, ratio, eRatio});
+                    hRd[method][ialpha][ipt]->SetBinContent(ieta + 1, Rd);
+                    hRd[method][ialpha][ipt]->SetBinError  (ieta + 1, eRd);
+                    hRm[method][ialpha][ipt]->SetBinContent(ieta + 1, Rm);
+                    hRm[method][ialpha][ipt]->SetBinError  (ieta + 1, eRm);
+                };
 
-                    accum(0, gd.mean,   gd.meanErr,   gm.mean,   gm.meanErr,   gd.valid  && gm.valid);
-                    accum(1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
-                    accum(2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
-                }
+                accum(0, gd.mean,   gd.meanErr,   gm.mean,   gm.meanErr,   gd.valid  && gm.valid);
+                accum(1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
+                accum(2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
 
                 ResetRange(hData, kEtaAxis);
                 ResetRange(hMC,   kEtaAxis);
@@ -218,7 +262,21 @@ static void ExtractAndFit(
             ResetRange(hData, kAlphaAxis);
             ResetRange(hMC,   kAlphaAxis);
         }
+
+        pb.Update();
     }
+
+    // ---- write R_data and R_mc histograms ----
+
+    dRvals->cd();
+    for (int m = 0; m < kNMethods; m++)
+        for (int ia = 0; ia < nAlpha; ia++)
+            for (int ip = 0; ip < nPt; ip++) {
+                hRd[m][ia][ip]->Write();
+                hRm[m][ia][ip]->Write();
+                delete hRd[m][ia][ip];
+                delete hRm[m][ia][ip];
+            }
 
     // ---- build TGraphErrors and fit R_ratio vs alpha ----
 
@@ -229,10 +287,16 @@ static void ExtractAndFit(
             TString corrName = Form("%s_intercept_%s%s%s",
                 cone.Data(), kMethodNames[method],
                 ptSlice.shortName.Data(), nameSuffix.Data());
+
             TH1D* hCorr = new TH1D(corrName, "",
                 (int)etaEdges.size() - 1, etaEdges.data());
             hCorr->GetXaxis()->SetTitle(nameSuffix.IsNull() ? "|#eta|" : "#eta");
             hCorr->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha=0");
+
+            TH1D* hCorrNorm = new TH1D(corrName + "_norm", "",
+                (int)etaEdges.size() - 1, etaEdges.data());
+            hCorrNorm->GetXaxis()->SetTitle(hCorr->GetXaxis()->GetTitle());
+            hCorrNorm->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha=0 (norm.)");
 
             for (int ieta = 0; ieta < nEta; ieta++) {
                 const auto& pts = rpts[method][ipt][ieta];
@@ -256,25 +320,76 @@ static void ExtractAndFit(
                 gr->SetMarkerColor(ptSlice.color);
                 gr->SetLineColor(ptSlice.color);
 
+                // "R" option: only points within [0, kAlphaFitHi] enter the chi2 — those above
+                // 0.30 are displayed in the graph but excluded from the fit
                 TF1* fitFn = new TF1(gname + "_fit", "[0]+[1]*x", 0.0, kAlphaFitHi);
                 fitFn->SetParameter(0, 1.0);
                 fitFn->SetParameter(1, 0.0);
                 fitFn->SetLineColor(ptSlice.color);
-                gr->Fit(fitFn, "Q");
+                gr->Fit(fitFn, "QR");
 
                 hCorr->SetBinContent(ieta + 1, fitFn->GetParameter(0));
                 hCorr->SetBinError  (ieta + 1, fitFn->GetParError(0));
 
+                // ---- normalized variant: divide each point by the value at alpha=0.30,
+                //      fit, then multiply the intercept back. Errors differ from direct
+                //      method because the normalization changes the fit input distribution. ----
+                double val030 = 0, err030 = 0;
+                for (int k = n - 1; k >= 0; k--) {
+                    if (pts[k].alpha <= kAlphaFitHi + 1e-4 && pts[k].val > 1e-6) {
+                        val030 = pts[k].val;
+                        err030 = pts[k].err;
+                        break;
+                    }
+                }
+                if (val030 > 1e-6) {
+                    // count points within fit range
+                    int nfit = 0;
+                    for (int k = 0; k < n && pts[k].alpha <= kAlphaFitHi + 1e-4; k++) nfit++;
+
+                    std::vector<double> xn(nfit), yn(nfit), exn(nfit, 0.0), eyn(nfit);
+                    bool bad = false;
+                    for (int k = 0; k < nfit; k++) {
+                        if (std::abs(pts[k].val) < 1e-6) { bad = true; break; }
+                        xn[k]  = pts[k].alpha;
+                        yn[k]  = pts[k].val / val030;
+                        eyn[k] = yn[k] * TMath::Sqrt(
+                            TMath::Power(pts[k].err / pts[k].val, 2.0) +
+                            TMath::Power(err030 / val030, 2.0));
+                    }
+                    if (!bad && nfit >= 2) {
+                        TGraphErrors* grn = new TGraphErrors(nfit,
+                            xn.data(), yn.data(), exn.data(), eyn.data());
+                        TF1* fn = new TF1(gname + "_fitnorm", "[0]+[1]*x", 0.0, kAlphaFitHi);
+                        grn->Fit(fn, "QR");
+
+                        double c0n  = fn->GetParameter(0);
+                        double ec0n = fn->GetParError(0);
+                        double c0   = c0n * val030;
+                        double ec0  = (std::abs(c0n) > 1e-9)
+                            ? c0 * TMath::Sqrt(
+                                TMath::Power(ec0n / c0n, 2.0) +
+                                TMath::Power(err030 / val030, 2.0))
+                            : ec0n * val030;
+
+                        hCorrNorm->SetBinContent(ieta + 1, c0);
+                        hCorrNorm->SetBinError  (ieta + 1, ec0);
+                        delete fn;
+                        delete grn;
+                    }
+                }
+
                 dGraphs->cd();
-                gr->Write();
-                gr->GetListOfFunctions()->Remove(fitFn);
-                delete fitFn;
+                gr->Write();   // fit function clone is embedded in graph by ROOT's Fit()
+                delete fitFn;  // delete the original (clone in graph list is separately owned)
                 delete gr;
             }
 
             fOut->cd();
             hCorr->Write();
+            hCorrNorm->Write();
             delete hCorr;
+            delete hCorrNorm;
         }
     }
 }
@@ -282,10 +397,6 @@ static void ExtractAndFit(
 // ============================================================
 
 void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
-
-    std::cout << "Data:   " << dataFile   << "\n"
-              << "MC:     " << mcFile     << "\n"
-              << "Output: " << outputFile << "\n";
 
     TFile* fData = TFile::Open(dataFile, "read");
     TFile* fMC   = TFile::Open(mcFile,   "read");
@@ -295,6 +406,11 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
     TFile* fOut = new TFile(outputFile, "recreate");
 
     BinningConfig bins;
+    const int nPt = (int)bins.ptavgSlices.size();
+
+    // two ExtractAndFit calls per cone (|eta| and full eta), each steps through nPt pT slices
+    const int totalSteps = (int)kConeLabels.size() * 2 * nPt;
+    ProgressBar pb("Extracting:", totalSteps);
 
     for (const TString& cone : kConeLabels) {
 
@@ -303,9 +419,6 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
         if (!hRawData) { std::cerr << "Missing " << cone << "_asym in data\n"; continue; }
         if (!hRawMC)   { std::cerr << "Missing " << cone << "_asym in MC\n";   continue; }
 
-        std::cout << "\n=== " << cone << " ===\n";
-
-        // fold full-eta → |eta| once; both folded sparses are written to fOut
         THnSparse* hData = FoldEtaAxis(hRawData, kEtaAxis, cone + "_asym_data_abseta");
         THnSparse* hMC   = FoldEtaAxis(hRawMC,   kEtaAxis, cone + "_asym_mc_abseta");
         fOut->cd();
@@ -317,24 +430,23 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
         TDirectory* dQA_data_full = fOut->mkdir(cone + "_QA_data_fulleta");
         TDirectory* dQA_mc_full   = fOut->mkdir(cone + "_QA_mc_fulleta");
         TDirectory* dGraphs       = fOut->mkdir(cone + "_graphs");
+        TDirectory* dRvals        = fOut->mkdir(cone + "_Rvals");
+        TDirectory* dRvals_full   = fOut->mkdir(cone + "_Rvals_fulleta");
 
-        std::cout << "  |eta| extraction\n";
         ExtractAndFit(hData, hMC, cone, bins,
-                      dQA_data, dQA_mc, dGraphs, fOut,
-                      kAbsEtaEdges, "");
+                      dQA_data, dQA_mc, dGraphs, dRvals, fOut,
+                      kAbsEtaEdges, "", pb);
 
-        std::cout << "  full eta extraction\n";
         ExtractAndFit(hRawData, hRawMC, cone, bins,
-                      dQA_data_full, dQA_mc_full, dGraphs, fOut,
-                      kEtaEdges, "_fulleta");
+                      dQA_data_full, dQA_mc_full, dGraphs, dRvals_full, fOut,
+                      kEtaEdges, "_fulleta", pb);
 
         delete hData;
         delete hMC;
     }
 
+    pb.Finish();
     fOut->Close();
     fData->Close();
     fMC  ->Close();
-
-    std::cout << "\nDone. Output: " << outputFile << "\n";
 }
