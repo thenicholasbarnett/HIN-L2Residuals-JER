@@ -13,7 +13,10 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "TFile.h"
+#include "TDirectory.h"
 #include "TH1D.h"
+#include "TH2D.h"
+#include "TH3D.h"
 #include "TGraphErrors.h"
 #include "TCanvas.h"
 #include "TPad.h"
@@ -185,6 +188,46 @@ static TString SafeKey(const TString& s) {
     return s.BeginsWith("_") ? s(1, s.Length() - 1) : s;
 }
 
+static TString EtaKey(int ieta) {
+    return Form("eta%02d", ieta);
+}
+
+static TString PtKey(const RangeBin& ptSl) {
+    return SafeKey(ptSl.shortName);
+}
+
+static TString AlphaKey(const RangeBin& aSl) {
+    return SafeKey(aSl.shortName);
+}
+
+static TString JoinPath(const std::vector<TString>& parts) {
+    TString path;
+    for (const auto& part : parts) {
+        if (part.IsNull()) continue;
+        if (!path.IsNull()) path += "/";
+        path += part;
+    }
+    return path;
+}
+
+static TString PlotDir(const TString& outDir, const TString& cone,
+                       const TString& plotType,
+                       const std::vector<TString>& orderedKeys = {}) {
+    std::vector<TString> parts = {outDir, cone, plotType};
+    parts.insert(parts.end(), orderedKeys.begin(), orderedKeys.end());
+    TString dir = JoinPath(parts);
+    gSystem->mkdir(dir, true);
+    return dir;
+}
+
+static void SavePlot(TCanvas* c, const TString& outDir, const TString& cone,
+                     const TString& plotType,
+                     const std::vector<TString>& orderedKeys,
+                     const TString& fileBase) {
+    TString dir = PlotDir(outDir, cone, plotType, orderedKeys);
+    c->SaveAs(Form("%s/%s.png", dir.Data(), fileBase.Data()));
+}
+
 // Return the x-values at the low and high truncation boundaries for `fraction` of the area.
 static std::pair<double, double> TruncBounds(TH1D* h, double fraction) {
     if (!h || h->Integral() <= 0) return {0, 0};
@@ -262,9 +305,11 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                 auto [t90lo, t90hi] = TruncBounds(hdc, 0.90);
                 auto [t95lo, t95hi] = TruncBounds(hdc, 0.95);
 
-                TString cvName = Form("adist_%s_%s_%s_eta%02d",
-                    cone.Data(), SafeKey(ptSl.shortName).Data(),
-                    SafeKey(aSl.shortName).Data(), ie);
+                TString etaKey = EtaKey(ie);
+                TString ptKey = PtKey(ptSl);
+                TString alphaKey = AlphaKey(aSl);
+                TString cvName = Form("adist_%s_%s_%s_%s",
+                    cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data());
                 TCanvas* c = new TCanvas(cvName, "", 800, 600);
                 c->SetLogy();
                 c->SetLeftMargin(0.13);
@@ -316,7 +361,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                 leg->AddEntry(l95lo, "Trunc 95%", "l");
                 leg->Draw();
 
-                c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                SavePlot(c, outDir, cone, "adist", {etaKey, ptKey, alphaKey}, cvName);
                 pb.Update();
 
                 delete c;   // cascade-deletes hdc, hmc, lines, leg
@@ -370,9 +415,10 @@ static void PlotROverlay(TFile* fIn, const TString& outDir,
                 TH1D* hRmc = (TH1D*)hRm->Clone(rmName + "_c"); hRmc->SetDirectory(0);
                 TH1D* hRat = RatioH(hRdc, hRmc, rdName + "_rat");
 
+                TString ptKey = PtKey(ptSl);
+                TString alphaKey = AlphaKey(aSl);
                 const TString cvName = Form("roverlay_%s_%s_%s_%s",
-                    cone.Data(), kMethodKeys[m],
-                    SafeKey(ptSl.shortName).Data(), SafeKey(aSl.shortName).Data());
+                    cone.Data(), kMethodKeys[m], ptKey.Data(), alphaKey.Data());
                 TwoPad cv = MakeTwoPad(cvName);
 
                 // ---- main pad ----
@@ -417,7 +463,7 @@ static void PlotROverlay(TFile* fIn, const TString& outDir,
                 RefLine(cv.ratio, (double)kAbsEtaEdges.front(), (double)kAbsEtaEdges.back(), 1.0);
 
                 cv.c->cd();
-                cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                SavePlot(cv.c, outDir, cone, "roverlay", {ptKey, alphaKey}, cvName);
                 pb.Update();
 
                 delete hRd; delete hRm;
@@ -459,9 +505,10 @@ static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                 }
                 TGraphErrors* gc = (TGraphErrors*)gr->Clone(gname + "_c");
 
-                const TString cvName = Form("alphafit_%s_%s_%s_eta%02d",
-                    cone.Data(), kMethodKeys[m],
-                    SafeKey(ptSl.shortName).Data(), ie);
+                TString etaKey = EtaKey(ie);
+                TString ptKey = PtKey(ptSl);
+                const TString cvName = Form("alphafit_%s_%s_%s_%s",
+                    cone.Data(), kMethodKeys[m], etaKey.Data(), ptKey.Data());
                 TCanvas* c = new TCanvas(cvName, "", 800, 600);
                 c->SetLeftMargin(0.13);
                 c->SetGridx(); c->SetGridy();
@@ -497,7 +544,7 @@ static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                 tex->DrawLatex(0.14, 0.92, Form("%s  |  %s  |  %s  |  |#eta| bin %d",
                     cone.Data(), kMethodLabels[m], ptSl.title.Data(), ie));
 
-                c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+                SavePlot(c, outDir, cone, "alpha", {etaKey, ptKey}, cvName);
                 pb.Update();
 
                 delete gc;
@@ -537,8 +584,9 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
             TH1D* hRefl  = Reflect(hAbs, nameAbs + "_refl");
             TH1D* hRatio = RatioH(hFull, hRefl, nameAbs + "_rat");
 
+            TString ptKey = PtKey(sl);
             const TString cvName = Form("etasym_%s_%s_%s",
-                cone.Data(), kMethodKeys[m], SafeKey(sl.shortName).Data());
+                cone.Data(), kMethodKeys[m], ptKey.Data());
             TwoPad cv = MakeTwoPad(cvName);
 
             // ---- main pad ----
@@ -590,7 +638,7 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
             RefLine(cv.ratio, kEtaEdges.front(), kEtaEdges.back(), 1.0);
 
             cv.c->cd();
-            cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+            SavePlot(cv.c, outDir, cone, "etasym", {ptKey}, cvName);
             pb.Update();
 
             // hAbs was not drawn — delete manually
@@ -647,8 +695,10 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
             ratioIdx.push_back(m);
         }
 
-        const TString cvName = Form("methods_%s_%s%s",
-            cone.Data(), SafeKey(sl.shortName).Data(), suffix.IsNull() ? "_abseta" : suffix.Data());
+        TString ptKey = PtKey(sl);
+        const TString etaMode = suffix.IsNull() ? "abseta" : "fulleta";
+        const TString cvName = Form("methods_%s_%s_%s",
+            cone.Data(), etaMode.Data(), ptKey.Data());
         TwoPad cv = MakeTwoPad(cvName);
 
         // ---- main pad ----
@@ -715,7 +765,7 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
         }
 
         cv.c->cd();
-        cv.c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+        SavePlot(cv.c, outDir, cone, "methods", {etaMode, ptKey}, cvName);
         pb.Update();
 
         // ratios and hists were drawn on pads — canvas cascade deletes them
@@ -759,9 +809,9 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
                 continue;
             }
 
-            const TString cvName = Form("finals_%s_%s%s",
-                cone.Data(), kMethodKeys[m],
-                fullEta ? "_fulleta" : "_abseta");
+            const TString etaMode = fullEta ? "fulleta" : "abseta";
+            const TString cvName = Form("finals_%s_%s_%s",
+                cone.Data(), kMethodKeys[m], etaMode.Data());
             TCanvas* c = new TCanvas(cvName, "", 900, 600);
             c->SetLeftMargin(0.13);
             c->SetGridx();
@@ -810,10 +860,152 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
             tex->DrawLatex(0.14, 0.92, Form("%s  |  %s  |  %s",
                 cone.Data(), kMethodLabels[m], xTitle.Data()));
 
-            c->SaveAs(Form("%s/%s.png", outDir.Data(), cvName.Data()));
+            SavePlot(c, outDir, cone, "finals", {etaMode}, cvName);
             pb.Update();
 
             delete c;   // cascade-deletes hists, leg, tex, rl
+        }
+    }
+}
+
+// ============================================================
+// Plot type 7: Step-1 jet kinematics
+//
+// Reads the TH3D(eta, phi, pT) control histograms written by runAsymmetry:
+//   {cone}_incl, {cone}_tag, {cone}_probe
+//
+// For each cone and collection, writes pT, eta, phi projections plus eta-phi
+// maps above a few pT thresholds. This mode expects a Step-1 runAsymmetry file,
+// not a Step-2 residuals file.
+// ============================================================
+
+static constexpr int kNKinematicsCollections = 3;
+static const char* const kKinematicsCollections[] = { "incl", "tag", "probe" };
+
+static constexpr int kNKinematicsPtMins = 3;
+static const double kKinematicsPtMins[] = { 40.0, 100.0, 200.0 };
+
+static TH1D* ProjectTH3D1D(TH3D* h3, const char* axis, const TString& name) {
+    TDirectory::TContext nodir(nullptr);
+    TH1D* h = (TH1D*)h3->Project3D(axis);
+    h->SetName(name);
+    h->SetDirectory(0);
+    return h;
+}
+
+static TH2D* ProjectEtaPhi(TH3D* h3, double ptMin, const TString& name) {
+    h3->GetZaxis()->SetRangeUser(ptMin, h3->GetZaxis()->GetXmax());
+    TDirectory::TContext nodir(nullptr);
+    TH2D* h = (TH2D*)h3->Project3D("yx");
+    h->SetName(name);
+    h->SetDirectory(0);
+    h3->GetZaxis()->SetRange(0, 0);
+    return h;
+}
+
+static void DrawKinematics1D(TH1D* h, const TString& xTitle, bool logy) {
+    h->SetTitle("");
+    h->GetXaxis()->SetTitle(xTitle);
+    h->GetYaxis()->SetTitle("Jets");
+    h->GetXaxis()->CenterTitle();
+    h->GetYaxis()->CenterTitle();
+    h->SetLineColor(HiroshigeNightBlue);
+    h->SetMarkerColor(HiroshigeNightBlue);
+    h->SetMarkerStyle(20);
+    h->SetLineWidth(2);
+    h->Draw("hist");
+    if (logy && h->GetMaximum() > 0) {
+        h->SetMinimum(std::max(0.5, h->GetMinimum(0.0) * 0.5));
+        gPad->SetLogy();
+    }
+}
+
+static TString PtMinKey(double ptMin) {
+    return Form("ptmin_%g", ptMin);
+}
+
+static void PlotKinematics(TFile* fIn, const TString& outDir,
+                           const TString& cone, ProgressBar& pb) {
+    for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+        const TString coll = kKinematicsCollections[ic];
+        TH3D* h3 = (TH3D*)fIn->Get(cone + "_" + coll);
+        const int plotsPerCollection = 3 + kNKinematicsPtMins;
+
+        if (!h3) {
+            std::cerr << "skip kinematics: missing " << cone << "_" << coll << "\n";
+            for (int i = 0; i < plotsPerCollection; i++) pb.Update();
+            continue;
+        }
+
+        h3->GetXaxis()->SetRange(0, 0);
+        h3->GetYaxis()->SetRange(0, 0);
+        h3->GetZaxis()->SetRange(0, 0);
+
+        {
+            TString cvName = Form("kinematics_%s_%s_pt", cone.Data(), coll.Data());
+            TH1D* h = ProjectTH3D1D(h3, "z", cvName + "_h");
+            TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            c->SetLeftMargin(0.13);
+            DrawKinematics1D(h, "p_{T} [GeV/c]", true);
+            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            delete c;
+            delete h;
+            pb.Update();
+        }
+
+        {
+            TString cvName = Form("kinematics_%s_%s_eta", cone.Data(), coll.Data());
+            TH1D* h = ProjectTH3D1D(h3, "x", cvName + "_h");
+            TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            c->SetLeftMargin(0.13);
+            DrawKinematics1D(h, "#eta", false);
+            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            delete c;
+            delete h;
+            pb.Update();
+        }
+
+        {
+            TString cvName = Form("kinematics_%s_%s_phi", cone.Data(), coll.Data());
+            TH1D* h = ProjectTH3D1D(h3, "y", cvName + "_h");
+            TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            c->SetLeftMargin(0.13);
+            DrawKinematics1D(h, "#phi", false);
+            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            delete c;
+            delete h;
+            pb.Update();
+        }
+
+        for (int ip = 0; ip < kNKinematicsPtMins; ip++) {
+            const double ptMin = kKinematicsPtMins[ip];
+            const TString ptKey = PtMinKey(ptMin);
+            TString cvName = Form("kinematics_%s_%s_eta_phi_%s",
+                cone.Data(), coll.Data(), ptKey.Data());
+
+            TH2D* h = ProjectEtaPhi(h3, ptMin, cvName + "_h");
+            TCanvas* c = new TCanvas(cvName, "", 850, 700);
+            c->SetLeftMargin(0.12);
+            c->SetRightMargin(0.16);
+            h->SetTitle("");
+            h->GetXaxis()->SetTitle("#eta");
+            h->GetYaxis()->SetTitle("#phi");
+            h->GetZaxis()->SetTitle("Jets");
+            h->GetXaxis()->CenterTitle();
+            h->GetYaxis()->CenterTitle();
+            h->Draw("colz");
+
+            TLatex* tex = new TLatex();
+            tex->SetNDC();
+            tex->SetTextSize(0.040);
+            tex->SetTextFont(62);
+            tex->DrawLatex(0.13, 0.93, Form("%s  |  %s jets  |  p_{T} > %.0f GeV/c",
+                cone.Data(), coll.Data(), ptMin));
+
+            SavePlot(c, outDir, cone, "kinematics", {coll, ptKey}, cvName);
+            delete c;
+            delete h;
+            pb.Update();
         }
     }
 }
@@ -828,7 +1020,8 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
 //   "adist"    — asymmetry distributions per bin with log-y and truncation lines
 //   "roverlay" — R_data and R_MC overlay with ratio panel per alpha/pT
 //   "alpha"    — alpha fit plots: all 9 points, fit line through 0.05–0.30
-//   "all"      — run everything (default)
+//   "kinematics" — Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
+//   "all"      — run all Step-2 residual plots (default); kinematics is explicit
 // ============================================================
 
 void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "all") {
@@ -862,6 +1055,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     const bool doAdist   = doAll || flags.Contains("adist");
     const bool doRover   = doAll || flags.Contains("roverlay");
     const bool doAlpha   = doAll || flags.Contains("alpha");
+    const bool doKine    = flags.Contains("kinematics");
 
     int totalPlots = 0;
     if (doEtaSym)  totalPlots += nCones * kNMethods * nPtSlices;
@@ -870,6 +1064,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     if (doAdist)   totalPlots += nCones * nAlpha * nPtSlices * nEta;
     if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
     if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
+    if (doKine)    totalPlots += nCones * kNKinematicsCollections * (3 + kNKinematicsPtMins);
 
     ProgressBar pb("Saving plots:", totalPlots);
 
@@ -881,6 +1076,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
         if (doAdist)   PlotAsymDist (fIn, outDir, cone, bins,        pb);
         if (doRover)   PlotROverlay (fIn, outDir, cone, bins,        pb);
         if (doAlpha)   PlotAlphaFit (fIn, outDir, cone, bins,        pb);
+        if (doKine)    PlotKinematics(fIn, outDir, cone,             pb);
     }
 
     pb.Finish();
@@ -892,7 +1088,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
-                  << "  flags: all etasym methods finals adist roverlay alpha (space-separated)\n";
+                  << "  flags: all etasym methods finals adist roverlay alpha kinematics (space-separated)\n";
         return 1;
     }
     plotResiduals(argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all");

@@ -35,17 +35,6 @@ public:
     // Custom constructor
     JSON_handler(const std::string &jsonFilePath){ loadJSON(jsonFilePath);}
 
-    //For testing if run is included before attempting to apply json
-    //Useful for provisional jsons being updated intermittently
-    bool isGoodRun(unsigned int run) const {
-        std::string runStr = std::to_string(run);
-		if (!dcsJson.contains(runStr)){
-		  std::cout << __PRETTY_FUNCTION__ << " WARNING: JSON does not contain run '" << run << "'. return false" << std::endl;
-		  return false;
-		}
-    	return false;
-    }
-
     bool isGood(unsigned int run, unsigned int lumi) const {
         std::string runStr = std::to_string(run);
 
@@ -69,6 +58,5 @@ public:
 // if (dcs.isGood(run, lumi)) {
 //     // Do your stuff
 // }
-
 
 
