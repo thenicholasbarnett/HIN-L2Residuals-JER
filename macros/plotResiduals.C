@@ -957,14 +957,22 @@ static TString PtMinKey(double ptMin) {
 
 static void PlotKinematics(TFile* fIn, const TString& outDir,
                            const TString& cone, ProgressBar& pb) {
+    const int plotsPerCollection = 3 + kNKinematicsPtMins;
+    {
+        TH3D* hTest = (TH3D*)fIn->Get(cone + "/" + cone + "_incl");
+        if (!hTest) hTest = (TH3D*)fIn->Get(cone + "_incl");
+        if (!hTest) {
+            std::cerr << "skip kinematics: no TH3Ds for " << cone << "\n";
+            for (int i = 0; i < kNKinematicsCollections * plotsPerCollection; i++) pb.Update();
+            return;
+        }
+    }
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
         const TString coll = kKinematicsCollections[ic];
         TH3D* h3 = (TH3D*)fIn->Get(cone + "/" + cone + "_" + coll);
         if (!h3) h3 = (TH3D*)fIn->Get(cone + "_" + coll);
-        const int plotsPerCollection = 3 + kNKinematicsPtMins;
 
         if (!h3) {
-            std::cerr << "skip kinematics: missing " << cone << "_" << coll << "\n";
             for (int i = 0; i < plotsPerCollection; i++) pb.Update();
             continue;
         }
