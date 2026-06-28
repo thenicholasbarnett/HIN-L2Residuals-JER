@@ -256,7 +256,11 @@ void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxE
     hvz->Write();
     if (hfilt) hfilt->Write();
     if (h_j80) h_j80->Write();
-    for (auto& cone : cones) cone.Write();
+    for (size_t c = 0; c < nCones; c++) {
+        TDirectory* dir = fo->mkdir(kConeLabels[c].Data());
+        cones[c].Write(dir);
+        fo->cd();
+    }
     fo->Close();
     fi->Close();
 }

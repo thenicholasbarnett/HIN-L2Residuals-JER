@@ -54,11 +54,14 @@ struct ConeHistograms {
         hInclJet->Fill(jetEta, jetPhi, corrPt, weight);
     }
 
-    void Write() {
+    void Write(TDirectory* dir = nullptr) {
+        TDirectory* saved = gDirectory;
+        if (dir) dir->cd();
         WriteAll(hAsym);
         WriteAll(hInclJet);
         WriteAll(hTagJet);
         WriteAll(hProbeJet);
+        if (dir && saved) saved->cd();
     }
 };
 

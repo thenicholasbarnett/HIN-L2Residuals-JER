@@ -153,7 +153,7 @@ static void ExtractAndFit(
     TDirectory* dQA_data, TDirectory* dQA_mc,
     TDirectory* dGraphs,
     TDirectory* dRvals,
-    TFile* fOut,
+    TDirectory* dOut,
     const std::vector<Double_t>& etaEdges,
     const TString& nameSuffix,
     ProgressBar& pb)
@@ -393,7 +393,7 @@ static void ExtractAndFit(
                 delete gr;
             }
 
-            fOut->cd();
+            dOut->cd();
             hCorr->Write();
             hCorrNorm->Write();
             delete hCorr;
@@ -422,31 +422,38 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
 
     for (const TString& cone : kConeLabels) {
 
-        THnSparse* hRawData = (THnSparse*)fData->Get(cone + "_asym");
-        THnSparse* hRawMC   = (THnSparse*)fMC  ->Get(cone + "_asym");
+        // Read THnSparse from cone TDirectory (new) or flat top level (legacy)
+        TDirectory* coneDataDir = (TDirectory*)fData->Get(cone);
+        TDirectory* coneMCDir   = (TDirectory*)fMC  ->Get(cone);
+        THnSparse* hRawData = coneDataDir ? (THnSparse*)coneDataDir->Get(cone + "_asym")
+                                          : (THnSparse*)fData->Get(cone + "_asym");
+        THnSparse* hRawMC   = coneMCDir   ? (THnSparse*)coneMCDir->Get(cone + "_asym")
+                                          : (THnSparse*)fMC->Get(cone + "_asym");
         if (!hRawData) { std::cerr << "Missing " << cone << "_asym in data\n"; continue; }
         if (!hRawMC)   { std::cerr << "Missing " << cone << "_asym in MC\n";   continue; }
 
         THnSparse* hData = FoldEtaAxis(hRawData, kEtaAxis, cone + "_asym_data_abseta");
         THnSparse* hMC   = FoldEtaAxis(hRawMC,   kEtaAxis, cone + "_asym_mc_abseta");
-        fOut->cd();
+
+        TDirectory* coneDir = fOut->mkdir(cone.Data());
+        coneDir->cd();
         hData->Write();
         hMC  ->Write();
 
-        TDirectory* dQA_data      = fOut->mkdir(cone + "_QA_data");
-        TDirectory* dQA_mc        = fOut->mkdir(cone + "_QA_mc");
-        TDirectory* dQA_data_full = fOut->mkdir(cone + "_QA_data_fulleta");
-        TDirectory* dQA_mc_full   = fOut->mkdir(cone + "_QA_mc_fulleta");
-        TDirectory* dGraphs       = fOut->mkdir(cone + "_graphs");
-        TDirectory* dRvals        = fOut->mkdir(cone + "_Rvals");
-        TDirectory* dRvals_full   = fOut->mkdir(cone + "_Rvals_fulleta");
+        TDirectory* dQA_data      = coneDir->mkdir("QA_data");
+        TDirectory* dQA_mc        = coneDir->mkdir("QA_mc");
+        TDirectory* dQA_data_full = coneDir->mkdir("QA_data_fulleta");
+        TDirectory* dQA_mc_full   = coneDir->mkdir("QA_mc_fulleta");
+        TDirectory* dGraphs       = coneDir->mkdir("graphs");
+        TDirectory* dRvals        = coneDir->mkdir("Rvals");
+        TDirectory* dRvals_full   = coneDir->mkdir("Rvals_fulleta");
 
         ExtractAndFit(hData, hMC, cone, bins,
-                      dQA_data, dQA_mc, dGraphs, dRvals, fOut,
+                      dQA_data, dQA_mc, dGraphs, dRvals, coneDir,
                       kAbsEtaEdges, "", pb);
 
         ExtractAndFit(hRawData, hRawMC, cone, bins,
-                      dQA_data_full, dQA_mc_full, dGraphs, dRvals_full, fOut,
+                      dQA_data_full, dQA_mc_full, dGraphs, dRvals_full, coneDir,
                       kEtaEdges, "_fulleta", pb);
 
         delete hData;

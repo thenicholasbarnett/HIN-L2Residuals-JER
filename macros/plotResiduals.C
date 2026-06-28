@@ -23,6 +23,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include "TLegend.h"
 #include "TLine.h"
 #include "TLatex.h"
+#include "TROOT.h"
 #include "TStyle.h"
 #include "TSystem.h"
 #include "TString.h"
@@ -56,6 +57,11 @@ static const Color_t kColRefl = HiroshigeNightBlue;
 // Canvas helpers
 // ============================================================
 
+static constexpr Float_t kAspectRatio = 4.0f / 3.0f;
+static void RealAspectRatio(TCanvas* c) {
+    if (!gROOT->IsBatch()) c->SetRealAspectRatio(kAspectRatio);
+}
+
 struct TwoPad {
     TCanvas* c     = nullptr;
     TPad*    main  = nullptr;
@@ -66,7 +72,8 @@ struct TwoPad {
 // Pads are added to the canvas's primitive list; delete canvas to cascade-delete both.
 static TwoPad MakeTwoPad(const TString& name) {
     TwoPad cv;
-    cv.c = new TCanvas(name, "", 900, 700);
+    cv.c = new TCanvas(name, "", 800, 600);
+    RealAspectRatio(cv.c);
     cv.c->cd();
 
     cv.main  = new TPad(name + "_m", "", 0.0, 0.30, 1.0, 1.00);
@@ -268,8 +275,10 @@ static constexpr int kMinEntriesPlot = 10;
 static void PlotAsymDist(TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb) {
-    TDirectory* dData = (TDirectory*)fIn->Get(cone + "_QA_data");
-    TDirectory* dMC   = (TDirectory*)fIn->Get(cone + "_QA_mc");
+    TDirectory* dData = (TDirectory*)fIn->Get(cone + "/QA_data");
+    if (!dData) dData = (TDirectory*)fIn->Get(cone + "_QA_data");
+    TDirectory* dMC   = (TDirectory*)fIn->Get(cone + "/QA_mc");
+    if (!dMC)   dMC   = (TDirectory*)fIn->Get(cone + "_QA_mc");
 
     const int nPt    = (int)bins.ptavgSlices.size();
     const int nAlpha = (int)bins.alphaSlices.size();
@@ -317,6 +326,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                 TString cvName = Form("adist_%s_%s_%s_%s",
                     cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data());
                 TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
                 c->SetLogy();
                 c->SetLeftMargin(0.13);
 
@@ -389,7 +399,8 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
 static void PlotROverlay(TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb) {
-    TDirectory* dRvals = (TDirectory*)fIn->Get(cone + "_Rvals");
+    TDirectory* dRvals = (TDirectory*)fIn->Get(cone + "/Rvals");
+    if (!dRvals) dRvals = (TDirectory*)fIn->Get(cone + "_Rvals");
 
     const int nPt    = (int)bins.ptavgSlices.size();
     const int nAlpha = (int)bins.alphaSlices.size();
@@ -492,7 +503,8 @@ static void PlotROverlay(TFile* fIn, const TString& outDir,
 static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb) {
-    TDirectory* dGraphs = (TDirectory*)fIn->Get(cone + "_graphs");
+    TDirectory* dGraphs = (TDirectory*)fIn->Get(cone + "/graphs");
+    if (!dGraphs) dGraphs = (TDirectory*)fIn->Get(cone + "_graphs");
 
     const int nPt  = (int)bins.ptavgSlices.size();
     const int nEta = (int)kAbsEtaEdges.size() - 1;
@@ -519,6 +531,7 @@ static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                 const TString cvName = Form("alphafit_%s_%s_%s_%s",
                     cone.Data(), kMethodKeys[m], etaKey.Data(), ptKey.Data());
                 TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
                 c->SetLeftMargin(0.13);
                 c->SetGridx(); c->SetGridy();
 
@@ -584,8 +597,8 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
                 cone.Data(), kMethodKeys[m], sl.shortName.Data());
             const TString oldNameFull = oldNameAbs + "_fulleta";
 
-            TH1D* hAbs  = GetHAny(fIn, {nameAbs, oldNameAbs});
-            TH1D* hFull = GetHAny(fIn, {nameFull, oldNameFull});
+            TH1D* hAbs  = GetHAny(fIn, {cone + "/" + nameAbs,  nameAbs,  oldNameAbs});
+            TH1D* hFull = GetHAny(fIn, {cone + "/" + nameFull, nameFull, oldNameFull});
 
             if (!hAbs || !hFull) {
                 std::cerr << "skip eta-sym: " << nameAbs << "\n";
@@ -689,7 +702,7 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
                 {etaMode, L2Name::PtKey(sl)}, {kMethodKeys[m]});
             TString oldName = Form("%s_intercept_%s%s%s",
                 cone.Data(), kMethodKeys[m], sl.shortName.Data(), suffix.Data());
-            hists[m] = GetHAny(fIn, {name, oldName});
+            hists[m] = GetHAny(fIn, {cone + "/" + name, name, oldName});
         }
 
         if (!hists[0]) {
@@ -815,7 +828,7 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
                     {L2Name::EtaModeKey(fullEta), L2Name::PtKey(ptSl)}, {kMethodKeys[m]});
                 TString oldName = Form("%s_intercept_%s%s%s",
                     cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), suffix.Data());
-                hists.push_back(GetHAny(fIn, {name, oldName}));
+                hists.push_back(GetHAny(fIn, {cone + "/" + name, name, oldName}));
             }
 
             bool anyValid = false;
@@ -829,7 +842,8 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
             const TString etaMode = L2Name::EtaModeKey(fullEta);
             const TString cvName = Form("finals_%s_%s_%s",
                 cone.Data(), kMethodKeys[m], etaMode.Data());
-            TCanvas* c = new TCanvas(cvName, "", 900, 600);
+            TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             c->SetGridx();
             c->SetGridy();
@@ -945,7 +959,8 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
                            const TString& cone, ProgressBar& pb) {
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
         const TString coll = kKinematicsCollections[ic];
-        TH3D* h3 = (TH3D*)fIn->Get(cone + "_" + coll);
+        TH3D* h3 = (TH3D*)fIn->Get(cone + "/" + cone + "_" + coll);
+        if (!h3) h3 = (TH3D*)fIn->Get(cone + "_" + coll);
         const int plotsPerCollection = 3 + kNKinematicsPtMins;
 
         if (!h3) {
@@ -962,6 +977,7 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TString cvName = Form("kinematics_%s_%s_pt", cone.Data(), coll.Data());
             TH1D* h = ProjectTH3D1D(h3, "z", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "p_{T} [GeV/c]", true);
             SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
@@ -974,6 +990,7 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TString cvName = Form("kinematics_%s_%s_eta", cone.Data(), coll.Data());
             TH1D* h = ProjectTH3D1D(h3, "x", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "#eta", false);
             SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
@@ -986,6 +1003,7 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TString cvName = Form("kinematics_%s_%s_phi", cone.Data(), coll.Data());
             TH1D* h = ProjectTH3D1D(h3, "y", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "#phi", false);
             SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
@@ -1001,7 +1019,8 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
                 cone.Data(), coll.Data(), ptKey.Data());
 
             TH2D* h = ProjectEtaPhi(h3, ptMin, cvName + "_h");
-            TCanvas* c = new TCanvas(cvName, "", 850, 700);
+            TCanvas* c = new TCanvas(cvName, "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.12);
             c->SetRightMargin(0.16);
             h->SetTitle("");
@@ -1065,6 +1084,7 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hallc->GetYaxis()->CenterTitle();
 
             TCanvas* c = new TCanvas("event_vz", "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.13); c->SetGridx(); c->SetGridy();
             hallc->Draw("hist");
             hvzc->Draw("E1 same");
@@ -1085,7 +1105,8 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
     {
         TH1I* hfilt = (TH1I*)fIn->Get("hfilt");
         if (hfilt) {
-            TCanvas* c = new TCanvas("event_ppvF", "", 600, 500);
+            TCanvas* c = new TCanvas("event_ppvF", "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.15);
             hfilt->SetTitle("");
             hfilt->GetXaxis()->SetTitle("pprimaryVertexFilter");
@@ -1106,7 +1127,8 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
     {
         TH1I* htrig = (TH1I*)fIn->Get("h_hlt_j80");
         if (htrig) {
-            TCanvas* c = new TCanvas("event_hlt", "", 600, 500);
+            TCanvas* c = new TCanvas("event_hlt", "", 800, 600);
+            RealAspectRatio(c);
             c->SetLeftMargin(0.15);
             htrig->SetTitle("");
             htrig->GetXaxis()->SetTitle("HLT_AK4PFJet80");
