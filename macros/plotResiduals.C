@@ -601,7 +601,6 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
             TH1D* hFull = GetHAny(fIn, {cone + "/" + nameFull, nameFull, oldNameFull});
 
             if (!hAbs || !hFull) {
-                std::cerr << "skip eta-sym: " << nameAbs << "\n";
                 delete hAbs; delete hFull;
                 pb.Update();
                 continue;
@@ -706,8 +705,6 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
         }
 
         if (!hists[0]) {
-            std::cerr << "skip method-comp: gauss missing for " << cone
-                      << " " << sl.shortName << suffix << "\n";
             for (auto* h : hists) delete h;
             pb.Update();
             continue;
