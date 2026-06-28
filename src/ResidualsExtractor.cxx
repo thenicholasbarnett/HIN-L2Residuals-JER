@@ -11,6 +11,7 @@
 #include "TMath.h"
 
 #include "Binning.h"
+#include "Naming.h"
 #include "Utilities.h"
 #include "ProgressBar.h"
 #include "2024ppRef.h"
@@ -130,13 +131,16 @@ static void ResetRange(THnSparse* h, int axis) { h->GetAxis(axis)->SetRange(0, 0
 // nameSuffix: "" for |eta|, "_fulleta" for full eta
 // pb:         progress bar updated once per pT slice
 //
+// Output names follow the global key order:
+//   cone, object kind, eta mode/bin, ptavg, alpha, method/detail.
+//
 // Outputs per (method, ptSlice):
-//   {cone}_intercept_{method}{ptSlice}{suffix}      — direct linear extrapolation to alpha=0
-//   {cone}_intercept_{method}{ptSlice}{suffix}_norm — same but normalized by value at alpha=0.30
+//   {cone}_intercept_{etaMode}_{ptSlice}_{method}
+//   {cone}_intercept_{etaMode}_{ptSlice}_{method}_norm
 //
 // Outputs in dRvals per (method, alphaSlice, ptSlice):
-//   {cone}_R_data_{method}{ptSlice}{alphaSlice}{suffix} — R_data vs eta
-//   {cone}_R_mc_{method}{ptSlice}{alphaSlice}{suffix}   — R_MC  vs eta
+//   {cone}_R_data_{etaMode}_{ptSlice}_{alphaSlice}_{method}
+//   {cone}_R_mc_{etaMode}_{ptSlice}_{alphaSlice}_{method}
 //
 // Outputs in dGraphs per (method, ptSlice, etaBin):
 //   TGraphErrors of R_data/R_MC vs alpha (all 9 bins), with fit function [0,0.31] embedded
@@ -157,6 +161,8 @@ static void ExtractAndFit(
     const int nPt    = (int)bins.ptavgSlices.size();
     const int nAlpha = (int)bins.alphaSlices.size();
     const int nEta   = hData->GetAxis(kEtaAxis)->GetNbins();
+    const bool fullEta = !nameSuffix.IsNull();
+    const TString etaMode = L2Name::EtaModeKey(fullEta);
 
     struct RPoint { double alpha, val, err; };
     // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within [0, kAlphaFitHi]
@@ -173,13 +179,13 @@ static void ExtractAndFit(
     for (int m = 0; m < kNMethods; m++)
         for (int ia = 0; ia < nAlpha; ia++)
             for (int ip = 0; ip < nPt; ip++) {
-                TString bn = Form("%s_R_data_%s%s%s%s", cone.Data(), kMethodNames[m],
-                    bins.ptavgSlices[ip].shortName.Data(),
-                    bins.alphaSlices[ia].shortName.Data(), nameSuffix.Data());
+                TString bn = L2Name::ObjectName(cone, "R_data",
+                    {etaMode, L2Name::PtKey(bins.ptavgSlices[ip]), L2Name::AlphaKey(bins.alphaSlices[ia])},
+                    {kMethodNames[m]});
                 hRd[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
-                bn = Form("%s_R_mc_%s%s%s%s", cone.Data(), kMethodNames[m],
-                    bins.ptavgSlices[ip].shortName.Data(),
-                    bins.alphaSlices[ia].shortName.Data(), nameSuffix.Data());
+                bn = L2Name::ObjectName(cone, "R_mc",
+                    {etaMode, L2Name::PtKey(bins.ptavgSlices[ip]), L2Name::AlphaKey(bins.alphaSlices[ia])},
+                    {kMethodNames[m]});
                 hRm[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
             }
 
@@ -212,10 +218,13 @@ static void ExtractAndFit(
                     hAMC   = (TH1D*)hMC  ->Projection(kAAxis);
                 }
 
-                TString sfx = Form("%s%s_eta%02d",
-                    ptSlice.shortName.Data(), aSlice.shortName.Data(), ieta);
-                hAData->SetName(cone + nameSuffix + "_A_data_" + sfx);
-                hAMC  ->SetName(cone + nameSuffix + "_A_mc_"   + sfx);
+                TString etaKey = L2Name::EtaKey(ieta);
+                TString ptKey = L2Name::PtKey(ptSlice);
+                TString alphaKey = L2Name::AlphaKey(aSlice);
+                hAData->SetName(L2Name::ObjectName(cone, "A_data",
+                    {etaMode, etaKey, ptKey, alphaKey}));
+                hAMC->SetName(L2Name::ObjectName(cone, "A_mc",
+                    {etaMode, etaKey, ptKey, alphaKey}));
 
                 dQA_data->cd(); hAData->Write();
                 dQA_mc  ->cd(); hAMC  ->Write();
@@ -284,9 +293,9 @@ static void ExtractAndFit(
         for (int ipt = 0; ipt < nPt; ipt++) {
             const auto& ptSlice = bins.ptavgSlices[ipt];
 
-            TString corrName = Form("%s_intercept_%s%s%s",
-                cone.Data(), kMethodNames[method],
-                ptSlice.shortName.Data(), nameSuffix.Data());
+            TString ptKey = L2Name::PtKey(ptSlice);
+            TString corrName = L2Name::ObjectName(cone, "intercept",
+                {etaMode, ptKey}, {kMethodNames[method]});
 
             TH1D* hCorr = new TH1D(corrName, "",
                 (int)etaEdges.size() - 1, etaEdges.data());
@@ -308,9 +317,8 @@ static void ExtractAndFit(
                     x[k] = pts[k].alpha; y[k] = pts[k].val; ey[k] = pts[k].err;
                 }
 
-                TString gname = Form("%s_R_%s%s_eta%02d%s",
-                    cone.Data(), kMethodNames[method],
-                    ptSlice.shortName.Data(), ieta, nameSuffix.Data());
+                TString gname = L2Name::ObjectName(cone, "R",
+                    {etaMode, L2Name::EtaKey(ieta), ptKey}, {kMethodNames[method]});
 
                 TGraphErrors* gr = new TGraphErrors(n,
                     x.data(), y.data(), ex.data(), ey.data());

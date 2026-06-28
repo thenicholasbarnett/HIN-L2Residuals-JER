@@ -8,6 +8,7 @@
 #include "TMath.h"
 
 #include "Binning.h"
+#include "Naming.h"
 #include "2024ppRef.h"
 
 #include <vector>
@@ -98,14 +99,21 @@ void runTextFile(TString residualsFile, TString outputFile,
     for (int ip = 0; ip < nPt; ip++)
         ptCenters[ip] = SliceCenter(bins.ptavgSlices[ip]);
 
-    // Load one intercept TH1D per pT slice: {cone}_intercept_{method}{ptSlice.shortName}
+    // Load one intercept TH1D per pT slice. Prefer the canonical global order:
+    // {cone}_intercept_abseta_{ptSlice}_{method}
+    // and keep the older {cone}_intercept_{method}{ptSlice} form readable.
     std::vector<TH1D*> hSlice(nPt, nullptr);
     for (int ip = 0; ip < nPt; ip++) {
-        TString name = Form("%s_intercept_%s%s",
-            cone.Data(), method.Data(), bins.ptavgSlices[ip].shortName.Data());
+        TString name = L2Name::ObjectName(cone, "intercept",
+            {L2Name::EtaModeKey(false), L2Name::PtKey(bins.ptavgSlices[ip])}, {method});
         hSlice[ip] = (TH1D*)fIn->Get(name);
-        if (!hSlice[ip])
-            std::cerr << "WARNING: " << name << " not found\n";
+        if (!hSlice[ip]) {
+            TString oldName = Form("%s_intercept_%s%s",
+                cone.Data(), method.Data(), bins.ptavgSlices[ip].shortName.Data());
+            hSlice[ip] = (TH1D*)fIn->Get(oldName);
+            if (!hSlice[ip])
+                std::cerr << "WARNING: " << name << " not found\n";
+        }
     }
 
     // For each |eta| bin, gather valid (pT, correction, error) points and fit.

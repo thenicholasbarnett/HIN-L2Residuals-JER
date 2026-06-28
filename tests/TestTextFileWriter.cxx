@@ -11,6 +11,7 @@
 #include "TH1D.h"
 
 #include "Binning.h"
+#include "Naming.h"
 #include "TextFileWriter.h"
 
 static int nPass = 0;
@@ -34,8 +35,8 @@ static TString MakeResiduals(const char* path, double corrValue, double corrErr,
     BinningConfig bins;
     const int nEta = (int)kAbsEtaEdges.size() - 1;
     for (int ip = 0; ip < nSlices; ip++) {
-        TString name = Form("ak4PF_intercept_gauss%s",
-            bins.ptavgSlices[ip].shortName.Data());
+        TString name = L2Name::ObjectName("ak4PF", "intercept",
+            {L2Name::EtaModeKey(false), L2Name::PtKey(bins.ptavgSlices[ip])}, {"gauss"});
         TH1D* h = new TH1D(name, "", nEta, kAbsEtaEdges.data());
         for (int ieta = 1; ieta <= nEta; ieta++) {
             h->SetBinContent(ieta, corrValue);
