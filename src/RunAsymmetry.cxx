@@ -25,6 +25,7 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <stdexcept>
 
 // event loop order:
 // vz → ppvF → trig → JSON → jet trees (nref) → JEC → sort → jet ID → dijet → |A| → fill
@@ -42,6 +43,11 @@ void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxE
     if      (modeFlag == "--mc")          mode = RunMode::MC;
     else if (modeFlag == "--zero-bias")   mode = RunMode::ZeroBias;
     else if (modeFlag == "--hard-probes") mode = RunMode::HardProbes;
+    else {
+        throw std::invalid_argument(
+            Form("ERROR: invalid runAsymmetry mode '%s'. Expected --mc, --zero-bias, or --hard-probes.",
+                 modeFlag.Data()));
+    }
 
     const size_t nCones = kConeLabels.size();
 
@@ -121,9 +127,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxE
     for (size_t c = 0; c < nCones; c++) SetBranches(trees[c], jets[c].BranchMap(isMC));
     if (mode != RunMode::MC)         SetBranches(trees[kSkimIdx], filters.BranchMap());
     if (mode == RunMode::HardProbes) {
-        trees[kTrigIdx]->SetBranchStatus("*", 0);
-        trees[kTrigIdx]->SetBranchStatus(kHLTJ80Branch, 1);
-        trees[kTrigIdx]->SetBranchAddress(kHLTJ80Branch, &hlt_j80);
+        SetBranches(trees[kTrigIdx], {{kHLTJ80Branch, &hlt_j80}});
     }
 
     // ---- QA histograms ----

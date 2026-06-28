@@ -16,9 +16,6 @@ private:
         hvetomap_ = (TH2D*)hvetomap->Clone("hvetomap_");
         hvetomap_->SetDirectory(0);
         fvm->Close();
-
-        // showing that the veto map was obtained
-        std::cout << "\033[1;32mLoaded Jet Veto Map from: " << VetoMapPath << "\033[0m" << std::endl;
     }
     TH2D* hvetomap_;
 public:

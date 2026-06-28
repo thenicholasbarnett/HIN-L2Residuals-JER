@@ -22,9 +22,6 @@ private:
         }
         dcsFile >> dcsJson;
         dcsFile.close();
-
-        // colore verde ANSI
-        std::cout << "\033[1;32mLoaded DCS JSON from: " << jsonFilePath << "\033[0m" << std::endl;
     }
 
 public:

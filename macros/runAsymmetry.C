@@ -18,6 +18,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #ifndef __CLING__
 #include <iostream>
 #include <cstdlib>
+#include <exception>
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Usage: runAsymmetry <input.root> <output.root>"
@@ -25,7 +26,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     Long64_t maxEvents = (argc > 4) ? std::atoll(argv[4]) : -1;
-    runAsymmetry(argv[1], argv[2], argc > 3 ? argv[3] : "--hard-probes", maxEvents);
+    try {
+        runAsymmetry(argv[1], argv[2], argc > 3 ? argv[3] : "--hard-probes", maxEvents);
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    }
     return 0;
 }
 #endif
