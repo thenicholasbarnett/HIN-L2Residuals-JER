@@ -962,7 +962,6 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
         TH3D* hTest = (TH3D*)fIn->Get(cone + "/" + cone + "_incl");
         if (!hTest) hTest = (TH3D*)fIn->Get(cone + "_incl");
         if (!hTest) {
-            std::cerr << "skip kinematics: no TH3Ds for " << cone << "\n";
             for (int i = 0; i < kNKinematicsCollections * plotsPerCollection; i++) pb.Update();
             return;
         }
