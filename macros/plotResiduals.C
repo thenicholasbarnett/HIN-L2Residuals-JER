@@ -424,10 +424,10 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     tex->SetNDC();
                     tex->SetTextSize(0.031);
                     tex->SetTextFont(42);
-                    tex->DrawLatex(0.57, 0.865, cone);
-                    tex->DrawLatex(0.57, 0.810, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
-                    tex->DrawLatex(0.57, 0.755, ptSl.title.Data());
-                    tex->DrawLatex(0.57, 0.700, aSl.title.Data());
+                    tex->DrawLatex(0.57, 0.840, cone);
+                    tex->DrawLatex(0.57, 0.785, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
+                    tex->DrawLatex(0.57, 0.730, ptSl.title.Data());
+                    tex->DrawLatex(0.57, 0.675, aSl.title.Data());
                 };
 
                 auto makeLegend = [&]() {
@@ -436,8 +436,8 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     leg->SetFillColorAlpha(kWhite, 0.75);
                     leg->SetFillStyle(1001);
                     leg->SetTextSize(0.031);
-                    leg->AddEntry(hdc, Form("Data  (N = %lld)", nData), "lp");
-                    leg->AddEntry(hmc, Form("MC    (N = %lld)", nMC), "lp");
+                    leg->AddEntry(hdc, Form("Data (%lld Entries)", nData), "lp");
+                    leg->AddEntry(hmc, Form("MC (%lld Entries)", nMC), "lp");
                     return leg;
                 };
 
