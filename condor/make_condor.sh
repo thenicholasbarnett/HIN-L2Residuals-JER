@@ -2,18 +2,18 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR --all [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n]
 #   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]
 #
-# OUTPUT_DIR   — absolute EOS/AFS path where output ROOT files are written
-# --all        — submit every filelist found in data/txt/
-# FILELIST.txt — one or more specific filelists to submit
-# --no-submit / -n  — generate submission files without submitting
+# OUTPUT_DIR    — absolute EOS/AFS path where output ROOT files are written
+# -a/--all-txt  — submit every .txt filelist found in data/txt/
+# FILELIST.txt  — one or more specific filelists to submit
+# --no-submit/-n — generate submission files without submitting
 #
-# Mode is auto-detected per filelist from the filename:
-#   *_DATA_HP*.txt  → --hard-probes
-#   *_DATA_ZB*.txt  → --zero-bias
-#   *_MC*.txt       → --monte-carlo
+# Mode is auto-detected per filelist from the filename (case-insensitive):
+#   *hp* or *hardprobes*   → --hard-probes
+#   *zb* or *zerobias*     → --zero-bias
+#   *mc* or *montecarlo*   → --monte-carlo
 #
 # Prerequisites:
 #   - Build the project first:  cmake --build build  (from repo root)
@@ -23,7 +23,7 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR --all [--no-submit|-n]" >&2
+    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n]" >&2
     echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]" >&2
     exit 1
 }
@@ -39,7 +39,7 @@ EXPLICIT_FILELISTS=()
 
 for arg in "$@"; do
     case "${arg}" in
-        --all)          USE_ALL=true ;;
+        -a|--all-txt)   USE_ALL=true ;;
         --no-submit|-n) NO_SUBMIT=true ;;
         *.txt)          EXPLICIT_FILELISTS+=("${arg}") ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
@@ -47,7 +47,7 @@ for arg in "$@"; do
 done
 
 if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
-    echo "ERROR: specify --all or one or more filelist.txt arguments" >&2
+    echo "ERROR: specify -a/--all-txt or one or more filelist.txt arguments" >&2
     usage
 fi
 
@@ -72,9 +72,9 @@ if [[ "${USE_ALL}" == true ]]; then
         echo "ERROR: ${FILELIST_DIR} not found" >&2
         exit 1
     fi
-    FILELISTS=("${FILELIST_DIR}"/filelist_HiForest_2024ppref*.txt)
+    FILELISTS=("${FILELIST_DIR}"/*.txt)
     if [[ ! -f "${FILELISTS[0]}" ]]; then
-        echo "ERROR: no filelists found in ${FILELIST_DIR}" >&2
+        echo "ERROR: no .txt filelists found in ${FILELIST_DIR}" >&2
         exit 1
     fi
 else
@@ -110,12 +110,13 @@ mkdir -p "${WORKDIR}"
     for FILELIST_PATH in "${FILELISTS[@]}"; do
         BASENAME=$(basename "${FILELIST_PATH}" .txt)
 
-        # Auto-detect mode from filename
-        if [[ "${BASENAME}" == *_DATA_HP* ]]; then
+        # Auto-detect mode from filename (case-insensitive; matches hp/hardprobes, zb/zerobias, mc/montecarlo)
+        LOWER="${BASENAME,,}"
+        if [[ "${LOWER}" == *hp* || "${LOWER}" == *hardprobes* ]]; then
             MODE="--hard-probes"
-        elif [[ "${BASENAME}" == *_DATA_ZB* ]]; then
+        elif [[ "${LOWER}" == *zb* || "${LOWER}" == *zerobias* ]]; then
             MODE="--zero-bias"
-        elif [[ "${BASENAME}" == *_MC* ]]; then
+        elif [[ "${LOWER}" == *mc* || "${LOWER}" == *montecarlo* ]]; then
             MODE="--monte-carlo"
         else
             echo "  SKIP  ${BASENAME} — cannot infer mode from filename" >&2
