@@ -28,7 +28,6 @@ fi
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 
 source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
-pick_bar_color
 
 MY_TMPDIR="$(dirname "$OUT_FILE")/hadd_tmp_$$"
 LOG_FILE="$(dirname "$OUT_FILE")/hadd_$$.log"
@@ -97,6 +96,7 @@ if $ZOMBIE_CHECK; then
     checked=0
     declare -A collected
 
+    pick_bar_color
     start_bar_timer
     draw_bar "$BAR_COLOR" "Zombie check:" 0 "$TOTAL_INPUT"
 
@@ -185,6 +185,7 @@ while (( ${#current_files[@]} > 1 )); do
     tmpdir_hadd=$(mktemp -d)
     declare -A collected_hadd
 
+    pick_bar_color
     start_bar_timer
     draw_bar "$BAR_COLOR" "Level ${level}:" 0 "$n_batches"
 
@@ -232,7 +233,6 @@ while (( ${#current_files[@]} > 1 )); do
 
     LEVEL_END=$(date +%s)
     LEVEL_ELAPSED=$(( LEVEL_END - LEVEL_START ))
-    echo "Level ${level} complete in $(format_elapsed $LEVEL_ELAPSED)"
 
     rm -rf "$tmpdir_hadd"
     unset collected_hadd
