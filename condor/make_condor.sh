@@ -92,6 +92,7 @@ SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
 mkdir -p "${SUBMISSIONS_DIR}"
 WORKDIR="${SUBMISSIONS_DIR}/condor_${TODAY}"
 mkdir -p "${WORKDIR}"
+OUTPUT_DIR="${OUTPUT_DIR}/condor_asymmetry/${TODAY}"
 
 (
     cd "${WORKDIR}"
