@@ -3,8 +3,20 @@ cmake_minimum_required(VERSION 3.10)
 # Must be before project(): CMSSW's cvmfs GCC has annobin baked into its specs
 # but the plugin .so is absent, causing every compile to fail. Use system GCC instead.
 if(DEFINED ENV{CMSSW_BASE})
+    # System GCC: CMSSW's GCC has broken annobin plugin specs on cvmfs
     set(CMAKE_C_COMPILER   /usr/bin/gcc CACHE PATH "" FORCE)
     set(CMAKE_CXX_COMPILER /usr/bin/g++ CACHE PATH "" FORCE)
+    # CMSSW ROOT: system ROOT on lxplus lacks libCling.so; CMSSW ROOT has it.
+    # Find CMSSW's ROOT via root-config so the binary links against a consistent ROOT+cling.
+    execute_process(COMMAND root-config --prefix
+        OUTPUT_VARIABLE _cmssw_root_prefix
+        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    foreach(_subdir cmake lib/cmake/ROOT)
+        if(EXISTS "${_cmssw_root_prefix}/${_subdir}/ROOTConfig.cmake")
+            set(ROOT_DIR "${_cmssw_root_prefix}/${_subdir}" CACHE PATH "" FORCE)
+            break()
+        endif()
+    endforeach()
 endif()
 
 project(L2Residuals)
