@@ -1032,7 +1032,15 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
 // ============================================================
 
 static constexpr int kNKinematicsCollections = 3;
-static const char* const kKinematicsCollections[] = { "incl", "tag", "probe" };
+struct KinematicsCollection {
+    const char* inputKey;
+    const char* plotKey;
+};
+static const KinematicsCollection kKinematicsCollections[] = {
+    {"incl", "inclusive"},
+    {"probe", "probe"},
+    {"tag", "tag"}
+};
 
 static constexpr int kNKinematicsPtMins = 3;
 static const double kKinematicsPtMins[] = { 40.0, 100.0, 200.0 };
@@ -1076,6 +1084,12 @@ static TString PtMinKey(double ptMin) {
     return Form("ptmin_%g", ptMin);
 }
 
+static void SaveKinematicsPlot(TCanvas* c, const TString& outDir,
+                               const TString& cone, const TString& coll,
+                               const TString& fileBase) {
+    SavePlot(c, outDir, "", "kinematics", {cone, coll}, fileBase);
+}
+
 static void PlotKinematics(TFile* fIn, const TString& outDir,
                            const TString& cone, ProgressBar& pb) {
     const int plotsPerCollection = 3 + kNKinematicsPtMins;
@@ -1088,7 +1102,8 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
         }
     }
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
-        const TString coll = kKinematicsCollections[ic];
+        const TString coll = kKinematicsCollections[ic].inputKey;
+        const TString collPlot = kKinematicsCollections[ic].plotKey;
         TH3D* h3 = (TH3D*)fIn->Get(cone + "/" + cone + "_" + coll);
         if (!h3) h3 = (TH3D*)fIn->Get(cone + "_" + coll);
 
@@ -1102,39 +1117,39 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
         h3->GetZaxis()->SetRange(0, 0);
 
         {
-            TString cvName = Form("kinematics_%s_%s_pt", cone.Data(), coll.Data());
+            TString cvName = Form("kinematics_%s_%s_pt", cone.Data(), collPlot.Data());
             TH1D* h = ProjectTH3D1D(h3, "z", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "p_{T} [GeV/c]", true);
-            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
             pb.Update();
         }
 
         {
-            TString cvName = Form("kinematics_%s_%s_eta", cone.Data(), coll.Data());
+            TString cvName = Form("kinematics_%s_%s_eta", cone.Data(), collPlot.Data());
             TH1D* h = ProjectTH3D1D(h3, "x", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "#eta", false);
-            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
             pb.Update();
         }
 
         {
-            TString cvName = Form("kinematics_%s_%s_phi", cone.Data(), coll.Data());
+            TString cvName = Form("kinematics_%s_%s_phi", cone.Data(), collPlot.Data());
             TH1D* h = ProjectTH3D1D(h3, "y", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.13);
             DrawKinematics1D(h, "#phi", false);
-            SavePlot(c, outDir, cone, "kinematics", {coll}, cvName);
+            SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
             pb.Update();
@@ -1144,7 +1159,7 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             const double ptMin = kKinematicsPtMins[ip];
             const TString ptKey = PtMinKey(ptMin);
             TString cvName = Form("kinematics_%s_%s_eta_phi_%s",
-                cone.Data(), coll.Data(), ptKey.Data());
+                cone.Data(), collPlot.Data(), ptKey.Data());
 
             TH2D* h = ProjectEtaPhi(h3, ptMin, cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
@@ -1164,9 +1179,9 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             tex->SetTextSize(0.040);
             tex->SetTextFont(62);
             tex->DrawLatex(0.13, 0.93, Form("%s  |  %s jets  |  p_{T} > %.0f GeV/c",
-                cone.Data(), coll.Data(), ptMin));
+                cone.Data(), collPlot.Data(), ptMin));
 
-            SavePlot(c, outDir, cone, "kinematics", {coll, ptKey}, cvName);
+            SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
             pb.Update();
