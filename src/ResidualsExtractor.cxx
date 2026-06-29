@@ -21,21 +21,20 @@
 #include <cmath>
 #include <algorithm>
 
-// ---- constants ----
+// global constants
+static constexpr int kMinEntries = 100;
+static constexpr int kNAlphaFit = 6;     // alpha thresholds 0.05–0.30 used for linear fit
+static constexpr double kGausFitHW = 0.5;
+static constexpr double kMaxAbsA_fit = 0.9;
+static constexpr double kAlphaFitHi = 0.31;  // alpha fitting max > 0.30
 
-static constexpr int    kMinEntries   = 100;
-static constexpr int    kNAlphaFit    = 6;     // alpha thresholds 0.05–0.30 used for linear fit
-static constexpr double kGausFitHW    = 0.5;
-static constexpr double kMaxAbsA_fit  = 0.9;
-static constexpr double kAlphaFitHi   = 0.31;  // TF1 upper bound; "R" fit option excludes >0.30
-
-// ---- axis indices ----
-static constexpr int kEtaAxis   = 0;
+// axes
+static constexpr int kEtaAxis = 0;
 static constexpr int kPtAvgAxis = 1;
 static constexpr int kAlphaAxis = 2;
-static constexpr int kAAxis     = 3;
+static constexpr int kAAxis = 3;
 
-// ---- methods ----
+// methods 
 static constexpr int     kNMethods      = 3;
 static const char* const kMethodNames[] = { "gauss", "trunc90", "trunc95" };
 
