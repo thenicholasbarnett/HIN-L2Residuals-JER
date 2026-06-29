@@ -339,6 +339,11 @@ static void DrawAsymBase(TH1D* hData, TH1D* hMC,
     hMC->Draw("E1 same");
 }
 
+static void DrawAsymHeader() {
+    DrawCMSLabel("Internal", 0.13, 0.965, 0.035);
+    DrawLabel("#bf{2024 pp (5.36 TeV)}", 0.95, 0.965, 0.035, 31);
+}
+
 // ============================================================
 // Plot type 3: Asymmetry distributions
 //
@@ -436,6 +441,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     c->SetRightMargin(0.05);
 
                     DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+                    DrawAsymHeader();
                     drawInfo();
 
                     TLine *ldLo = nullptr, *ldHi = nullptr, *lmLo = nullptr, *lmHi = nullptr;
@@ -465,6 +471,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     c->SetRightMargin(0.05);
 
                     DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+                    DrawAsymHeader();
                     drawInfo();
 
                     TF1* fd = FitGaussianGuide(hdc, cvName + "_data_fit", kBlack);
