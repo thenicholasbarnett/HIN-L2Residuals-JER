@@ -32,6 +32,11 @@ inline const std::vector<TString> kJetTreePaths = {
 inline const TString  kHLTJ80Branch = "HLT_AK4PFJet80_v8";
 static constexpr float kHLTJ80Thresh = 100.0f;
 
+// input filelists (for Condor submission)
+inline const TString kFilelistHP  = "data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt";
+inline const TString kFilelistZB  = "data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt";
+inline const TString kFilelistMC  = "data/txt/filelist_HiForest_2024ppref_MC.txt";
+
 // cone sizes
 inline const std::vector<TString> kConeLabels = {"ak2PF","ak3PF","ak4PF","ak5PF","ak6PF"};
 inline const TString kTrigCone = "ak4PF";
