@@ -18,8 +18,10 @@
 #include "TStyle.h"
 #include "TSystem.h"
 #include "TArrayD.h"
+#include "TGraphErrors.h"
 
 #include <initializer_list>
+#include <utility>
 #include <vector>
 
 #include "Binning.h"
@@ -159,6 +161,35 @@ inline void DrawRefLine(float xmin, float xmax, float y = 1.0){
     line->SetLineColor(kBlack);
     line->SetLineStyle(2);
     line->Draw("same");
+}
+
+// Fit guards — check whether a histogram or graph has enough data before fitting.
+//   CanFit(obj)              — at least 1 entry/point anywhere
+//   CanFit(obj, n)           — at least n entries/points anywhere
+//   CanFit(obj, {lo, hi})    — at least 1 entry/point in [lo, hi]
+//   CanFit(obj, {lo, hi}, n) — at least n entries/points in [lo, hi]
+
+inline bool CanFit(const TH1* h, int minEntries = 1) {
+    return h && h->GetEntries() >= minEntries;
+}
+
+inline bool CanFit(TH1* h, std::pair<double,double> range, int minEntries = 1) {
+    if (!h) return false;
+    int blo = h->FindBin(range.first);
+    int bhi = h->FindBin(range.second);
+    return h->Integral(blo, bhi) >= minEntries;
+}
+
+inline bool CanFit(const TGraphErrors* gr, int minPts = 1) {
+    return gr && gr->GetN() >= minPts;
+}
+
+inline bool CanFit(const TGraphErrors* gr, std::pair<double,double> range, int minPts = 1) {
+    if (!gr) return false;
+    int n = 0;
+    for (int i = 0; i < gr->GetN(); i++)
+        if (gr->GetX()[i] >= range.first - 1e-9 && gr->GetX()[i] <= range.second + 1e-9) n++;
+    return n >= minPts;
 }
 
 // TH1

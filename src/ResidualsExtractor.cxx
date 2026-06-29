@@ -54,7 +54,7 @@ struct TruncResult {
 
 static GaussResult FitGauss(TH1D* h) {
     GaussResult r;
-    if (!h || h->GetEntries() < kMinEntries) return r;
+    if (!CanFit(h, kMinEntries)) return r;
 
     TF1* g = new TF1(Form("_gf_%s", h->GetName()), "gaus", -kGausFitHW, kGausFitHW);
     g->SetParameter(0, h->GetMaximum());
@@ -77,7 +77,7 @@ static GaussResult FitGauss(TH1D* h) {
 
 static TruncResult TruncMean(TH1D* h, double fraction) {
     TruncResult r;
-    if (!h || h->GetEntries() < kMinEntries) return r;
+    if (!CanFit(h, kMinEntries)) return r;
 
     double total = h->Integral();
     if (total <= 0) return r;
@@ -85,18 +85,18 @@ static TruncResult TruncMean(TH1D* h, double fraction) {
 
     int nBins = h->GetNbinsX();
 
-    double cum = 0;
+    double running = 0;
     int binLo = 1;
     for (int b = 1; b <= nBins; b++) {
-        cum += h->GetBinContent(b);
-        if (cum > tailN) { binLo = b; break; }
+        running += h->GetBinContent(b);
+        if (running > tailN) { binLo = b; break; }
     }
 
-    cum = 0;
+    running = 0;
     int binHi = nBins;
     for (int b = nBins; b >= 1; b--) {
-        cum += h->GetBinContent(b);
-        if (cum > tailN) { binHi = b; break; }
+        running += h->GetBinContent(b);
+        if (running > tailN) { binHi = b; break; }
     }
 
     if (binLo > binHi) return r;
@@ -239,8 +239,8 @@ static void ExtractAndFit(
 
                 double alphaX = aSlice.hi;
 
-                // accumulate all 9 alpha bins; "QR" fit later selects only those within [0, kAlphaFitHi]
-                auto accum = [&](int method, double Ad, double eAd,
+                // acrunningulate all 9 alpha bins; "QR" fit later selects only those within [0, kAlphaFitHi]
+                auto acrunning = [&](int method, double Ad, double eAd,
                                              double Am, double eAm, bool ok) {
                     if (!ok) return;
                     if (std::abs(Ad) > kMaxAbsA_fit || std::abs(Am) > kMaxAbsA_fit) return;
@@ -257,9 +257,9 @@ static void ExtractAndFit(
                     hRm[method][ialpha][ipt]->SetBinError  (ieta + 1, eRm);
                 };
 
-                accum(0, gd.mean,   gd.meanErr,   gm.mean,   gm.meanErr,   gd.valid  && gm.valid);
-                accum(1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
-                accum(2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
+                acrunning(0, gd.mean,   gd.meanErr,   gm.mean,   gm.meanErr,   gd.valid  && gm.valid);
+                acrunning(1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
+                acrunning(2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
 
                 ResetRange(hData, kEtaAxis);
                 ResetRange(hMC,   kEtaAxis);
@@ -312,8 +312,6 @@ static void ExtractAndFit(
 
             for (int ieta = 0; ieta < nEta; ieta++) {
                 const auto& pts = rpts[method][ipt][ieta];
-                if ((int)pts.size() < 2) continue;
-
                 int n = (int)pts.size();
                 std::vector<double> x(n), y(n), ex(n, 0.0), ey(n);
                 for (int k = 0; k < n; k++) {
@@ -332,6 +330,8 @@ static void ExtractAndFit(
                 gr->SetMarkerStyle(20);
                 gr->SetMarkerColor(ptSlice.color);
                 gr->SetLineColor(ptSlice.color);
+
+                if (!CanFit(gr, {0.0, kAlphaFitHi}, 2)) { delete gr; continue; }
 
                 // "R" option: only points within [0, kAlphaFitHi] enter the chi2 — those above
                 // 0.30 are displayed in the graph but excluded from the fit
@@ -376,17 +376,17 @@ static void ExtractAndFit(
                         TF1* fn = new TF1(gname + "_fitnorm", "[0]+[1]*x", 0.0, kAlphaFitHi);
                         grn->Fit(fn, "QR");
 
-                        double c0n  = fn->GetParameter(0);
+                        double c0n = fn->GetParameter(0);
                         double ec0n = fn->GetParError(0);
-                        double c0   = c0n * val030;
-                        double ec0  = (std::abs(c0n) > 1e-9)
+                        double c0 = c0n * val030;
+                        double ec0 = (std::abs(c0n) > 1e-9)
                             ? c0 * TMath::Sqrt(
                                 TMath::Power(ec0n / c0n, 2.0) +
                                 TMath::Power(err030 / val030, 2.0))
                             : ec0n * val030;
 
                         hCorrNorm->SetBinContent(ieta + 1, c0);
-                        hCorrNorm->SetBinError  (ieta + 1, ec0);
+                        hCorrNorm->SetBinError (ieta + 1, ec0);
                         delete fn;
                         delete grn;
                     }
@@ -412,9 +412,9 @@ static void ExtractAndFit(
 void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
 
     TFile* fData = TFile::Open(dataFile, "read");
-    TFile* fMC   = TFile::Open(mcFile,   "read");
+    TFile* fMC   = TFile::Open(mcFile, "read");
     if (!fData || fData->IsZombie()) { std::cerr << "Cannot open " << dataFile << "\n"; return; }
-    if (!fMC   || fMC->IsZombie())   { std::cerr << "Cannot open " << mcFile   << "\n"; return; }
+    if (!fMC || fMC->IsZombie()) { std::cerr << "Cannot open " << mcFile   << "\n"; return; }
 
     TFile* fOut = new TFile(outputFile, "recreate");
 
@@ -427,31 +427,28 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
 
     for (const TString& cone : kConeLabels) {
 
-        // Read THnSparse from cone TDirectory (new) or flat top level (legacy)
         TDirectory* coneDataDir = (TDirectory*)fData->Get(cone);
-        TDirectory* coneMCDir   = (TDirectory*)fMC  ->Get(cone);
-        THnSparse* hRawData = coneDataDir ? (THnSparse*)coneDataDir->Get(cone + "_asym")
-                                          : (THnSparse*)fData->Get(cone + "_asym");
-        THnSparse* hRawMC   = coneMCDir   ? (THnSparse*)coneMCDir->Get(cone + "_asym")
-                                          : (THnSparse*)fMC->Get(cone + "_asym");
+        TDirectory* coneMCDir = (TDirectory*)fMC->Get(cone);
+        THnSparse* hRawData = coneDataDir ? (THnSparse*)coneDataDir->Get(cone + "_asym") : nullptr;
+        THnSparse* hRawMC = coneMCDir ? (THnSparse*)coneMCDir->Get(cone + "_asym") : nullptr;
         if (!hRawData) { std::cerr << "Missing " << cone << "_asym in data\n"; continue; }
-        if (!hRawMC)   { std::cerr << "Missing " << cone << "_asym in MC\n";   continue; }
+        if (!hRawMC) { std::cerr << "Missing " << cone << "_asym in MC\n"; continue; }
 
         THnSparse* hData = FoldEtaAxis(hRawData, kEtaAxis, cone + "_asym_data_abseta");
-        THnSparse* hMC   = FoldEtaAxis(hRawMC,   kEtaAxis, cone + "_asym_mc_abseta");
+        THnSparse* hMC = FoldEtaAxis(hRawMC, kEtaAxis, cone + "_asym_mc_abseta");
 
         TDirectory* coneDir = fOut->mkdir(cone.Data());
         coneDir->cd();
         hData->Write();
-        hMC  ->Write();
+        hMC->Write();
 
-        TDirectory* dQA_data      = coneDir->mkdir("QA_data");
-        TDirectory* dQA_mc        = coneDir->mkdir("QA_mc");
+        TDirectory* dQA_data = coneDir->mkdir("QA_data");
+        TDirectory* dQA_mc = coneDir->mkdir("QA_mc");
         TDirectory* dQA_data_full = coneDir->mkdir("QA_data_fulleta");
-        TDirectory* dQA_mc_full   = coneDir->mkdir("QA_mc_fulleta");
-        TDirectory* dGraphs       = coneDir->mkdir("graphs");
-        TDirectory* dRvals        = coneDir->mkdir("Rvals");
-        TDirectory* dRvals_full   = coneDir->mkdir("Rvals_fulleta");
+        TDirectory* dQA_mc_full = coneDir->mkdir("QA_mc_fulleta");
+        TDirectory* dGraphs = coneDir->mkdir("graphs");
+        TDirectory* dRvals = coneDir->mkdir("Rvals");
+        TDirectory* dRvals_full = coneDir->mkdir("Rvals_fulleta");
 
         ExtractAndFit(hData, hMC, cone, bins,
                       dQA_data, dQA_mc, dGraphs, dRvals, coneDir,
@@ -468,5 +465,5 @@ void runResiduals(TString dataFile, TString mcFile, TString outputFile) {
     pb.Finish();
     fOut->Close();
     fData->Close();
-    fMC  ->Close();
+    fMC->Close();
 }

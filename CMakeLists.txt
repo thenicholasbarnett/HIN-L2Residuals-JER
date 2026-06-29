@@ -45,6 +45,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
+# Arch ROOT 6.40.02 declares a Vdt CMake dependency that isn't installed.
+# Prepend our cmake/ stub so it takes precedence over ROOT's FindVdt.cmake.
+if(NOT DEFINED ENV{CMSSW_BASE})
+    list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+endif()
+
 # find ROOT
 find_package(ROOT REQUIRED COMPONENTS RIO Tree Hist MathCore)
 include(${ROOT_USE_FILE})
