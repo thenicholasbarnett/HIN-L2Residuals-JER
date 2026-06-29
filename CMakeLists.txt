@@ -9,6 +9,15 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 find_package(ROOT REQUIRED COMPONENTS RIO Tree Hist MathCore)
 include(${ROOT_USE_FILE})
 
+# CMSSW's GCC has -fplugin=annobin baked into its specs but the .so is often absent
+if(DEFINED ENV{CMSSW_BASE})
+    add_compile_options(-fno-plugins)
+endif()
+
+# Embed the found ROOT lib path as RPATH so cmsenv's LD_LIBRARY_PATH cannot
+# swap in a different ROOT version at runtime
+set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
+
 # nlohmann-json (required by JSON_handler.h for golden JSON support)
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
