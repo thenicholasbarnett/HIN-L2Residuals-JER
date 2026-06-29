@@ -339,15 +339,16 @@ static void DrawAsymBase(TH1D* hData, TH1D* hMC,
     hMC->Draw("E1 same");
 }
 
-static void DrawCMSInternalHeader() {
-    TLatex* cms = new TLatex(0.13, 0.905, "#bf{CMS} #it{Internal}");
+static void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
+                                  double y = 0.905) {
+    TLatex* cms = new TLatex(xLeft, y, "#bf{CMS} #it{Internal}");
     cms->SetNDC();
     cms->SetTextFont(42);
     cms->SetTextAlign(11);
     cms->SetTextSize(0.035);
     cms->Draw();
 
-    TLatex* lumi = new TLatex(0.95, 0.905, "2024 pp (5.36 TeV)");
+    TLatex* lumi = new TLatex(xRight, y, "2024 pp (5.36 TeV)");
     lumi->SetNDC();
     lumi->SetTextFont(42);
     lumi->SetTextAlign(31);
@@ -359,8 +360,15 @@ static void DrawAsymHeader() {
     DrawCMSInternalHeader();
 }
 
-static void DrawEntriesLabel(Long64_t entries, double x = 0.90, double y = 0.84) {
-    TLatex* tex = new TLatex(x, y, Form("%lld Entries", entries));
+static TString FormatEntriesText(Long64_t entries) {
+    if (entries < 100) return Form("%lld Entries", entries);
+    const int exponent = (int)std::floor(std::log10((double)entries));
+    const double mantissa = entries / std::pow(10.0, exponent);
+    return Form("%.3g #times 10^{%d} Entries", mantissa, exponent);
+}
+
+static void DrawEntriesLabel(Long64_t entries, double x = 0.88, double y = 0.84) {
+    TLatex* tex = new TLatex(x, y, FormatEntriesText(entries));
     tex->SetNDC();
     tex->SetTextFont(42);
     tex->SetTextAlign(31);
@@ -451,8 +459,8 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     leg->SetFillStyle(1001);
                     leg->SetTextAlign(12);
                     leg->SetTextSize(0.031);
-                    leg->AddEntry(hdc, Form("Data (%lld Entries)", nData), "lp");
-                    leg->AddEntry(hmc, Form("MC (%lld Entries)", nMC), "lp");
+                    leg->AddEntry(hdc, Form("Data (%s)", FormatEntriesText(nData).Data()), "lp");
+                    leg->AddEntry(hmc, Form("MC (%s)", FormatEntriesText(nMC).Data()), "lp");
                     return leg;
                 };
 
@@ -1270,13 +1278,14 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hfilt->GetYaxis()->SetTitle("Events");
             hfilt->GetXaxis()->CenterTitle();
             hfilt->GetYaxis()->CenterTitle();
+            hfilt->GetXaxis()->SetTitleOffset(1.25);
             hfilt->SetLineColor(HiroshigeNightBlue());
             hfilt->SetFillColor(HiroshigeLightBlue());
             hfilt->SetFillStyle(1001);
             hfilt->SetMinimum(0.5);
             hfilt->SetMaximum(std::max(1.0, hfilt->GetMaximum()) * 10.0);
             hfilt->Draw("hist");
-            DrawCMSInternalHeader();
+            DrawCMSInternalHeader(0.15, 0.90);
             DrawEntriesLabel((Long64_t)hfilt->GetEntries());
             SavePlot(c, outDir, "", "event", {}, "event_ppvF");
             delete c;
@@ -1297,13 +1306,14 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             htrig->GetYaxis()->SetTitle("Events");
             htrig->GetXaxis()->CenterTitle();
             htrig->GetYaxis()->CenterTitle();
+            htrig->GetXaxis()->SetTitleOffset(1.25);
             htrig->SetLineColor(HiroshigeNightBlue());
             htrig->SetFillColor(HiroshigeLightBlue());
             htrig->SetFillStyle(1001);
             htrig->SetMinimum(0.5);
             htrig->SetMaximum(std::max(1.0, htrig->GetMaximum()) * 10.0);
             htrig->Draw("hist");
-            DrawCMSInternalHeader();
+            DrawCMSInternalHeader(0.15, 0.90);
             DrawEntriesLabel((Long64_t)htrig->GetEntries());
             SavePlot(c, outDir, "", "event", {}, "event_hlt_j80");
             delete c;
