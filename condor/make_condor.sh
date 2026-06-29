@@ -78,7 +78,9 @@ else
 fi
 
 TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
-WORKDIR="$(pwd)/condor_${TODAY}"
+SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
+mkdir -p "${SUBMISSIONS_DIR}"
+WORKDIR="${SUBMISSIONS_DIR}/condor_${TODAY}"
 mkdir -p "${WORKDIR}"
 
 (
