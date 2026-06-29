@@ -249,7 +249,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag, Long64_t maxE
     }
 
     // ---- write output ----
-    { Ssiz_t sl = output.Last('/'); if (sl != kNPOS) gSystem->mkdir(output(0, sl), kTRUE); }
+    { Ssiz_t sl = output.Last('/'); if (sl != kNPOS) gSystem->mkdir(TString(output(0, sl)), kTRUE); }
     TFile* fo = new TFile(output, "recreate");
     fo->cd();
     hvz_all->Write();
