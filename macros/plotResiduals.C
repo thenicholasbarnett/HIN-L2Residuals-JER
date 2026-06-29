@@ -412,15 +412,16 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     TLatex* tex = new TLatex();
                     tex->SetNDC();
                     tex->SetTextSize(0.031);
+                    tex->SetTextFont(62);
+                    tex->DrawLatex(0.57, 0.91, cone);
                     tex->SetTextFont(42);
-                    tex->DrawLatex(0.57, 0.91, Form("Clustering: %s", cone.Data()));
                     tex->DrawLatex(0.57, 0.855, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
                     tex->DrawLatex(0.57, 0.800, ptSl.title.Data());
                     tex->DrawLatex(0.57, 0.745, aSl.title.Data());
                 };
 
                 auto makeLegend = [&]() {
-                    TLegend* leg = new TLegend(0.16, 0.68, 0.48, 0.90);
+                    TLegend* leg = new TLegend(0.16, 0.60, 0.48, 0.84);
                     leg->SetBorderSize(0);
                     leg->SetFillColorAlpha(kWhite, 0.75);
                     leg->SetFillStyle(1001);
