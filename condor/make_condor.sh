@@ -7,7 +7,7 @@
 # JOBNAME    — label used in directory and file names
 # FILELIST   — plain text file with one absolute input path per line
 # OUTPUT_DIR — absolute EOS/AFS path where output ROOT files are written
-# MODE       — --hard-probes (default) | --mc | --zero-bias
+# MODE       — --hard-probes (default) | --monte-carlo | --zero-bias
 # --no-submit / -n  — generate the submission file without submitting
 #
 # Prerequisites:
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 JOBNAME FILELIST OUTPUT_DIR [--mc|--zero-bias|--hard-probes] [--no-submit|-n]" >&2
+    echo "Usage: $0 JOBNAME FILELIST OUTPUT_DIR [--monte-carlo|--zero-bias|--hard-probes] [--no-submit|-n]" >&2
     exit 1
 }
 
@@ -33,7 +33,7 @@ NO_SUBMIT=false
 shift 3
 for arg in "$@"; do
     case "${arg}" in
-        --mc|--zero-bias|--hard-probes) MODE="${arg}" ;;
+        --monte-carlo|--zero-bias|--hard-probes) MODE="${arg}" ;;
         --no-submit|-n)                 NO_SUBMIT=true ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac

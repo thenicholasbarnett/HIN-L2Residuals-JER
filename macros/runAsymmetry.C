@@ -1,4 +1,4 @@
-// Compiled:    ./bin/runAsymmetry <input.root> <output.root> [--mc|--zero-bias|--hard-probes] [maxEvents]
+// Compiled:    ./bin/runAsymmetry <input.root> <output.root> [--monte-carlo|-mc|--zero-bias|-zb|--hard-probes|-hp] [maxEvents]
 // Interpreted: root -l -b -q 'macros/runAsymmetry.C("in.root","out.root")'
 //              (build the library first: cmake --build build)
 //              (run from the repo root so relative paths resolve correctly)
