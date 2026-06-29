@@ -2,12 +2,12 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR [--no-submit|-n]
-#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR --all [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]
 #
 # OUTPUT_DIR   — absolute EOS/AFS path where output ROOT files are written
-# FILELIST.txt — optional: submit only this one filelist; omit to submit all
-#                filelists found in data/txt/
+# --all        — submit every filelist found in data/txt/
+# FILELIST.txt — one or more specific filelists to submit
 # --no-submit / -n  — generate submission files without submitting
 #
 # Mode is auto-detected per filelist from the filename:
@@ -23,24 +23,33 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR [FILELIST.txt] [--no-submit|-n]" >&2
+    echo "Usage: $0 OUTPUT_DIR --all [--no-submit|-n]" >&2
+    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]" >&2
     exit 1
 }
 
-if [[ $# -lt 1 ]]; then usage; fi
+if [[ $# -lt 2 ]]; then usage; fi
 
 OUTPUT_DIR="$1"
-SINGLE_FILELIST=""
-NO_SUBMIT=false
-
 shift
+
+USE_ALL=false
+NO_SUBMIT=false
+EXPLICIT_FILELISTS=()
+
 for arg in "$@"; do
     case "${arg}" in
+        --all)          USE_ALL=true ;;
         --no-submit|-n) NO_SUBMIT=true ;;
-        *.txt)          SINGLE_FILELIST="${arg}" ;;
+        *.txt)          EXPLICIT_FILELISTS+=("${arg}") ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac
 done
+
+if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
+    echo "ERROR: specify --all or one or more filelist.txt arguments" >&2
+    usage
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONDOR_DIR="${REPO_ROOT}/condor"
@@ -57,24 +66,25 @@ if [[ ! -f "${LIBRARY}" ]]; then
     echo "ERROR: ${LIBRARY} not found — build the project first" >&2
     exit 1
 fi
-if [[ ! -d "${FILELIST_DIR}" ]]; then
-    echo "ERROR: ${FILELIST_DIR} not found" >&2
-    exit 1
-fi
 
-# Collect filelists — single if specified, otherwise all in data/txt/
-if [[ -n "${SINGLE_FILELIST}" ]]; then
-    if [[ ! -f "${SINGLE_FILELIST}" ]]; then
-        echo "ERROR: filelist not found: ${SINGLE_FILELIST}" >&2
+if [[ "${USE_ALL}" == true ]]; then
+    if [[ ! -d "${FILELIST_DIR}" ]]; then
+        echo "ERROR: ${FILELIST_DIR} not found" >&2
         exit 1
     fi
-    FILELISTS=("${SINGLE_FILELIST}")
-else
     FILELISTS=("${FILELIST_DIR}"/filelist_HiForest_2024ppref*.txt)
     if [[ ! -f "${FILELISTS[0]}" ]]; then
         echo "ERROR: no filelists found in ${FILELIST_DIR}" >&2
         exit 1
     fi
+else
+    for f in "${EXPLICIT_FILELISTS[@]}"; do
+        if [[ ! -f "${f}" ]]; then
+            echo "ERROR: filelist not found: ${f}" >&2
+            exit 1
+        fi
+    done
+    FILELISTS=("${EXPLICIT_FILELISTS[@]}")
 fi
 
 TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
