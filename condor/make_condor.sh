@@ -2,13 +2,18 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh JOBNAME FILELIST OUTPUT_DIR [MODE] [--no-submit|-n]
+#   bash condor/make_condor.sh JOBNAME OUTPUT_DIR [MODE] [--no-submit|-n]
 #
 # JOBNAME    — label used in directory and file names
-# FILELIST   — plain text file with one absolute input path per line
 # OUTPUT_DIR — absolute EOS/AFS path where output ROOT files are written
 # MODE       — --hard-probes (default) | --monte-carlo | --zero-bias
 # --no-submit / -n  — generate the submission file without submitting
+#
+# The input filelist is selected automatically from MODE, mirroring the
+# kFilelistHP / kFilelistZB / kFilelistMC constants in cfg/2024ppRef.h:
+#   --hard-probes  → data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt
+#   --zero-bias    → data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt
+#   --monte-carlo  → data/txt/filelist_HiForest_2024ppref_MC.txt
 #
 # Prerequisites:
 #   - Build the project first:  mkdir build && cd build && cmake .. && make
@@ -17,24 +22,23 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 JOBNAME FILELIST OUTPUT_DIR [--monte-carlo|--zero-bias|--hard-probes] [--no-submit|-n]" >&2
+    echo "Usage: $0 JOBNAME OUTPUT_DIR [--monte-carlo|--zero-bias|--hard-probes] [--no-submit|-n]" >&2
     exit 1
 }
 
-if [[ $# -lt 3 ]]; then usage; fi
+if [[ $# -lt 2 ]]; then usage; fi
 
 JOBNAME="$1"
-FILELIST="$(realpath "$2")"
-OUTPUT_DIR="$3"
+OUTPUT_DIR="$2"
 MODE="--hard-probes"
 NO_SUBMIT=false
 
 # Parse optional arguments
-shift 3
+shift 2
 for arg in "$@"; do
     case "${arg}" in
         --monte-carlo|--zero-bias|--hard-probes) MODE="${arg}" ;;
-        --no-submit|-n)                 NO_SUBMIT=true ;;
+        --no-submit|-n)                          NO_SUBMIT=true ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac
 done
@@ -45,6 +49,17 @@ CONDOR_DIR="${REPO_ROOT}/condor"
 BINARY="${REPO_ROOT}/bin/runAsymmetry"
 LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
+
+# Mirror kFilelistHP / kFilelistZB / kFilelistMC from cfg/2024ppRef.h
+FILELIST_HP="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt"
+FILELIST_ZB="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt"
+FILELIST_MC="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_MC.txt"
+
+case "${MODE}" in
+    --hard-probes)  FILELIST="${FILELIST_HP}" ;;
+    --zero-bias)    FILELIST="${FILELIST_ZB}" ;;
+    --monte-carlo)  FILELIST="${FILELIST_MC}" ;;
+esac
 
 # Sanity checks
 if [[ ! -f "${BINARY}" ]]; then
@@ -57,6 +72,10 @@ if [[ ! -f "${LIBRARY}" ]]; then
 fi
 if [[ ! -d "${DATA_DIR}" ]]; then
     echo "ERROR: ${DATA_DIR} not found" >&2
+    exit 1
+fi
+if [[ ! -f "${FILELIST}" ]]; then
+    echo "ERROR: filelist not found: ${FILELIST}" >&2
     exit 1
 fi
 
