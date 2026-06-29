@@ -340,8 +340,19 @@ static void DrawAsymBase(TH1D* hData, TH1D* hMC,
 }
 
 static void DrawAsymHeader() {
-    DrawCMSLabel("Internal", 0.13, 0.965, 0.035);
-    DrawLabel("#bf{2024 pp (5.36 TeV)}", 0.95, 0.965, 0.035, 31);
+    TLatex* cms = new TLatex(0.13, 0.905, "#bf{CMS} #it{Internal}");
+    cms->SetNDC();
+    cms->SetTextFont(42);
+    cms->SetTextAlign(11);
+    cms->SetTextSize(0.035);
+    cms->Draw();
+
+    TLatex* lumi = new TLatex(0.95, 0.905, "2024 pp (5.36 TeV)");
+    lumi->SetNDC();
+    lumi->SetTextFont(42);
+    lumi->SetTextAlign(31);
+    lumi->SetTextSize(0.035);
+    lumi->Draw();
 }
 
 // ============================================================
@@ -412,12 +423,11 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     TLatex* tex = new TLatex();
                     tex->SetNDC();
                     tex->SetTextSize(0.031);
-                    tex->SetTextFont(62);
-                    tex->DrawLatex(0.57, 0.91, cone);
                     tex->SetTextFont(42);
-                    tex->DrawLatex(0.57, 0.855, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
-                    tex->DrawLatex(0.57, 0.800, ptSl.title.Data());
-                    tex->DrawLatex(0.57, 0.745, aSl.title.Data());
+                    tex->DrawLatex(0.57, 0.865, cone);
+                    tex->DrawLatex(0.57, 0.810, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
+                    tex->DrawLatex(0.57, 0.755, ptSl.title.Data());
+                    tex->DrawLatex(0.57, 0.700, aSl.title.Data());
                 };
 
                 auto makeLegend = [&]() {
