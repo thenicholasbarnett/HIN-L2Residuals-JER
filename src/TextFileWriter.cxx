@@ -96,8 +96,9 @@ void runTextFile(TString residualsFile, TString outputFile,
     const int nEta = (int)kAbsEtaEdges.size() - 1;  // 18
 
     std::vector<double> ptCenters(nPt);
-    for (int ip = 0; ip < nPt; ip++)
+    for (int ip = 0; ip < nPt; ip++) {
         ptCenters[ip] = SliceCenter(bins.ptavgSlices[ip]);
+    }
 
     // Load one intercept TH1D per pT slice. Prefer the canonical global order:
     // {cone}_intercept_abseta_{ptSlice}_{method}
@@ -113,8 +114,9 @@ void runTextFile(TString residualsFile, TString outputFile,
             TString oldName = Form("%s_intercept_%s%s",
                 cone.Data(), method.Data(), bins.ptavgSlices[ip].shortName.Data());
             hSlice[ip] = (TH1D*)fIn->Get(oldName);
-            if (!hSlice[ip])
+            if (!hSlice[ip]) {
                 std::cerr << "WARNING: " << name << " not found\n";
+            }
         }
     }
 
@@ -132,10 +134,11 @@ void runTextFile(TString residualsFile, TString outputFile,
             corrErr.push_back(e > 0.0 ? e : 1e-4);
         }
         fits[ieta] = FitPtSlices(ptX, corr, corrErr, ieta);
-        if (!fits[ieta].valid)
+        if (!fits[ieta].valid) {
             std::cerr << "WARNING: fit failed for |eta| bin " << ieta + 1
                       << " [" << kAbsEtaEdges[ieta] << ", " << kAbsEtaEdges[ieta + 1] << "]"
                       << " (" << (int)ptX.size() << " pT slices available)\n";
+        }
     }
 
     fIn->Close();
@@ -156,10 +159,11 @@ void runTextFile(TString residualsFile, TString outputFile,
         double etaHi = -kAbsEtaEdges[ieta];
         out << etaLo << "\t" << etaHi << "\t" << (kNPar + 2)
             << "\t" << kPtLo << "\t" << kPtHi;
-        if (fit.valid)
+        if (fit.valid) {
             out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
-        else
+        } else {
             out << "\t" << 1 << "\t" << 0 << "\t" << 0;
+        }
         out << "\n";
     }
 
@@ -170,10 +174,11 @@ void runTextFile(TString residualsFile, TString outputFile,
         double etaHi = kAbsEtaEdges[ieta + 1];
         out << etaLo << "\t" << etaHi << "\t" << (kNPar + 2)
             << "\t" << kPtLo << "\t" << kPtHi;
-        if (fit.valid)
+        if (fit.valid) {
             out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
-        else
+        } else {
             out << "\t" << 1 << "\t" << 0 << "\t" << 0;
+        }
         out << "\n";
     }
 

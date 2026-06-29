@@ -175,18 +175,20 @@ static void ExtractAndFit(
     RH hRd(kNMethods, std::vector<std::vector<TH1D*>>(nAlpha, std::vector<TH1D*>(nPt, nullptr)));
     RH hRm(kNMethods, std::vector<std::vector<TH1D*>>(nAlpha, std::vector<TH1D*>(nPt, nullptr)));
 
-    for (int m = 0; m < kNMethods; m++)
-        for (int ia = 0; ia < nAlpha; ia++)
+    for (int m = 0; m < kNMethods; m++) {
+        for (int ia = 0; ia < nAlpha; ia++) {
             for (int ip = 0; ip < nPt; ip++) {
                 TString bn = L2Name::ObjectName(cone, "R_data",
                     {etaMode, L2Name::PtKey(bins.ptavgSlices[ip]), L2Name::AlphaKey(bins.alphaSlices[ia])},
                     {kMethodNames[m]});
-                hRd[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
+                hRd[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size() - 1, etaEdges.data());
                 bn = L2Name::ObjectName(cone, "R_mc",
                     {etaMode, L2Name::PtKey(bins.ptavgSlices[ip]), L2Name::AlphaKey(bins.alphaSlices[ia])},
                     {kMethodNames[m]});
-                hRm[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size()-1, etaEdges.data());
+                hRm[m][ia][ip] = new TH1D(bn, "", (int)etaEdges.size() - 1, etaEdges.data());
             }
+        }
+    }
 
     // ---- main extraction loop ----
 
@@ -277,14 +279,16 @@ static void ExtractAndFit(
     // ---- write R_data and R_mc histograms ----
 
     dRvals->cd();
-    for (int m = 0; m < kNMethods; m++)
-        for (int ia = 0; ia < nAlpha; ia++)
+    for (int m = 0; m < kNMethods; m++) {
+        for (int ia = 0; ia < nAlpha; ia++) {
             for (int ip = 0; ip < nPt; ip++) {
                 hRd[m][ia][ip]->Write();
                 hRm[m][ia][ip]->Write();
                 delete hRd[m][ia][ip];
                 delete hRm[m][ia][ip];
             }
+        }
+    }
 
     // ---- build TGraphErrors and fit R_ratio vs alpha ----
 
@@ -313,7 +317,9 @@ static void ExtractAndFit(
                 int n = (int)pts.size();
                 std::vector<double> x(n), y(n), ex(n, 0.0), ey(n);
                 for (int k = 0; k < n; k++) {
-                    x[k] = pts[k].alpha; y[k] = pts[k].val; ey[k] = pts[k].err;
+                    x[k]  = pts[k].alpha;
+                    y[k]  = pts[k].val;
+                    ey[k] = pts[k].err;
                 }
 
                 TString gname = L2Name::ObjectName(cone, "R",
