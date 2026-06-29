@@ -67,6 +67,18 @@ if [[ ! -f "${LIBRARY}" ]]; then
     exit 1
 fi
 
+# Verify the binary's RPATH points to CMSSW ROOT (cvmfs), not system ROOT.
+# If it points to /usr/lib64/root/ the binary was built without cmsenv — it
+# will crash on worker nodes because system ROOT lacks libCling.so.
+BINARY_RPATH="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
+if [[ -z "${BINARY_RPATH}" ]]; then
+    echo "WARNING: ${BINARY} has no embedded RPATH/RUNPATH — verify it was built with cmsenv" >&2
+elif ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
+    echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${BINARY_RPATH}" >&2
+    echo "       Rebuild inside a cmsenv shell: source /cvmfs/cms.cern.ch/cmsset_default.sh && cmsenv && cmake --build build" >&2
+    exit 1
+fi
+
 if [[ "${USE_ALL}" == true ]]; then
     if [[ ! -d "${FILELIST_DIR}" ]]; then
         echo "ERROR: ${FILELIST_DIR} not found" >&2

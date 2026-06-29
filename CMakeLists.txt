@@ -37,6 +37,14 @@ if(DEFINED ENV{CMSSW_BASE})
             break()
         endif()
     endforeach()
+
+    # EL9's ld.bfd defaults to DT_RPATH already, but make it explicit so future
+    # linker upgrades can't silently switch to DT_RUNPATH (which LD_LIBRARY_PATH
+    # can override, allowing the wrong ROOT to load on Condor worker nodes).
+    set(CMAKE_EXE_LINKER_FLAGS
+        "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-new-dtags")
+    set(CMAKE_SHARED_LINKER_FLAGS
+        "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--disable-new-dtags")
 endif()
 
 project(L2Residuals)
