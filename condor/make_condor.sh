@@ -92,6 +92,11 @@ SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
 mkdir -p "${SUBMISSIONS_DIR}"
 WORKDIR="${SUBMISSIONS_DIR}/${TODAY}"
 mkdir -p "${WORKDIR}"
+# Normalize: strip trailing /condor/asymmetry or /condor so the user can pass any of
+# outdir, outdir/condor, or outdir/condor/asymmetry and land in the same place.
+OUTPUT_DIR="${OUTPUT_DIR%/}"
+OUTPUT_DIR="${OUTPUT_DIR%/condor/asymmetry}"
+OUTPUT_DIR="${OUTPUT_DIR%/condor}"
 OUTPUT_DIR="${OUTPUT_DIR}/condor/asymmetry/${TODAY}"
 
 source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
