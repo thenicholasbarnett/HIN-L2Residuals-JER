@@ -227,7 +227,8 @@ static TString PlotDir(const TString& outDir, const TString& cone,
     std::vector<TString> parts = {outDir, cone, plotType};
     parts.insert(parts.end(), orderedKeys.begin(), orderedKeys.end());
     TString dir = L2Name::Join(parts, "/");
-    gSystem->mkdir(dir, true);
+    if (gSystem->mkdir(dir, true) < 0 && gSystem->AccessPathName(dir))
+        std::cerr << "Warning: cannot create plot subdirectory: " << dir << "\n";
     return dir;
 }
 
@@ -245,10 +246,10 @@ static std::pair<double, double> TruncBounds(TH1D* h, double fraction) {
     double total = h->Integral();
     double tailN = 0.5 * (1.0 - fraction) * total;
     int nBins = h->GetNbinsX();
-    double cum = 0; int binLo = 1;
-    for (int b = 1; b <= nBins; b++) { cum += h->GetBinContent(b); if (cum > tailN) { binLo = b; break; } }
-    cum = 0; int binHi = nBins;
-    for (int b = nBins; b >= 1; b--) { cum += h->GetBinContent(b); if (cum > tailN) { binHi = b; break; } }
+    double running = 0; int binLo = 1;
+    for (int b = 1; b <= nBins; b++) { running += h->GetBinContent(b); if (running > tailN) { binLo = b; break; } }
+    running = 0; int binHi = nBins;
+    for (int b = nBins; b >= 1; b--) { running += h->GetBinContent(b); if (running > tailN) { binHi = b; break; } }
     return { h->GetBinLowEdge(binLo), h->GetBinLowEdge(binHi) + h->GetBinWidth(binHi) };
 }
 
@@ -1181,7 +1182,10 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     }
 
     if (outDir.IsNull()) outDir = MakePlotDir("plots_residuals");
-    gSystem->mkdir(outDir, true);
+    if (gSystem->mkdir(outDir, true) < 0 && gSystem->AccessPathName(outDir)) {
+        std::cerr << "Cannot create output directory: " << outDir << "\n";
+        return;
+    }
 
     BinningConfig bins;
     const int nCones    = (int)kConeLabels.size();
