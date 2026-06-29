@@ -3,5 +3,6 @@ bin/
 lib/
 
 readme/
+README.md
 data/sample/
 condor/submissions/
