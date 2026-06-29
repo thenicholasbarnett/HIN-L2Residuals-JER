@@ -180,7 +180,7 @@ EOF
             draw_bar "${BAR_COLOR}" "${LABEL}:" "${COUNT}" "${TOTAL}"
         done < "${FILELIST_FILE}"
 
-        printf "\n"
+        printf "\n\n"
 
         if [[ "${NO_SUBMIT}" == true ]]; then
             echo "  ${LABEL} (${MODE}): ${COUNT} jobs → $(pwd)/${SUBMIT_FILE}"

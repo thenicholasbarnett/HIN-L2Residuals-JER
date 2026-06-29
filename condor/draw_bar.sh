@@ -6,14 +6,6 @@ _BAR_START_TIME=""
 
 start_bar_timer() { _BAR_START_TIME=$(date +%s); }
 
-format_eta() {
-    local secs="$1"
-    if   (( secs < 60 ));   then printf "~%ds"      "$secs"
-    elif (( secs < 3600 )); then printf "~%dm %ds"  "$(( secs/60 ))" "$(( secs%60 ))"
-    else                         printf "~%dh %dm"  "$(( secs/3600 ))" "$(( (secs%3600)/60 ))"
-    fi
-}
-
 # Sets BAR_COLOR by drawing from a shuffled deck; refills when exhausted,
 # guaranteeing every color appears once per cycle with no consecutive repeats.
 pick_bar_color() {
@@ -62,14 +54,19 @@ draw_bar() {
     local filled_str="" empty_str=""
     (( filled > 0 )) && filled_str="$(printf '%0.s█' $(seq 1 $filled))"
     (( empty > 0 ))  && empty_str="$(printf '%0.s░' $(seq 1 $empty))"
-    local eta_str=""
-    if [[ -n "$_BAR_START_TIME" && "$current" -gt 0 && "$current" -lt "$total" && "$pct" -ge 10 ]]; then
+    local rate_str="" time_str=""
+    if [[ -n "$_BAR_START_TIME" && "$current" -gt 0 ]]; then
         local elapsed=$(( $(date +%s) - _BAR_START_TIME ))
         if (( elapsed >= 1 )); then
-            local eta_secs=$(( elapsed * (total - current) / current ))
-            eta_str=" $(format_eta "$eta_secs")"
+            rate_str=$(awk "BEGIN{printf \"  %4.1f/s\", $current/$elapsed}")
+            if (( current >= total )); then
+                time_str=$(printf "  %02d:%02d" "$(( elapsed/60 ))" "$(( elapsed%60 ))")
+            elif (( pct >= 10 )); then
+                local eta_secs=$(( elapsed * (total - current) / current ))
+                time_str=$(printf "  %02d:%02d ETA" "$(( eta_secs/60 ))" "$(( eta_secs%60 ))")
+            fi
         fi
     fi
-    printf "\r  %-24s [${ansi_color}%s${reset}${grey}%s${reset}] %d/%d (%d%%%s)\033[K" \
-        "$label" "$filled_str" "$empty_str" "$current" "$total" "$pct" "$eta_str"
+    printf "\r  %-24s [${ansi_color}%s${reset}${grey}%s${reset}]  %d/%d  %3d%%%s%s\033[K" \
+        "$label" "$filled_str" "$empty_str" "$current" "$total" "$pct" "$rate_str" "$time_str"
 }

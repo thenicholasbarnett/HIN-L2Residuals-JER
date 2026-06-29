@@ -59,7 +59,7 @@ struct ProgressBar {
     }
 
     void Update(){current++; Draw();}
-    void Finish(){current = total; Draw(); printf("\n"); fflush(stdout);}
+    void Finish(){current = total; Draw(); printf("\n\n"); fflush(stdout);}
 
 private:
     const char* AnsiColor() const {
@@ -87,25 +87,25 @@ private:
         for(int i = 0; i < filled; i++) bar += "\xe2\x96\x88";  // █
         for(int i = 0; i < empty;  i++) gap += "\xe2\x96\x91";  // ░
 
-        char etaBuf[32] = "";
-        if (current > 0 && current < total && pct >= 10) {
-            long elapsed = (long)(time(nullptr) - startTime);
-            if (elapsed >= 1) {
-                long eta = elapsed * (long)(total - current) / (long)current;
-                if (eta < 60)
-                    snprintf(etaBuf, sizeof(etaBuf), " ~%lds", eta);
-                else if (eta < 3600)
-                    snprintf(etaBuf, sizeof(etaBuf), " ~%ldm %lds", eta/60, eta%60);
-                else
-                    snprintf(etaBuf, sizeof(etaBuf), " ~%ldh %ldm", eta/3600, (eta%3600)/60);
-            }
+        long elapsed = (long)(time(nullptr) - startTime);
+
+        char rateBuf[16] = "";
+        if (current > 0 && elapsed >= 1)
+            snprintf(rateBuf, sizeof(rateBuf), "  %4.1f/s", (double)current / elapsed);
+
+        char timeBuf[24] = "";
+        if (current >= total && elapsed > 0)
+            snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld", elapsed / 60, elapsed % 60);
+        else if (current > 0 && pct >= 10 && elapsed >= 1) {
+            long eta = elapsed * (long)(total - current) / (long)current;
+            snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld ETA", eta / 60, eta % 60);
         }
 
-        printf("\r  %-24s [%s%s\033[90m%s\033[0m] %d/%d (%d%%%s)\033[K",
+        printf("\r  %-24s [%s%s\033[90m%s\033[0m]  %d/%d  %3d%%%s%s\033[K",
                label.c_str(),
-               AnsiColor(), bar.c_str(),
-               gap.c_str(),
-               current, total, pct, etaBuf);
+               AnsiColor(), bar.c_str(), gap.c_str(),
+               current, total, pct,
+               rateBuf, timeBuf);
         fflush(stdout);
     }
 };

@@ -143,7 +143,7 @@ if $ZOMBIE_CHECK; then
 
     rm -rf "$tmpdir_check"
     draw_bar "$BAR_COLOR" "Zombie check:" "$TOTAL_INPUT" "$TOTAL_INPUT"
-    printf "\n"
+    printf "\n\n"
 
     ZOMBIE_END=$(date +%s)
     ZOMBIE_ELAPSED=$(( ZOMBIE_END - ZOMBIE_START ))
@@ -228,7 +228,7 @@ while (( ${#current_files[@]} > 1 )); do
     done
 
     draw_bar "$BAR_COLOR" "Level ${level}:" "$n_batches" "$n_batches"
-    printf "\n"
+    printf "\n\n"
 
     LEVEL_END=$(date +%s)
     LEVEL_ELAPSED=$(( LEVEL_END - LEVEL_START ))
