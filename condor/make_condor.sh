@@ -159,6 +159,7 @@ request_cpus            = 1
 EOF
 
         pick_bar_color
+        start_bar_timer
         draw_bar "${BAR_COLOR}" "${LABEL}:" 0 "${TOTAL}"
 
         while IFS= read -r INPUT_FILE; do

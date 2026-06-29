@@ -34,9 +34,10 @@ struct ProgressBar {
     int current = 0;
     int width = 40;
     Color color;
+    time_t startTime;
 
     ProgressBar(const std::string& label, int total, Color color = kRandom)
-        : label(label), total(total), color(color)
+        : label(label), total(total), color(color), startTime(time(nullptr))
     {
         if(this->color == kRandom){
             static const Color all[] = {kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite};
@@ -86,11 +87,25 @@ private:
         for(int i = 0; i < filled; i++) bar += "\xe2\x96\x88";  // █
         for(int i = 0; i < empty;  i++) gap += "\xe2\x96\x91";  // ░
 
-        printf("\r  %-24s [%s%s\033[90m%s\033[0m] %d/%d (%d%%)",
+        char etaBuf[32] = "";
+        if (current > 0 && current < total && pct >= 10) {
+            long elapsed = (long)(time(nullptr) - startTime);
+            if (elapsed >= 1) {
+                long eta = elapsed * (long)(total - current) / (long)current;
+                if (eta < 60)
+                    snprintf(etaBuf, sizeof(etaBuf), " ~%lds", eta);
+                else if (eta < 3600)
+                    snprintf(etaBuf, sizeof(etaBuf), " ~%ldm %lds", eta/60, eta%60);
+                else
+                    snprintf(etaBuf, sizeof(etaBuf), " ~%ldh %ldm", eta/3600, (eta%3600)/60);
+            }
+        }
+
+        printf("\r  %-24s [%s%s\033[90m%s\033[0m] %d/%d (%d%%%s)\033[K",
                label.c_str(),
                AnsiColor(), bar.c_str(),
                gap.c_str(),
-               current, total, pct);
+               current, total, pct, etaBuf);
         fflush(stdout);
     }
 };

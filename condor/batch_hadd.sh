@@ -97,6 +97,7 @@ if $ZOMBIE_CHECK; then
     checked=0
     declare -A collected
 
+    start_bar_timer
     draw_bar "$BAR_COLOR" "Zombie check:" 0 "$TOTAL_INPUT"
 
     collect_check_results() {
@@ -184,6 +185,7 @@ while (( ${#current_files[@]} > 1 )); do
     tmpdir_hadd=$(mktemp -d)
     declare -A collected_hadd
 
+    start_bar_timer
     draw_bar "$BAR_COLOR" "Level ${level}:" 0 "$n_batches"
 
     collect_hadd_results() {
