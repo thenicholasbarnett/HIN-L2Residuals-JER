@@ -39,15 +39,21 @@ struct ProgressBar {
         : label(label), total(total), color(color)
     {
         if(this->color == kRandom){
-            static const Color choices[] = {kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite};
-            static constexpr int nChoices = (int)(sizeof(choices) / sizeof(choices[0]));
+            static const Color all[] = {kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite};
+            static const int N = (int)(sizeof(all)/sizeof(all[0]));
             static bool seeded = false;
-            static Color lastColor = kRandom;  // kRandom not in choices, so first pick is unconstrained
+            static Color lastColor = kRandom;  // kRandom not in all[], so first pick is unconstrained
+            static Color deck[N];
+            static int remaining = 0;
             if(!seeded){ srand((unsigned int)(time(nullptr) ^ (unsigned int)getpid())); seeded = true; }
-            Color c; int tries = 0;
-            do { c = choices[rand() % nChoices]; } while(c == lastColor && ++tries < 20);
-            lastColor = c;
-            this->color = c;
+            if(remaining == 0){
+                for(int i = 0; i < N; i++) deck[i] = all[i];
+                for(int i = N-1; i > 0; i--){ int j = rand()%(i+1); Color t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+                if(deck[0] == lastColor && N > 1){ Color t = deck[0]; deck[0] = deck[1]; deck[1] = t; }
+                remaining = N;
+            }
+            this->color = deck[N - remaining--];
+            lastColor = this->color;
         }
     }
 

@@ -28,6 +28,7 @@ fi
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 
 source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
+pick_bar_color
 
 MY_TMPDIR="$(dirname "$OUT_FILE")/hadd_tmp_$$"
 LOG_FILE="$(dirname "$OUT_FILE")/hadd_$$.log"

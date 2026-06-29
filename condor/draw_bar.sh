@@ -1,16 +1,30 @@
 _BAR_COLORS=(green blue red pink purple orange yellow cyan white)
 _LAST_BAR_COLOR=""
+_COLOR_QUEUE=()
 BAR_COLOR=""
 
-# Sets BAR_COLOR to a random color different from the previous call
+# Sets BAR_COLOR by drawing from a shuffled deck; refills when exhausted,
+# guaranteeing every color appears once per cycle with no consecutive repeats.
 pick_bar_color() {
-    local color tries=0
-    while (( tries++ < 20 )); do
-        color="${_BAR_COLORS[$(( RANDOM % ${#_BAR_COLORS[@]} ))]}"
-        [[ "$color" != "$_LAST_BAR_COLOR" ]] && break
-    done
-    _LAST_BAR_COLOR="$color"
-    BAR_COLOR="$color"
+    if (( ${#_COLOR_QUEUE[@]} == 0 )); then
+        local shuffled=("${_BAR_COLORS[@]}")
+        local n=${#shuffled[@]} i j tmp
+        for (( i = n-1; i > 0; i-- )); do
+            j=$(( RANDOM % (i+1) ))
+            tmp="${shuffled[i]}"
+            shuffled[i]="${shuffled[j]}"
+            shuffled[j]="${tmp}"
+        done
+        if [[ "${shuffled[0]}" == "$_LAST_BAR_COLOR" && n -gt 1 ]]; then
+            tmp="${shuffled[0]}"
+            shuffled[0]="${shuffled[1]}"
+            shuffled[1]="${tmp}"
+        fi
+        _COLOR_QUEUE=("${shuffled[@]}")
+    fi
+    BAR_COLOR="${_COLOR_QUEUE[0]}"
+    _LAST_BAR_COLOR="$BAR_COLOR"
+    _COLOR_QUEUE=("${_COLOR_QUEUE[@]:1}")
 }
 
 draw_bar() {
