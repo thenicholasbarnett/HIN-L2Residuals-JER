@@ -74,42 +74,41 @@ static GaussResult FitGauss(TH1D* h) {
     return r;
 }
 
-// ---- truncated mean: trim equal tails so central `fraction` of area survives ----
+// ---- truncated mean ----
 
-static TruncResult TruncMean(TH1D* h, double fraction) {
-    TruncResult r;
-    if (!CanFit(h, kMinEntries)) return r;
-
+// Find the bin range that contains the central `fraction` of h's area.
+// Returns {1, 0} (lo > hi = invalid) if h has fewer than kMinEntries.
+static std::pair<int,int> FindTruncBins(TH1D* h, double fraction) {
+    if (!CanFit(h, kMinEntries)) return {1, 0};
     double total = h->Integral();
-    if (total <= 0) return r;
+    if (total <= 0) return {1, 0};
     double tailN = 0.5 * (1.0 - fraction) * total;
-
     int nBins = h->GetNbinsX();
-
     double running = 0;
     int binLo = 1;
     for (int b = 1; b <= nBins; b++) {
         running += h->GetBinContent(b);
         if (running > tailN) { binLo = b; break; }
     }
-
     running = 0;
     int binHi = nBins;
     for (int b = nBins; b >= 1; b--) {
         running += h->GetBinContent(b);
         if (running > tailN) { binHi = b; break; }
     }
+    return {binLo, binHi};
+}
 
+// Compute the mean of h restricted to bins [binLo, binHi].
+static TruncResult TruncMeanInRange(TH1D* h, int binLo, int binHi) {
+    TruncResult r;
     if (binLo > binHi) return r;
-
     double nEff = h->Integral(binLo, binHi);
     if (nEff < 10) return r;
-
     h->GetXaxis()->SetRange(binLo, binHi);
     double mean = h->GetMean();
     double rms  = h->GetRMS();
     h->GetXaxis()->SetRange(0, 0);
-
     r.mean    = mean;
     r.meanErr = rms / TMath::Sqrt(nEff);
     r.nEff    = nEff;
@@ -236,10 +235,14 @@ static void ExtractAndFit(
 
                 GaussResult gd   = FitGauss(hAData);
                 GaussResult gm   = FitGauss(hAMC);
-                TruncResult td90 = TruncMean(hAData, 0.90);
-                TruncResult tm90 = TruncMean(hAMC,   0.90);
-                TruncResult td95 = TruncMean(hAData, 0.95);
-                TruncResult tm95 = TruncMean(hAMC,   0.95);
+                auto [dlo90, dhi90] = FindTruncBins(hAData, 0.90);
+                auto [mlo90, mhi90] = FindTruncBins(hAMC,   0.90);
+                auto [dlo95, dhi95] = FindTruncBins(hAData, 0.95);
+                auto [mlo95, mhi95] = FindTruncBins(hAMC,   0.95);
+                TruncResult td90 = TruncMeanInRange(hAData, dlo90, dhi90);
+                TruncResult tm90 = TruncMeanInRange(hAMC,   mlo90, mhi90);
+                TruncResult td95 = TruncMeanInRange(hAData, dlo95, dhi95);
+                TruncResult tm95 = TruncMeanInRange(hAMC,   mlo95, mhi95);
 
                 double alphaX = aSlice.hi;
 

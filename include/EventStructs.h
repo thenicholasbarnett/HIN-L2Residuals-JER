@@ -23,13 +23,14 @@ struct EventStruct{
     // mapping variables to branches
     std::vector<std::pair<TString, void*>> BranchMap(bool isMC){
         std::vector<std::pair<TString, void*>> branches = {
-            {"vz", &vz}
+            {"vz",  &vz},
+            {"evt", &event}
         };
-        if(isMC){branches.push_back({"weight", &w});}
-        if(!isMC){
+        if(isMC){
+            branches.push_back({"weight", &w});
+        } else {
             branches.insert(branches.end(), {
-                {"run", &run},
-                {"evt", &event},
+                {"run",  &run},
                 {"lumi", &lumi}
             });
         }
