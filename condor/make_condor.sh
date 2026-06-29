@@ -1,50 +1,47 @@
 #!/bin/bash
-# Submit one runAsymmetry job per input HiForest file across all matching filelists.
+# Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh JOBNAME OUTPUT_DIR [MODE] [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [--no-submit|-n]
 #
-# JOBNAME    — label used in directory and file names
-# OUTPUT_DIR — absolute EOS/AFS path where output ROOT files are written
-# MODE       — --hard-probes (default) | --monte-carlo | --zero-bias
+# OUTPUT_DIR   — absolute EOS/AFS path where output ROOT files are written
+# FILELIST.txt — optional: submit only this one filelist; omit to submit all
+#                filelists found in data/txt/
 # --no-submit / -n  — generate submission files without submitting
 #
-# All filelists in data/txt/ matching the mode pattern are submitted as
-# separate Condor batches (one submit file per filelist). The mode-to-glob
-# mapping mirrors cfg/2024ppRef.h:
-#   --hard-probes  → filelist_HiForest_2024ppref_DATA_HP*.txt  (~5 datasets)
-#   --zero-bias    → filelist_HiForest_2024ppref_DATA_ZB*.txt  (~15 datasets)
-#   --monte-carlo  → filelist_HiForest_2024ppref_MC*.txt
+# Mode is auto-detected per filelist from the filename:
+#   *_DATA_HP*.txt  → --hard-probes
+#   *_DATA_ZB*.txt  → --zero-bias
+#   *_MC*.txt       → --monte-carlo
 #
 # Prerequisites:
-#   - Build the project first:  mkdir build && cd build && cmake .. && make
+#   - Build the project first:  cmake --build build  (from repo root)
 #   - All five cone JEC files must be present in data/jec/ before submitting
+#   - Set CMSSW_SRC in condor/runtime_wrapper.sh
 
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 JOBNAME OUTPUT_DIR [--monte-carlo|--zero-bias|--hard-probes] [--no-submit|-n]" >&2
+    echo "Usage: $0 OUTPUT_DIR [FILELIST.txt] [--no-submit|-n]" >&2
     exit 1
 }
 
-if [[ $# -lt 2 ]]; then usage; fi
+if [[ $# -lt 1 ]]; then usage; fi
 
-JOBNAME="$1"
-OUTPUT_DIR="$2"
-MODE="--hard-probes"
+OUTPUT_DIR="$1"
+SINGLE_FILELIST=""
 NO_SUBMIT=false
 
-# Parse optional arguments
-shift 2
+shift
 for arg in "$@"; do
     case "${arg}" in
-        --monte-carlo|--zero-bias|--hard-probes) MODE="${arg}" ;;
-        --no-submit|-n)                          NO_SUBMIT=true ;;
+        --no-submit|-n) NO_SUBMIT=true ;;
+        *.txt)          SINGLE_FILELIST="${arg}" ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac
 done
 
-# Locate the repo root (parent of the condor/ directory this script lives in)
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONDOR_DIR="${REPO_ROOT}/condor"
 BINARY="${REPO_ROOT}/bin/runAsymmetry"
@@ -52,42 +49,41 @@ LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
 FILELIST_DIR="${REPO_ROOT}/data/txt"
 
-# Glob pattern per mode — mirrors cfg/2024ppRef.h naming convention
-case "${MODE}" in
-    --hard-probes)  FILELIST_GLOB="filelist_HiForest_2024ppref_DATA_HP*.txt" ;;
-    --zero-bias)    FILELIST_GLOB="filelist_HiForest_2024ppref_DATA_ZB*.txt" ;;
-    --monte-carlo)  FILELIST_GLOB="filelist_HiForest_2024ppref_MC*.txt" ;;
-esac
-
-# Sanity checks
 if [[ ! -f "${BINARY}" ]]; then
-    echo "ERROR: ${BINARY} not found — build the project first (cmake .. && make)" >&2
+    echo "ERROR: ${BINARY} not found — build the project first (cmake --build build)" >&2
     exit 1
 fi
 if [[ ! -f "${LIBRARY}" ]]; then
     echo "ERROR: ${LIBRARY} not found — build the project first" >&2
     exit 1
 fi
-if [[ ! -d "${DATA_DIR}" ]]; then
-    echo "ERROR: ${DATA_DIR} not found" >&2
+if [[ ! -d "${FILELIST_DIR}" ]]; then
+    echo "ERROR: ${FILELIST_DIR} not found" >&2
     exit 1
 fi
 
-# Collect matching filelists
-FILELISTS=("${FILELIST_DIR}"/${FILELIST_GLOB})
-if [[ ! -f "${FILELISTS[0]}" ]]; then
-    echo "ERROR: no filelists matched ${FILELIST_DIR}/${FILELIST_GLOB}" >&2
-    exit 1
+# Collect filelists — single if specified, otherwise all in data/txt/
+if [[ -n "${SINGLE_FILELIST}" ]]; then
+    if [[ ! -f "${SINGLE_FILELIST}" ]]; then
+        echo "ERROR: filelist not found: ${SINGLE_FILELIST}" >&2
+        exit 1
+    fi
+    FILELISTS=("${SINGLE_FILELIST}")
+else
+    FILELISTS=("${FILELIST_DIR}"/filelist_HiForest_2024ppref*.txt)
+    if [[ ! -f "${FILELISTS[0]}" ]]; then
+        echo "ERROR: no filelists found in ${FILELIST_DIR}" >&2
+        exit 1
+    fi
 fi
 
 TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
-WORKDIR="$(pwd)/condor_${JOBNAME}_${TODAY}"
+WORKDIR="$(pwd)/condor_${TODAY}"
 mkdir -p "${WORKDIR}"
 
 (
     cd "${WORKDIR}"
 
-    # Copy shared artifacts once — all submit files in this work dir reference them.
     cp "${CONDOR_DIR}/runtime_wrapper.sh" .
     cp "${BINARY}"  runAsymmetry
     cp "${LIBRARY}" libl2residuals.so
@@ -97,15 +93,30 @@ mkdir -p "${WORKDIR}"
     mkdir -p "${OUTPUT_DIR}"
 
     TOTAL_JOBS=0
+    TOTAL_LISTS=0
 
     for FILELIST_PATH in "${FILELISTS[@]}"; do
-        # Extract dataset label: HP0, ZB3, MC, etc. (last _-separated token, no extension)
-        LABEL=$(basename "${FILELIST_PATH}" .txt | rev | cut -d_ -f1 | rev)
+        BASENAME=$(basename "${FILELIST_PATH}" .txt)
+
+        # Auto-detect mode from filename
+        if [[ "${BASENAME}" == *_DATA_HP* ]]; then
+            MODE="--hard-probes"
+        elif [[ "${BASENAME}" == *_DATA_ZB* ]]; then
+            MODE="--zero-bias"
+        elif [[ "${BASENAME}" == *_MC* ]]; then
+            MODE="--monte-carlo"
+        else
+            echo "  SKIP  ${BASENAME} — cannot infer mode from filename" >&2
+            continue
+        fi
+
+        # Label: last _-separated token (HP0, ZB3, MC, …)
+        LABEL=$(echo "${BASENAME}" | rev | cut -d_ -f1 | rev)
 
         mkdir -p "logs/${LABEL}/out" "logs/${LABEL}/err" "logs/${LABEL}/log"
         cp "${FILELIST_PATH}" "filelist_${LABEL}.txt"
 
-        SUBMIT_FILE="submit_${JOBNAME}_${LABEL}.condor"
+        SUBMIT_FILE="submit_${LABEL}.condor"
         COUNT=0
 
         cat > "${SUBMIT_FILE}" <<EOF
@@ -142,17 +153,18 @@ EOF
         done < "filelist_${LABEL}.txt"
 
         if [[ "${NO_SUBMIT}" == true ]]; then
-            echo "  ${LABEL}: ${COUNT} jobs written to $(pwd)/${SUBMIT_FILE}"
+            echo "  ${LABEL} (${MODE}): ${COUNT} jobs → $(pwd)/${SUBMIT_FILE}"
         else
-            echo "  Submitting ${LABEL}: ${COUNT} jobs..."
+            echo "  Submitting ${LABEL} (${MODE}): ${COUNT} jobs..."
             condor_submit "${SUBMIT_FILE}"
         fi
 
         TOTAL_JOBS=$((TOTAL_JOBS + COUNT))
+        TOTAL_LISTS=$((TOTAL_LISTS + 1))
     done
 
     echo ""
-    echo "Total jobs: ${TOTAL_JOBS} across ${#FILELISTS[@]} filelists (mode: ${MODE})"
+    echo "Total: ${TOTAL_JOBS} jobs across ${TOTAL_LISTS} filelists"
     if [[ "${NO_SUBMIT}" == false ]]; then
         echo "Output directory: ${OUTPUT_DIR}"
     fi

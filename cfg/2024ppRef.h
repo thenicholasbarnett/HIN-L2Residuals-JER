@@ -14,8 +14,8 @@ inline const std::vector<std::vector<std::string>> kJECFilesPerCone = {
     {"data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt"},
 };
 
-// jet veto map
-inline const std::string kVetoMapPath = "data/veto/Winter25Prompt25_RunCDE.root";
+// jet veto map — absolute EOS path; no file transfer needed on lxplus/Condor workers
+inline const std::string kVetoMapPath = "/eos/cms/store/group/phys_heavyions/nbarnett/Winter25Prompt25_RunCDE.root";
 
 // golden JSON
 inline const TString kJSONPath = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json";
