@@ -424,17 +424,19 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     tex->SetNDC();
                     tex->SetTextSize(0.031);
                     tex->SetTextFont(42);
-                    tex->DrawLatex(0.57, 0.840, cone);
-                    tex->DrawLatex(0.57, 0.785, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
-                    tex->DrawLatex(0.57, 0.730, ptSl.title.Data());
-                    tex->DrawLatex(0.57, 0.675, aSl.title.Data());
+                    tex->SetTextAlign(31);
+                    tex->DrawLatex(0.93, 0.840, cone);
+                    tex->DrawLatex(0.93, 0.785, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
+                    tex->DrawLatex(0.93, 0.730, ptSl.title.Data());
+                    tex->DrawLatex(0.93, 0.675, aSl.title.Data());
                 };
 
                 auto makeLegend = [&]() {
-                    TLegend* leg = new TLegend(0.16, 0.60, 0.48, 0.84);
+                    TLegend* leg = new TLegend(0.16, 0.66, 0.48, 0.86);
                     leg->SetBorderSize(0);
                     leg->SetFillColorAlpha(kWhite, 0.75);
                     leg->SetFillStyle(1001);
+                    leg->SetTextAlign(12);
                     leg->SetTextSize(0.031);
                     leg->AddEntry(hdc, Form("Data (%lld Entries)", nData), "lp");
                     leg->AddEntry(hmc, Form("MC (%lld Entries)", nMC), "lp");
