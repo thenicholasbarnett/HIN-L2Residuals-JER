@@ -1,5 +1,17 @@
 _BAR_COLORS=(green blue red pink purple orange yellow cyan white)
-BAR_COLOR="${_BAR_COLORS[$(( RANDOM % ${#_BAR_COLORS[@]} ))]}"
+_LAST_BAR_COLOR=""
+BAR_COLOR=""
+
+# Sets BAR_COLOR to a random color different from the previous call
+pick_bar_color() {
+    local color tries=0
+    while (( tries++ < 20 )); do
+        color="${_BAR_COLORS[$(( RANDOM % ${#_BAR_COLORS[@]} ))]}"
+        [[ "$color" != "$_LAST_BAR_COLOR" ]] && break
+    done
+    _LAST_BAR_COLOR="$color"
+    BAR_COLOR="$color"
+}
 
 draw_bar() {
     local color="$1" label="$2" current="$3" total="$4"

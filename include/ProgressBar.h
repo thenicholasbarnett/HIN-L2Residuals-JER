@@ -41,8 +41,13 @@ struct ProgressBar {
         if(this->color == kRandom){
             static const Color choices[] = {kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite};
             static constexpr int nChoices = (int)(sizeof(choices) / sizeof(choices[0]));
-            srand((unsigned int)(time(nullptr) ^ (unsigned int)getpid()));
-            this->color = choices[rand() % nChoices];
+            static bool seeded = false;
+            static Color lastColor = kRandom;  // kRandom not in choices, so first pick is unconstrained
+            if(!seeded){ srand((unsigned int)(time(nullptr) ^ (unsigned int)getpid())); seeded = true; }
+            Color c; int tries = 0;
+            do { c = choices[rand() % nChoices]; } while(c == lastColor && ++tries < 20);
+            lastColor = c;
+            this->color = c;
         }
     }
 
