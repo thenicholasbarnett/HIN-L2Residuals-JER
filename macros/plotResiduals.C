@@ -23,6 +23,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include "TLegend.h"
 #include "TLine.h"
 #include "TLatex.h"
+#include "TF1.h"
 #include "TROOT.h"
 #include "TStyle.h"
 #include "TSystem.h"
@@ -117,8 +118,11 @@ static TH1D* GetHAny(TFile* f, const std::vector<TString>& names) {
 static TH1D* GetHAny(TDirectory* d, const std::vector<TString>& names) {
     if (!d) return nullptr;
     for (const auto& name : names) {
-        TH1D* h = (TH1D*)d->Get(name);
-        if (h) return h;
+        TH1D* src = (TH1D*)d->Get(name);
+        if (!src) continue;
+        TH1D* h = (TH1D*)src->Clone(name + "_c");
+        h->SetDirectory(0);
+        return h;
     }
     return nullptr;
 }
@@ -240,6 +244,8 @@ static void SavePlot(TCanvas* c, const TString& outDir, const TString& cone,
     c->SaveAs(Form("%s/%s.png", dir.Data(), fileBase.Data()));
 }
 
+static constexpr int kMinEntriesPlot = 10;
+
 // Return the x-values at the low and high truncation boundaries for `fraction` of the area.
 static std::pair<double, double> TruncBounds(TH1D* h, double fraction) {
     if (!h || h->Integral() <= 0) return {0, 0};
@@ -262,16 +268,86 @@ static TLine* VLine(double x, Color_t col, int style = 3) {
     return l;
 }
 
+static void NormalizeDensity(TH1D* h) {
+    if (!h) return;
+    const double norm = h->Integral("width");
+    if (norm > 0) h->Scale(1.0 / norm);
+}
+
+static double MinPositiveBin(const std::vector<TH1D*>& hv) {
+    double minPos = 1e9;
+    for (auto* h : hv) {
+        if (!h) continue;
+        for (int i = 1; i <= h->GetNbinsX(); i++) {
+            const double v = h->GetBinContent(i);
+            if (v > 0) minPos = std::min(minPos, v);
+        }
+    }
+    return (minPos < 1e9) ? minPos : 1e-6;
+}
+
+static void StyleGuideLine(TLine* l, Color_t col) {
+    l->SetLineColorAlpha(col, 0.65);
+    l->SetLineStyle(3);
+    l->SetLineWidth(1);
+}
+
+static void StyleFit(TF1* f, Color_t col) {
+    f->SetLineColorAlpha(col, 0.70);
+    f->SetLineStyle(3);
+    f->SetLineWidth(2);
+}
+
+static void DrawTruncLines(TH1D* h, double fraction, Color_t col,
+                           double yMin, double yMax,
+                           TLine*& loLine, TLine*& hiLine) {
+    auto [xlo, xhi] = TruncBounds(h, fraction);
+    loLine = new TLine(xlo, yMin, xlo, yMax);
+    hiLine = new TLine(xhi, yMin, xhi, yMax);
+    StyleGuideLine(loLine, col);
+    StyleGuideLine(hiLine, col);
+    loLine->Draw();
+    hiLine->Draw();
+}
+
+static TF1* FitGaussianGuide(TH1D* h, const TString& name, Color_t col) {
+    if (!h || h->GetEntries() < kMinEntriesPlot) return nullptr;
+    TF1* fit = new TF1(name, "gaus", -0.5, 0.5);
+    fit->SetParameter(0, h->GetMaximum());
+    fit->SetParameter(1, h->GetMean());
+    fit->SetParameter(2, std::max(h->GetRMS(), 1e-3));
+    StyleFit(fit, col);
+    h->Fit(fit, "NQSR");
+    return fit;
+}
+
+static void DrawAsymBase(TH1D* hData, TH1D* hMC,
+                         const TString& xTitle,
+                         double yMin, double yMax) {
+    StyleH(hData, kBlack, 20, 1.5f);
+    StyleH(hMC, kRed + 1, 24, 1.5f);
+
+    hData->SetTitle("");
+    hData->GetXaxis()->SetTitle(xTitle);
+    hData->GetXaxis()->CenterTitle();
+    hData->GetYaxis()->SetTitle("1/N dN/dA");
+    hData->GetYaxis()->CenterTitle();
+    hData->SetMinimum(yMin);
+    hData->SetMaximum(yMax);
+
+    hData->Draw("E1");
+    hMC->Draw("E1 same");
+}
+
 // ============================================================
 // Plot type 3: Asymmetry distributions
 //
-// For each (cone, pT slice, alpha slice, eta bin): one canvas with
-//   data (black) and MC (red) overlaid, log-y scale,
-//   dotted vertical lines at trunc90 and trunc95 boundaries.
+// For each (cone, pT slice, alpha slice, eta bin): three canvases with
+//   data (black) and MC (red) overlaid, log-y scale:
+//     trunc90/trunc95: data and MC truncation bounds
+//     gauss: data and MC Gaussian fit guides
 // Skips bins with fewer than kMinEntriesPlot entries.
 // ============================================================
-
-static constexpr int kMinEntriesPlot = 10;
 
 static void PlotAsymDist(TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
@@ -307,6 +383,8 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     if (hd) delete hd;
                     if (hm) delete hm;
                     pb.Update();
+                    pb.Update();
+                    pb.Update();
                     continue;
                 }
 
@@ -316,72 +394,97 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                 TH1D* hdc = (TH1D*)hd->Clone(dname + "_c"); hdc->SetDirectory(0);
                 TH1D* hmc = (TH1D*)hm->Clone(mname + "_c"); hmc->SetDirectory(0);
 
-                // self-normalize so data and MC overlay on the same scale
-                if (hdc->Integral() > 0) hdc->Scale(1.0 / hdc->Integral());
-                if (hmc->Integral() > 0) hmc->Scale(1.0 / hmc->Integral());
+                NormalizeDensity(hdc);
+                NormalizeDensity(hmc);
 
-                // truncation boundaries from the normalized data distribution
-                auto [t90lo, t90hi] = TruncBounds(hdc, 0.90);
-                auto [t95lo, t95hi] = TruncBounds(hdc, 0.95);
-
-                TString cvName = Form("adist_%s_%s_%s_%s",
-                    cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data());
-                TCanvas* c = new TCanvas(cvName, "", 800, 600);
-            RealAspectRatio(c);
-                c->SetLogy();
-                c->SetLeftMargin(0.13);
-
-                StyleH(hdc, kBlack, 1, 1.5f);
-                StyleH(hmc, kRed+1, 1, 1.5f);
-
-                hdc->SetTitle("");
-                hdc->GetXaxis()->SetTitle("A");
-                hdc->GetXaxis()->CenterTitle();
-                hdc->GetYaxis()->SetTitle("Normalized");
-                hdc->GetYaxis()->CenterTitle();
-
-                // y range after normalization
-                double ymax = std::max(hdc->GetMaximum(), hmc->GetMaximum()) * 5.0;
-                double ymin = 1e-4;
-                hdc->SetMaximum(ymax);
-                hdc->SetMinimum(ymin);
-
-                hdc->Draw("E1");
-                hmc->Draw("E1 same");
-
-                // trunc90 boundaries — blue dotted
-                TLine* l90lo = new TLine(t90lo, ymin, t90lo, ymax);
-                TLine* l90hi = new TLine(t90hi, ymin, t90hi, ymax);
-                l90lo->SetLineColor(kBlue); l90lo->SetLineStyle(3); l90lo->SetLineWidth(2);
-                l90hi->SetLineColor(kBlue); l90hi->SetLineStyle(3); l90hi->SetLineWidth(2);
-                l90lo->Draw(); l90hi->Draw();
-
-                // trunc95 boundaries — orange dotted
-                TLine* l95lo = new TLine(t95lo, ymin, t95lo, ymax);
-                TLine* l95hi = new TLine(t95hi, ymin, t95hi, ymax);
-                l95lo->SetLineColor(kOrange+7); l95lo->SetLineStyle(3); l95lo->SetLineWidth(2);
-                l95hi->SetLineColor(kOrange+7); l95hi->SetLineStyle(3); l95hi->SetLineWidth(2);
-                l95lo->Draw(); l95hi->Draw();
+                const double ymax = std::max(hdc->GetMaximum(), hmc->GetMaximum()) * 5.0;
+                const double ymin = std::max(1e-6, MinPositiveBin({hdc, hmc}) * 0.5);
 
                 double etalo = kAbsEtaEdges[ie];
                 double etahi = kAbsEtaEdges[ie + 1];
 
-                TLegend* leg = new TLegend(0.52, 0.52, 0.93, 0.90);
-                leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.036);
-                leg->AddEntry((TObject*)nullptr, cone,                                                    "");
-                leg->AddEntry((TObject*)nullptr, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi),      "");
-                leg->AddEntry((TObject*)nullptr, ptSl.title.Data(),                                       "");
-                leg->AddEntry((TObject*)nullptr, aSl.title.Data(),                                        "");
-                leg->AddEntry(hdc, Form("Data  (N = %lld)", nData), "l");
-                leg->AddEntry(hmc, Form("MC    (N = %lld)", nMC),   "l");
-                leg->AddEntry(l90lo, "Trunc 90%", "l");
-                leg->AddEntry(l95lo, "Trunc 95%", "l");
-                leg->Draw();
+                auto drawInfo = [&]() {
+                    TLatex* tex = new TLatex();
+                    tex->SetNDC();
+                    tex->SetTextSize(0.030);
+                    tex->SetTextFont(62);
+                    tex->DrawLatex(0.715, 0.91, cone);
+                    tex->SetTextFont(42);
+                    tex->DrawLatex(0.715, 0.855, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
+                    tex->DrawLatex(0.715, 0.800, ptSl.title.Data());
+                    tex->DrawLatex(0.715, 0.745, aSl.title.Data());
+                };
 
-                SavePlot(c, outDir, cone, "adist", {etaKey, ptKey, alphaKey}, cvName);
-                pb.Update();
+                auto makeLegend = [&]() {
+                    TLegend* leg = new TLegend(0.715, 0.50, 0.985, 0.70);
+                    leg->SetBorderSize(0);
+                    leg->SetFillStyle(0);
+                    leg->SetTextSize(0.029);
+                    leg->AddEntry(hdc, Form("Data  (N = %lld)", nData), "lp");
+                    leg->AddEntry(hmc, Form("MC    (N = %lld)", nMC), "lp");
+                    return leg;
+                };
 
-                delete c;   // cascade-deletes hdc, hmc, lines, leg
+                auto drawTruncPlot = [&](double fraction, const TString& tag, const TString& label) {
+                    TString cvName = Form("adist_%s_%s_%s_%s_%s",
+                        cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data(), tag.Data());
+                    TCanvas* c = new TCanvas(cvName, "", 800, 600);
+                    c->SetRealAspectRatio(kAspectRatio);
+                    c->SetLogy();
+                    c->SetLeftMargin(0.13);
+                    c->SetRightMargin(0.31);
+
+                    DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+                    drawInfo();
+
+                    TLine *ldLo = nullptr, *ldHi = nullptr, *lmLo = nullptr, *lmHi = nullptr;
+                    DrawTruncLines(hdc, fraction, kBlack, ymin, ymax, ldLo, ldHi);
+                    DrawTruncLines(hmc, fraction, kRed + 1, ymin, ymax, lmLo, lmHi);
+
+                    TLegend* leg = makeLegend();
+                    leg->AddEntry(ldLo, Form("Data %s", label.Data()), "l");
+                    leg->AddEntry(lmLo, Form("MC %s", label.Data()), "l");
+                    leg->Draw();
+
+                    SavePlot(c, outDir, cone, "adist", {etaKey, ptKey, alphaKey}, cvName);
+                    pb.Update();
+                    delete c;
+                };
+
+                drawTruncPlot(0.90, "trunc90", "trunc. 90%");
+                drawTruncPlot(0.95, "trunc95", "trunc. 95%");
+
+                {
+                    TString cvName = Form("adist_%s_%s_%s_%s_gauss",
+                        cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data());
+                    TCanvas* c = new TCanvas(cvName, "", 800, 600);
+                    c->SetRealAspectRatio(kAspectRatio);
+                    c->SetLogy();
+                    c->SetLeftMargin(0.13);
+                    c->SetRightMargin(0.31);
+
+                    DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+                    drawInfo();
+
+                    TF1* fd = FitGaussianGuide(hdc, cvName + "_data_fit", kBlack);
+                    TF1* fm = FitGaussianGuide(hmc, cvName + "_mc_fit", kRed + 1);
+                    if (fd) fd->Draw("same");
+                    if (fm) fm->Draw("same");
+
+                    TLegend* leg = makeLegend();
+                    if (fd) leg->AddEntry(fd, "Data Gaussian fit", "l");
+                    if (fm) leg->AddEntry(fm, "MC Gaussian fit", "l");
+                    leg->Draw();
+
+                    SavePlot(c, outDir, cone, "adist", {etaKey, ptKey, alphaKey}, cvName);
+                    pb.Update();
+                    delete fd;
+                    delete fm;
+                    delete c;
+                }
+
+                delete hdc;
+                delete hmc;
                 delete hd;
                 delete hm;
             }
@@ -1207,7 +1310,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     if (doEtaSym)  totalPlots += nCones * kNMethods * nPtSlices;
     if (doMethods) totalPlots += nCones * 2 * nPtSlices;
     if (doFinals)  totalPlots += nCones * kNMethods * 2;
-    if (doAdist)   totalPlots += nCones * nAlpha * nPtSlices * nEta;
+    if (doAdist)   totalPlots += 3 * nCones * nAlpha * nPtSlices * nEta;
     if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
     if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
     if (doKine)    totalPlots += nCones * kNKinematicsCollections * (3 + kNKinematicsPtMins);
