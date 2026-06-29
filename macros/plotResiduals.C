@@ -1084,19 +1084,18 @@ static TH2D* ProjectEtaPhi(TH3D* h3, double ptMin, const TString& name) {
     return h;
 }
 
-static void DrawKinematics1D(TH1D* h, const TString& xTitle, bool logy) {
+static void DrawKinematics1D(TH1D* h, const TString& xTitle, const TString& yTitle, bool logy) {
+    if (h->Integral() > 0) h->Scale(1.0 / h->Integral());
     h->SetTitle("");
     h->GetXaxis()->SetTitle(xTitle);
-    h->GetYaxis()->SetTitle("Jets");
+    h->GetYaxis()->SetTitle(yTitle);
     h->GetXaxis()->CenterTitle();
     h->GetYaxis()->CenterTitle();
-    h->SetLineColor(HiroshigeNightBlue());
-    h->SetMarkerColor(HiroshigeNightBlue());
-    h->SetMarkerStyle(20);
-    h->SetLineWidth(2);
+    h->GetXaxis()->SetTitleOffset(1.25);
+    StyleH(h, HiroshigeNightBlue(), 20);
     h->Draw("hist");
     if (logy && h->GetMaximum() > 0) {
-        h->SetMinimum(std::max(0.5, h->GetMinimum(0.0) * 0.5));
+        h->SetMinimum(std::max(1e-6, h->GetMinimum(0.0) * 0.5));
         gPad->SetLogy();
     }
 }
@@ -1118,10 +1117,21 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
         TH3D* hTest = (TH3D*)fIn->Get(cone + "/" + cone + "_incl");
         if (!hTest) hTest = (TH3D*)fIn->Get(cone + "_incl");
         if (!hTest) {
-            for (int i = 0; i < kNKinematicsCollections * plotsPerCollection; i++) pb.Update();
+            for (int i = 0; i < kNKinematicsCollections * plotsPerCollection + 3; i++) pb.Update();
             return;
         }
     }
+
+    TH1D* hPtAll[kNKinematicsCollections]  = {};
+    TH1D* hEtaAll[kNKinematicsCollections] = {};
+    TH1D* hPhiAll[kNKinematicsCollections] = {};
+
+    auto drawConeLabel = [&](const TString& collPlot, double xLeft) {
+        TLatex* lab = new TLatex(xLeft + 0.03, 0.855,
+                                 Form("%s  |  %s", cone.Data(), collPlot.Data()));
+        lab->SetNDC(); lab->SetTextFont(42); lab->SetTextSize(0.035); lab->Draw();
+    };
+
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
         const TString coll = kKinematicsCollections[ic].inputKey;
         const TString collPlot = kKinematicsCollections[ic].plotKey;
@@ -1142,8 +1152,11 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TH1D* h = ProjectTH3D1D(h3, "z", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
-            c->SetLeftMargin(0.13);
-            DrawKinematics1D(h, "p_{T} [GeV/c]", true);
+            c->SetLeftMargin(0.14); c->SetGridx(); c->SetGridy();
+            DrawKinematics1D(h, "p_{T} [GeV/c]", "1/N  dN/dp_{T}", true);
+            hPtAll[ic] = (TH1D*)h->Clone(Form("hPtAll_%d", ic)); hPtAll[ic]->SetDirectory(0);
+            DrawCMSInternalHeader(0.14, 0.90);
+            drawConeLabel(collPlot, 0.14);
             SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
@@ -1155,8 +1168,11 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TH1D* h = ProjectTH3D1D(h3, "x", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
-            c->SetLeftMargin(0.13);
-            DrawKinematics1D(h, "#eta", false);
+            c->SetLeftMargin(0.14); c->SetGridx(); c->SetGridy();
+            DrawKinematics1D(h, "#eta", "1/N  dN/d#eta", false);
+            hEtaAll[ic] = (TH1D*)h->Clone(Form("hEtaAll_%d", ic)); hEtaAll[ic]->SetDirectory(0);
+            DrawCMSInternalHeader(0.14, 0.90);
+            drawConeLabel(collPlot, 0.14);
             SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
@@ -1168,8 +1184,11 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
             TH1D* h = ProjectTH3D1D(h3, "y", cvName + "_h");
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
-            c->SetLeftMargin(0.13);
-            DrawKinematics1D(h, "#phi", false);
+            c->SetLeftMargin(0.14); c->SetGridx(); c->SetGridy();
+            DrawKinematics1D(h, "#phi", "1/N  dN/d#phi", false);
+            hPhiAll[ic] = (TH1D*)h->Clone(Form("hPhiAll_%d", ic)); hPhiAll[ic]->SetDirectory(0);
+            DrawCMSInternalHeader(0.14, 0.90);
+            drawConeLabel(collPlot, 0.14);
             SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
@@ -1183,30 +1202,117 @@ static void PlotKinematics(TFile* fIn, const TString& outDir,
                 cone.Data(), collPlot.Data(), ptKey.Data());
 
             TH2D* h = ProjectEtaPhi(h3, ptMin, cvName + "_h");
+            if (h->Integral("width") > 0) h->Scale(1.0 / h->Integral("width"));
+
             TCanvas* c = new TCanvas(cvName, "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.12);
             c->SetRightMargin(0.16);
+            c->SetTopMargin(0.14);
+            c->SetBottomMargin(0.13);
+
             h->SetTitle("");
             h->GetXaxis()->SetTitle("#eta");
             h->GetYaxis()->SetTitle("#phi");
-            h->GetZaxis()->SetTitle("Jets");
+            h->GetZaxis()->SetTitle("1/N d^{2}N/d#etad#phi");
             h->GetXaxis()->CenterTitle();
             h->GetYaxis()->CenterTitle();
+            h->GetXaxis()->SetTitleOffset(1.25);
             h->Draw("colz");
 
-            TLatex* tex = new TLatex();
-            tex->SetNDC();
-            tex->SetTextSize(0.040);
-            tex->SetTextFont(62);
-            tex->DrawLatex(0.13, 0.93, Form("%s  |  %s jets  |  p_{T} > %.0f GeV/c",
-                cone.Data(), collPlot.Data(), ptMin));
+            // top: CMS Internal (left) and 2024 pp lumi (right), above frame
+            DrawCMSInternalHeader(0.12, 0.84, 0.935);
+
+            // collection title centered in top margin
+            TString collTitle = collPlot;
+            if (!collTitle.IsNull()) collTitle[0] = toupper(collTitle[0]);
+            TLatex* tColl = new TLatex(0.48, 0.895, Form("%s jets", collTitle.Data()));
+            tColl->SetNDC(); tColl->SetTextFont(42); tColl->SetTextSize(0.038);
+            tColl->SetTextAlign(22); tColl->Draw();
+
+            // bottom: pT cut (left) and cone label (right), below frame
+            TLatex* tPt = new TLatex(0.12, 0.045, Form("p_{T} > %.0f GeV/c", ptMin));
+            tPt->SetNDC(); tPt->SetTextFont(42); tPt->SetTextSize(0.035);
+            tPt->SetTextAlign(11); tPt->Draw();
+
+            TLatex* tCone = new TLatex(0.84, 0.045, cone.Data());
+            tCone->SetNDC(); tCone->SetTextFont(42); tCone->SetTextSize(0.035);
+            tCone->SetTextAlign(31); tCone->Draw();
 
             SaveKinematicsPlot(c, outDir, cone, collPlot, cvName);
             delete c;
             delete h;
             pb.Update();
         }
+    }
+
+    // Overview: all three collections overlaid on a single canvas per variable
+    auto DrawOverview1D = [&](TH1D* hArr[], const TString& xTitle, const TString& yTitle,
+                              const TString& varName, bool logy) {
+        bool anyValid = false;
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) if (hArr[ic]) anyValid = true;
+        if (!anyValid) { pb.Update(); return; }
+
+        // normalize
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+            if (hArr[ic] && hArr[ic]->Integral() > 0) hArr[ic]->Scale(1.0 / hArr[ic]->Integral());
+        }
+
+        Color_t cols[kNKinematicsCollections]    = {HiroshigeNightBlue(), HiroshigeBlue(), KlimtRed()};
+        int     markers[kNKinematicsCollections] = {20, 21, 22};
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+            if (hArr[ic]) StyleH(hArr[ic], cols[ic], markers[ic]);
+        }
+
+        TH1D* hFrame = nullptr;
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) if (hArr[ic]) { hFrame = hArr[ic]; break; }
+
+        double ymax = 0;
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) if (hArr[ic]) ymax = std::max(ymax, hArr[ic]->GetMaximum());
+
+        hFrame->SetTitle("");
+        hFrame->GetXaxis()->SetTitle(xTitle);
+        hFrame->GetYaxis()->SetTitle(yTitle);
+        hFrame->GetXaxis()->CenterTitle();
+        hFrame->GetYaxis()->CenterTitle();
+        hFrame->GetXaxis()->SetTitleOffset(1.25);
+        hFrame->SetMaximum(ymax * 1.3);
+        if (logy) hFrame->SetMinimum(1e-6);
+
+        TString cvName = Form("kinematics_%s_overview_%s", cone.Data(), varName.Data());
+        TCanvas* c = new TCanvas(cvName, "", 800, 600);
+        RealAspectRatio(c);
+        c->SetLeftMargin(0.14); c->SetGridx(); c->SetGridy();
+        hFrame->Draw("hist");
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+            if (hArr[ic] && hArr[ic] != hFrame) hArr[ic]->Draw("hist same");
+        }
+        if (logy) gPad->SetLogy();
+
+        TLegend* leg = new TLegend(0.55, 0.72, 0.88, 0.87);
+        leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.034);
+        for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+            if (hArr[ic]) leg->AddEntry(hArr[ic], kKinematicsCollections[ic].plotKey, "l");
+        }
+        leg->Draw();
+
+        DrawCMSInternalHeader(0.14, 0.90);
+        TLatex* lab = new TLatex(0.17, 0.855, cone.Data());
+        lab->SetNDC(); lab->SetTextFont(42); lab->SetTextSize(0.035); lab->Draw();
+
+        SaveKinematicsPlot(c, outDir, cone, "overview", cvName);
+        delete c;
+        pb.Update();
+    };
+
+    DrawOverview1D(hPtAll,  "p_{T} [GeV/c]", "1/N  dN/dp_{T}", "pt",  true);
+    DrawOverview1D(hEtaAll, "#eta",           "1/N  dN/d#eta",  "eta", false);
+    DrawOverview1D(hPhiAll, "#phi",           "1/N  dN/d#phi",  "phi", false);
+
+    for (int ic = 0; ic < kNKinematicsCollections; ic++) {
+        delete hPtAll[ic];
+        delete hEtaAll[ic];
+        delete hPhiAll[ic];
     }
 }
 
@@ -1246,6 +1352,7 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hallc->GetYaxis()->SetTitle("Events");
             hallc->GetXaxis()->CenterTitle();
             hallc->GetYaxis()->CenterTitle();
+            hallc->GetXaxis()->SetTitleOffset(1.25);
 
             TCanvas* c = new TCanvas("event_vz", "", 800, 600);
             RealAspectRatio(c);
@@ -1253,11 +1360,12 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hallc->Draw("hist");
             hvzc->Draw("E1 same");
 
-            TLegend* leg = new TLegend(0.62, 0.76, 0.93, 0.90);
+            TLegend* leg = new TLegend(0.55, 0.72, 0.89, 0.87);
             leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.034);
-            leg->AddEntry(hallc, Form("All events (N = %lld)", (Long64_t)hall->GetEntries()), "f");
-            leg->AddEntry(hvzc,  Form("After cuts  (N = %lld)", (Long64_t)hvz->GetEntries()),  "lp");
+            leg->AddEntry(hallc, Form("All events (%s)", FormatEntriesText((Long64_t)hall->GetEntries()).Data()), "f");
+            leg->AddEntry(hvzc,  Form("After cuts  (%s)", FormatEntriesText((Long64_t)hvz->GetEntries()).Data()),  "lp");
             leg->Draw();
+            DrawCMSInternalHeader(0.13, 0.90);
 
             SavePlot(c, outDir, "", "event", {}, "event_vz");
             delete c;
@@ -1381,7 +1489,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     if (doAdist)   totalPlots += 3 * nCones * nAlpha * nPtSlices * nEta;
     if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
     if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
-    if (doKine)    totalPlots += nCones * kNKinematicsCollections * (3 + kNKinematicsPtMins);
+    if (doKine)    totalPlots += nCones * (kNKinematicsCollections * (3 + kNKinematicsPtMins) + 3);
     if (doEvent)   totalPlots += 3;
 
     ProgressBar pb("Saving plots:", totalPlots);
