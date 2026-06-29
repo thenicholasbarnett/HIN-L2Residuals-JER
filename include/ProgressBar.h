@@ -93,10 +93,10 @@ private:
         if (current > 0 && elapsed >= 1)
             snprintf(rateBuf, sizeof(rateBuf), "  %4.1f/s", (double)current / elapsed);
 
-        char timeBuf[24] = "";
+        char timeBuf[24] = "  --:-- ETA";
         if (current >= total && elapsed > 0)
             snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld", elapsed / 60, elapsed % 60);
-        else if (current > 0 && pct >= 10 && elapsed >= 1) {
+        else if (current > 0 && pct >= 5 && elapsed >= 1) {
             long eta = elapsed * (long)(total - current) / (long)current;
             snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld ETA", eta / 60, eta % 60);
         }

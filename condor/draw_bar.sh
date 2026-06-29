@@ -54,14 +54,15 @@ draw_bar() {
     local filled_str="" empty_str=""
     (( filled > 0 )) && filled_str="$(printf '%0.s█' $(seq 1 $filled))"
     (( empty > 0 ))  && empty_str="$(printf '%0.s░' $(seq 1 $empty))"
-    local rate_str="" time_str=""
+    local rate_str="" time_str="  --:-- ETA"
+    if (( current >= total )); then time_str=""; fi
     if [[ -n "$_BAR_START_TIME" && "$current" -gt 0 ]]; then
         local elapsed=$(( $(date +%s) - _BAR_START_TIME ))
         if (( elapsed >= 1 )); then
             rate_str=$(awk "BEGIN{printf \"  %4.1f/s\", $current/$elapsed}")
             if (( current >= total )); then
                 time_str=$(printf "  %02d:%02d" "$(( elapsed/60 ))" "$(( elapsed%60 ))")
-            elif (( pct >= 10 )); then
+            elif (( pct >= 5 )); then
                 local eta_secs=$(( elapsed * (total - current) / current ))
                 time_str=$(printf "  %02d:%02d ETA" "$(( eta_secs/60 ))" "$(( eta_secs%60 ))")
             fi
