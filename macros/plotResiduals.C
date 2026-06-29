@@ -339,7 +339,7 @@ static void DrawAsymBase(TH1D* hData, TH1D* hMC,
     hMC->Draw("E1 same");
 }
 
-static void DrawAsymHeader() {
+static void DrawCMSInternalHeader() {
     TLatex* cms = new TLatex(0.13, 0.905, "#bf{CMS} #it{Internal}");
     cms->SetNDC();
     cms->SetTextFont(42);
@@ -353,6 +353,19 @@ static void DrawAsymHeader() {
     lumi->SetTextAlign(31);
     lumi->SetTextSize(0.035);
     lumi->Draw();
+}
+
+static void DrawAsymHeader() {
+    DrawCMSInternalHeader();
+}
+
+static void DrawEntriesLabel(Long64_t entries, double x = 0.90, double y = 0.84) {
+    TLatex* tex = new TLatex(x, y, Form("%lld Entries", entries));
+    tex->SetNDC();
+    tex->SetTextFont(42);
+    tex->SetTextAlign(31);
+    tex->SetTextSize(0.035);
+    tex->Draw();
 }
 
 // ============================================================
@@ -1251,6 +1264,7 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             TCanvas* c = new TCanvas("event_ppvF", "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.15);
+            c->SetLogy();
             hfilt->SetTitle("");
             hfilt->GetXaxis()->SetTitle("pprimaryVertexFilter");
             hfilt->GetYaxis()->SetTitle("Events");
@@ -1259,7 +1273,11 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hfilt->SetLineColor(HiroshigeNightBlue());
             hfilt->SetFillColor(HiroshigeLightBlue());
             hfilt->SetFillStyle(1001);
+            hfilt->SetMinimum(0.5);
+            hfilt->SetMaximum(std::max(1.0, hfilt->GetMaximum()) * 10.0);
             hfilt->Draw("hist");
+            DrawCMSInternalHeader();
+            DrawEntriesLabel((Long64_t)hfilt->GetEntries());
             SavePlot(c, outDir, "", "event", {}, "event_ppvF");
             delete c;
         }
@@ -1273,6 +1291,7 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             TCanvas* c = new TCanvas("event_hlt", "", 800, 600);
             RealAspectRatio(c);
             c->SetLeftMargin(0.15);
+            c->SetLogy();
             htrig->SetTitle("");
             htrig->GetXaxis()->SetTitle("HLT_AK4PFJet80");
             htrig->GetYaxis()->SetTitle("Events");
@@ -1281,7 +1300,11 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             htrig->SetLineColor(HiroshigeNightBlue());
             htrig->SetFillColor(HiroshigeLightBlue());
             htrig->SetFillStyle(1001);
+            htrig->SetMinimum(0.5);
+            htrig->SetMaximum(std::max(1.0, htrig->GetMaximum()) * 10.0);
             htrig->Draw("hist");
+            DrawCMSInternalHeader();
+            DrawEntriesLabel((Long64_t)htrig->GetEntries());
             SavePlot(c, outDir, "", "event", {}, "event_hlt_j80");
             delete c;
         }
