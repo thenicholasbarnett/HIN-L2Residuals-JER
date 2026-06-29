@@ -58,24 +58,29 @@ LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
 FILELIST_DIR="${REPO_ROOT}/data/txt"
 
-if [[ ! -f "${BINARY}" ]]; then
-    echo "ERROR: ${BINARY} not found — build the project first (cmake --build build)" >&2
-    exit 1
-fi
-if [[ ! -f "${LIBRARY}" ]]; then
-    echo "ERROR: ${LIBRARY} not found — build the project first" >&2
+if [[ -z "${CMSSW_BASE:-}" ]]; then
+    echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
+    echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
+    echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
+    echo "       cmake --build build  # if not already built" >&2
     exit 1
 fi
 
-# Verify the binary's RPATH points to CMSSW ROOT (cvmfs), not system ROOT.
-# If it points to /usr/lib64/root/ the binary was built without cmsenv — it
-# will crash on worker nodes because system ROOT lacks libCling.so.
+if [[ ! -f "${BINARY}" ]]; then
+    echo "ERROR: ${BINARY} not found — run: cmake --build build" >&2
+    exit 1
+fi
+if [[ ! -f "${LIBRARY}" ]]; then
+    echo "ERROR: ${LIBRARY} not found — run: cmake --build build" >&2
+    exit 1
+fi
+
+# Belt-and-suspenders: verify the binary's embedded RPATH points to cvmfs.
+# Catches the case where cmsenv was sourced after the binary was built without it.
 BINARY_RPATH="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
-if [[ -z "${BINARY_RPATH}" ]]; then
-    echo "WARNING: ${BINARY} has no embedded RPATH/RUNPATH — verify it was built with cmsenv" >&2
-elif ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
+if [[ -n "${BINARY_RPATH}" ]] && ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
     echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${BINARY_RPATH}" >&2
-    echo "       Rebuild inside a cmsenv shell: source /cvmfs/cms.cern.ch/cmsset_default.sh && cmsenv && cmake --build build" >&2
+    echo "       Binary was built without cmsenv. Rebuild: cmake --build build" >&2
     exit 1
 fi
 
