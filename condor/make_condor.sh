@@ -127,7 +127,6 @@ mkdir -p "${WORKDIR}"
         LABEL=$(echo "${BASENAME}" | rev | cut -d_ -f1 | rev)
 
         mkdir -p "logs/${LABEL}/out" "logs/${LABEL}/err" "logs/${LABEL}/log"
-        cp "${FILELIST_PATH}" "filelist_${LABEL}.txt"
 
         SUBMIT_FILE="submit_${LABEL}.condor"
         COUNT=0
@@ -137,6 +136,7 @@ Universe                = vanilla
 Executable              = $(pwd)/runtime_wrapper.sh
 
 +JobFlavour             = "longlunch"
+JobBatchName            = "${LABEL}"
 
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
@@ -163,7 +163,7 @@ Queue
 
 EOF
             COUNT=$((COUNT + 1))
-        done < "filelist_${LABEL}.txt"
+        done < "data/txt/$(basename "${FILELIST_PATH}")"
 
         if [[ "${NO_SUBMIT}" == true ]]; then
             echo "  ${LABEL} (${MODE}): ${COUNT} jobs → $(pwd)/${SUBMIT_FILE}"
