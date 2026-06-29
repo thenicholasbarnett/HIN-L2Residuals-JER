@@ -1,19 +1,39 @@
 cmake_minimum_required(VERSION 3.10)
 
-# Must be before project(): CMSSW's cvmfs GCC has annobin baked into its specs
-# but the plugin .so is absent, causing every compile to fail. Use system GCC instead.
+# Must be before project(): CMSSW GCC has a broken annobin plugin and
+# system ROOT on lxplus lacks libCling.so — both fixed with CMSSW GCC + CMSSW ROOT.
 if(DEFINED ENV{CMSSW_BASE})
-    # System GCC: CMSSW's GCC has broken annobin plugin specs on cvmfs
-    set(CMAKE_C_COMPILER   /usr/bin/gcc CACHE PATH "" FORCE)
-    set(CMAKE_CXX_COMPILER /usr/bin/g++ CACHE PATH "" FORCE)
+    # CMSSW GCC has broken annobin plugin specs (the .so is missing from cvmfs).
+    # Fix: dump its specs, strip annobin entries, compile with -specs=<cleaned>.
+    execute_process(COMMAND g++ -dumpspecs
+        OUTPUT_VARIABLE _specs OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    string(REGEX REPLACE "-fplugin=annobin" "" _specs "${_specs}")
+    string(REGEX REPLACE "-fplugin-arg-annobin-[^ \n]*" "" _specs "${_specs}")
+    set(_specs_file "${CMAKE_CURRENT_LIST_DIR}/.noannobin.specs")
+    file(WRITE "${_specs_file}" "${_specs}")
+    set(CMAKE_CXX_FLAGS_INIT "-specs=${_specs_file}")
+    set(CMAKE_C_FLAGS_INIT   "-specs=${_specs_file}")
+
+    # The stripped specs may not propagate CMSSW GCC's own lib dir to ld, causing
+    # "undefined reference to GLIBCXX_3.4.31" when linking against CMSSW ROOT libs.
+    # Explicitly add CMSSW GCC's libstdc++ dir to ld's search path and RPATH.
+    execute_process(COMMAND g++ -print-file-name=libstdc++.so.6
+        OUTPUT_VARIABLE _libstdcxx OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(_libstdcxx AND NOT "${_libstdcxx}" STREQUAL "libstdc++.so.6")
+        get_filename_component(_gxx_lib_dir "${_libstdcxx}" DIRECTORY)
+        set(CMAKE_EXE_LINKER_FLAGS
+            "${CMAKE_EXE_LINKER_FLAGS} -L${_gxx_lib_dir} -Wl,-rpath,${_gxx_lib_dir}")
+        set(CMAKE_SHARED_LINKER_FLAGS
+            "${CMAKE_SHARED_LINKER_FLAGS} -L${_gxx_lib_dir} -Wl,-rpath,${_gxx_lib_dir}")
+    endif()
+
     # CMSSW ROOT: system ROOT on lxplus lacks libCling.so; CMSSW ROOT has it.
-    # Find CMSSW's ROOT via root-config so the binary links against a consistent ROOT+cling.
+    # Both compiler and ROOT must come from the same GCC 13 ABI.
     execute_process(COMMAND root-config --prefix
-        OUTPUT_VARIABLE _cmssw_root_prefix
-        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        OUTPUT_VARIABLE _r OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     foreach(_subdir cmake lib/cmake/ROOT)
-        if(EXISTS "${_cmssw_root_prefix}/${_subdir}/ROOTConfig.cmake")
-            set(ROOT_DIR "${_cmssw_root_prefix}/${_subdir}" CACHE PATH "" FORCE)
+        if(EXISTS "${_r}/${_subdir}/ROOTConfig.cmake")
+            set(ROOT_DIR "${_r}/${_subdir}" CACHE PATH "" FORCE)
             break()
         endif()
     endforeach()

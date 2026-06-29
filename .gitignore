@@ -1,6 +1,9 @@
 build/
 bin/
 lib/
+.noannobin.specs
+.cxx_wrapper.sh
+.cc_wrapper.sh
 
 readme/
 README.md
