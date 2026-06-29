@@ -406,20 +406,21 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                 auto drawInfo = [&]() {
                     TLatex* tex = new TLatex();
                     tex->SetNDC();
-                    tex->SetTextSize(0.030);
+                    tex->SetTextSize(0.031);
                     tex->SetTextFont(62);
-                    tex->DrawLatex(0.715, 0.91, cone);
+                    tex->DrawLatex(0.57, 0.91, cone);
                     tex->SetTextFont(42);
-                    tex->DrawLatex(0.715, 0.855, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
-                    tex->DrawLatex(0.715, 0.800, ptSl.title.Data());
-                    tex->DrawLatex(0.715, 0.745, aSl.title.Data());
+                    tex->DrawLatex(0.57, 0.855, Form("%.3f < |#eta^{probe}| < %.3f", etalo, etahi));
+                    tex->DrawLatex(0.57, 0.800, ptSl.title.Data());
+                    tex->DrawLatex(0.57, 0.745, aSl.title.Data());
                 };
 
                 auto makeLegend = [&]() {
-                    TLegend* leg = new TLegend(0.715, 0.50, 0.985, 0.70);
+                    TLegend* leg = new TLegend(0.16, 0.68, 0.48, 0.90);
                     leg->SetBorderSize(0);
-                    leg->SetFillStyle(0);
-                    leg->SetTextSize(0.029);
+                    leg->SetFillColorAlpha(kWhite, 0.75);
+                    leg->SetFillStyle(1001);
+                    leg->SetTextSize(0.031);
                     leg->AddEntry(hdc, Form("Data  (N = %lld)", nData), "lp");
                     leg->AddEntry(hmc, Form("MC    (N = %lld)", nMC), "lp");
                     return leg;
@@ -432,7 +433,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     c->SetRealAspectRatio(kAspectRatio);
                     c->SetLogy();
                     c->SetLeftMargin(0.13);
-                    c->SetRightMargin(0.31);
+                    c->SetRightMargin(0.05);
 
                     DrawAsymBase(hdc, hmc, "A", ymin, ymax);
                     drawInfo();
@@ -461,7 +462,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     c->SetRealAspectRatio(kAspectRatio);
                     c->SetLogy();
                     c->SetLeftMargin(0.13);
-                    c->SetRightMargin(0.31);
+                    c->SetRightMargin(0.05);
 
                     DrawAsymBase(hdc, hmc, "A", ymin, ymax);
                     drawInfo();
