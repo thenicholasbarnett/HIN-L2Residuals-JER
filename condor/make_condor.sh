@@ -1,5 +1,5 @@
 #!/bin/bash
-# Submit one runAsymmetry job per input HiForest file.
+# Submit one runAsymmetry job per input HiForest file across all matching filelists.
 #
 # Usage:
 #   bash condor/make_condor.sh JOBNAME OUTPUT_DIR [MODE] [--no-submit|-n]
@@ -7,13 +7,14 @@
 # JOBNAME    — label used in directory and file names
 # OUTPUT_DIR — absolute EOS/AFS path where output ROOT files are written
 # MODE       — --hard-probes (default) | --monte-carlo | --zero-bias
-# --no-submit / -n  — generate the submission file without submitting
+# --no-submit / -n  — generate submission files without submitting
 #
-# The input filelist is selected automatically from MODE, mirroring the
-# kFilelistHP / kFilelistZB / kFilelistMC constants in cfg/2024ppRef.h:
-#   --hard-probes  → data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt
-#   --zero-bias    → data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt
-#   --monte-carlo  → data/txt/filelist_HiForest_2024ppref_MC.txt
+# All filelists in data/txt/ matching the mode pattern are submitted as
+# separate Condor batches (one submit file per filelist). The mode-to-glob
+# mapping mirrors cfg/2024ppRef.h:
+#   --hard-probes  → filelist_HiForest_2024ppref_DATA_HP*.txt  (~5 datasets)
+#   --zero-bias    → filelist_HiForest_2024ppref_DATA_ZB*.txt  (~15 datasets)
+#   --monte-carlo  → filelist_HiForest_2024ppref_MC*.txt
 #
 # Prerequisites:
 #   - Build the project first:  mkdir build && cd build && cmake .. && make
@@ -49,16 +50,13 @@ CONDOR_DIR="${REPO_ROOT}/condor"
 BINARY="${REPO_ROOT}/bin/runAsymmetry"
 LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
+FILELIST_DIR="${REPO_ROOT}/data/txt"
 
-# Mirror kFilelistHP / kFilelistZB / kFilelistMC from cfg/2024ppRef.h
-FILELIST_HP="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt"
-FILELIST_ZB="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt"
-FILELIST_MC="${REPO_ROOT}/data/txt/filelist_HiForest_2024ppref_MC.txt"
-
+# Glob pattern per mode — mirrors cfg/2024ppRef.h naming convention
 case "${MODE}" in
-    --hard-probes)  FILELIST="${FILELIST_HP}" ;;
-    --zero-bias)    FILELIST="${FILELIST_ZB}" ;;
-    --monte-carlo)  FILELIST="${FILELIST_MC}" ;;
+    --hard-probes)  FILELIST_GLOB="filelist_HiForest_2024ppref_DATA_HP*.txt" ;;
+    --zero-bias)    FILELIST_GLOB="filelist_HiForest_2024ppref_DATA_ZB*.txt" ;;
+    --monte-carlo)  FILELIST_GLOB="filelist_HiForest_2024ppref_MC*.txt" ;;
 esac
 
 # Sanity checks
@@ -74,8 +72,11 @@ if [[ ! -d "${DATA_DIR}" ]]; then
     echo "ERROR: ${DATA_DIR} not found" >&2
     exit 1
 fi
-if [[ ! -f "${FILELIST}" ]]; then
-    echo "ERROR: filelist not found: ${FILELIST}" >&2
+
+# Collect matching filelists
+FILELISTS=("${FILELIST_DIR}"/${FILELIST_GLOB})
+if [[ ! -f "${FILELISTS[0]}" ]]; then
+    echo "ERROR: no filelists matched ${FILELIST_DIR}/${FILELIST_GLOB}" >&2
     exit 1
 fi
 
@@ -85,22 +86,29 @@ mkdir -p "${WORKDIR}"
 
 (
     cd "${WORKDIR}"
-    mkdir -p logs/out logs/err logs/log
 
-    # Copy everything the worker nodes will need into the work directory.
-    # Condor transfers these to the sandbox on each worker.
+    # Copy shared artifacts once — all submit files in this work dir reference them.
     cp "${CONDOR_DIR}/runtime_wrapper.sh" .
     cp "${BINARY}"  runAsymmetry
     cp "${LIBRARY}" libl2residuals.so
     cp -r "${DATA_DIR}" data
-    cp "${FILELIST}" filelist.txt
     chmod +x runtime_wrapper.sh runAsymmetry
 
     mkdir -p "${OUTPUT_DIR}"
 
-    SUBMIT_FILE="submit_${JOBNAME}.condor"
+    TOTAL_JOBS=0
 
-    cat > "${SUBMIT_FILE}" <<EOF
+    for FILELIST_PATH in "${FILELISTS[@]}"; do
+        # Extract dataset label: HP0, ZB3, MC, etc. (last _-separated token, no extension)
+        LABEL=$(basename "${FILELIST_PATH}" .txt | rev | cut -d_ -f1 | rev)
+
+        mkdir -p "logs/${LABEL}/out" "logs/${LABEL}/err" "logs/${LABEL}/log"
+        cp "${FILELIST_PATH}" "filelist_${LABEL}.txt"
+
+        SUBMIT_FILE="submit_${JOBNAME}_${LABEL}.condor"
+        COUNT=0
+
+        cat > "${SUBMIT_FILE}" <<EOF
 Universe                = vanilla
 Executable              = $(pwd)/runtime_wrapper.sh
 
@@ -116,33 +124,37 @@ request_cpus            = 1
 
 EOF
 
-    COUNT=0
+        while IFS= read -r INPUT_FILE; do
+            [[ -z "${INPUT_FILE}" ]] && continue
 
-    while IFS= read -r INPUT_FILE; do
-        [[ -z "${INPUT_FILE}" ]] && continue
+            OUTPUT_FILE="${OUTPUT_DIR}/${LABEL}/output_${COUNT}.root"
+            mkdir -p "${OUTPUT_DIR}/${LABEL}"
 
-        OUTPUT_FILE="${OUTPUT_DIR}/output_${JOBNAME}_${COUNT}.root"
-
-        cat >> "${SUBMIT_FILE}" <<EOF
+            cat >> "${SUBMIT_FILE}" <<EOF
 Arguments = runAsymmetry ${INPUT_FILE} ${OUTPUT_FILE} ${MODE}
-Output    = $(pwd)/logs/out/job_${COUNT}.out
-Error     = $(pwd)/logs/err/job_${COUNT}.err
-Log       = $(pwd)/logs/log/job_${COUNT}.log
+Output    = $(pwd)/logs/${LABEL}/out/job_${COUNT}.out
+Error     = $(pwd)/logs/${LABEL}/err/job_${COUNT}.err
+Log       = $(pwd)/logs/${LABEL}/log/job_${COUNT}.log
 Queue
 
 EOF
-        COUNT=$((COUNT + 1))
+            COUNT=$((COUNT + 1))
+        done < "filelist_${LABEL}.txt"
 
-    done < filelist.txt
+        if [[ "${NO_SUBMIT}" == true ]]; then
+            echo "  ${LABEL}: ${COUNT} jobs written to $(pwd)/${SUBMIT_FILE}"
+        else
+            echo "  Submitting ${LABEL}: ${COUNT} jobs..."
+            condor_submit "${SUBMIT_FILE}"
+        fi
 
-    if [[ "${NO_SUBMIT}" == true ]]; then
-        echo "--no-submit flag set — skipping condor_submit."
-        echo "${COUNT} jobs written to $(pwd)/${SUBMIT_FILE}"
-    else
-        echo "Submitting ${COUNT} jobs (mode: ${MODE})..."
-        condor_submit "${SUBMIT_FILE}"
-        echo "Done. Output directory: ${OUTPUT_DIR}"
+        TOTAL_JOBS=$((TOTAL_JOBS + COUNT))
+    done
+
+    echo ""
+    echo "Total jobs: ${TOTAL_JOBS} across ${#FILELISTS[@]} filelists (mode: ${MODE})"
+    if [[ "${NO_SUBMIT}" == false ]]; then
+        echo "Output directory: ${OUTPUT_DIR}"
     fi
-
     echo "Working directory: ${WORKDIR}"
 )
