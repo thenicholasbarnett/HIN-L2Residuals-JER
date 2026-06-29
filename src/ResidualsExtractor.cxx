@@ -2,6 +2,7 @@
 
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TF1.h"
 #include "TFitResult.h"
 #include "TGraphErrors.h"
@@ -203,29 +204,32 @@ static void ExtractAndFit(
             hData->GetAxis(kAlphaAxis)->SetRangeUser(aSlice.lo,  aSlice.hi);
             hMC  ->GetAxis(kAlphaAxis)->SetRangeUser(aSlice.lo,  aSlice.hi);
 
+            // One 2D (eta, A) projection per (ipt, ialpha) instead of nEta 1D projections.
+            // Projection(yDim, xDim) → TH2D with x=eta, y=A.
+            TH2D* h2Data;
+            TH2D* h2MC;
+            {
+                TDirectory::TContext nodir(nullptr);
+                h2Data = hData->Projection(kAAxis, kEtaAxis);
+                h2MC   = hMC  ->Projection(kAAxis, kEtaAxis);
+            }
+
             for (int ieta = 0; ieta < nEta; ieta++) {
-                int etaBin = ieta + 1;
+                TString etaKey   = L2Name::EtaKey(ieta);
+                TString ptKey    = L2Name::PtKey(ptSlice);
+                TString alphaKey = L2Name::AlphaKey(aSlice);
 
-                hData->GetAxis(kEtaAxis)->SetRange(etaBin, etaBin);
-                hMC  ->GetAxis(kEtaAxis)->SetRange(etaBin, etaBin);
-
-                // Projection() registers the result in gDirectory using the sparse's base name.
-                // Suppress registration by setting gDirectory to null for the call.
                 TH1D* hAData;
                 TH1D* hAMC;
                 {
                     TDirectory::TContext nodir(nullptr);
-                    hAData = (TH1D*)hData->Projection(kAAxis);
-                    hAMC   = (TH1D*)hMC  ->Projection(kAAxis);
+                    hAData = h2Data->ProjectionY(
+                        L2Name::ObjectName(cone, "A_data", {etaMode, etaKey, ptKey, alphaKey}),
+                        ieta + 1, ieta + 1);
+                    hAMC = h2MC->ProjectionY(
+                        L2Name::ObjectName(cone, "A_mc",   {etaMode, etaKey, ptKey, alphaKey}),
+                        ieta + 1, ieta + 1);
                 }
-
-                TString etaKey = L2Name::EtaKey(ieta);
-                TString ptKey = L2Name::PtKey(ptSlice);
-                TString alphaKey = L2Name::AlphaKey(aSlice);
-                hAData->SetName(L2Name::ObjectName(cone, "A_data",
-                    {etaMode, etaKey, ptKey, alphaKey}));
-                hAMC->SetName(L2Name::ObjectName(cone, "A_mc",
-                    {etaMode, etaKey, ptKey, alphaKey}));
 
                 dQA_data->cd(); hAData->Write();
                 dQA_mc  ->cd(); hAMC  ->Write();
@@ -261,11 +265,12 @@ static void ExtractAndFit(
                 acrunning(1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
                 acrunning(2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
 
-                ResetRange(hData, kEtaAxis);
-                ResetRange(hMC,   kEtaAxis);
                 delete hAData;
                 delete hAMC;
             }
+
+            delete h2Data;
+            delete h2MC;
 
             ResetRange(hData, kPtAvgAxis);
             ResetRange(hMC,   kPtAvgAxis);
