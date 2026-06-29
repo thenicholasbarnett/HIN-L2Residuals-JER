@@ -330,7 +330,7 @@ static void DrawAsymBase(TH1D* hData, TH1D* hMC,
     hData->SetTitle("");
     hData->GetXaxis()->SetTitle(xTitle);
     hData->GetXaxis()->CenterTitle();
-    hData->GetYaxis()->SetTitle("1/N dN/dA");
+    hData->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{dA}");
     hData->GetYaxis()->CenterTitle();
     hData->SetMinimum(yMin);
     hData->SetMaximum(yMax);
