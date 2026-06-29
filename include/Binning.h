@@ -85,25 +85,25 @@ struct BinningConfig {
 
     // named pT_avg slices for extraction — applied via SetRangeUser(pT_avg axis, lo, hi)
     std::vector<RangeBin> ptavgSlices = {
-        { 40,  90, "40 < p_{T,avg} < 90 GeV",    "_ptavg_40_90",   HiroshigeNightBlue  },
-        { 90, 120, "90 < p_{T,avg} < 120 GeV",   "_ptavg_90_120",  HiroshigeGrayBlue   },
-        {120, 190, "120 < p_{T,avg} < 190 GeV",  "_ptavg_120_190", HiroshigeBlue       },
-        {190, 260, "190 < p_{T,avg} < 260 GeV",  "_ptavg_190_260", HiroshigeLightBlue  },
-        {260, 1000,"260 < p_{T,avg} < 1000 GeV", "_ptavg_260_1000",HiroshigeIceBlue    },
+        { 40,  90, "40 < p_{T,avg} < 90 GeV",    "_ptavg_40_90",   HiroshigeNightBlue()  },
+        { 90, 120, "90 < p_{T,avg} < 120 GeV",   "_ptavg_90_120",  HiroshigeGrayBlue()   },
+        {120, 190, "120 < p_{T,avg} < 190 GeV",  "_ptavg_120_190", HiroshigeBlue()       },
+        {190, 260, "190 < p_{T,avg} < 260 GeV",  "_ptavg_190_260", HiroshigeLightBlue()  },
+        {260, 1000,"260 < p_{T,avg} < 1000 GeV", "_ptavg_260_1000",HiroshigeIceBlue()    },
     };
 
     // cumulative alpha ranges for extraction — lo is always 0
     // use SetRangeUser(alpha axis, slice.lo, slice.hi) to get all events with alpha < threshold
     std::vector<RangeBin> alphaSlices = {
-        {0.0, 0.05, "#alpha < 0.05", "_alpha_0p05", HiroshigeLightRed    },
-        {0.0, 0.10, "#alpha < 0.10", "_alpha_0p10", HiroshigeOrange      },
-        {0.0, 0.15, "#alpha < 0.15", "_alpha_0p15", HiroshigeLightOrange },
-        {0.0, 0.20, "#alpha < 0.20", "_alpha_0p20", HiroshigeYellow      },
-        {0.0, 0.25, "#alpha < 0.25", "_alpha_0p25", HiroshigeIceBlue     },
-        {0.0, 0.30, "#alpha < 0.30", "_alpha_0p30", HiroshigeLightBlue   },
-        {0.0, 0.35, "#alpha < 0.35", "_alpha_0p35", HiroshigeBlue        },
-        {0.0, 0.40, "#alpha < 0.40", "_alpha_0p40", HiroshigeGrayBlue    },
-        {0.0, 0.45, "#alpha < 0.45", "_alpha_0p45", HiroshigeNightBlue   },
+        {0.0, 0.05, "#alpha < 0.05", "_alpha_0p05", HiroshigeLightRed()    },
+        {0.0, 0.10, "#alpha < 0.10", "_alpha_0p10", HiroshigeOrange()      },
+        {0.0, 0.15, "#alpha < 0.15", "_alpha_0p15", HiroshigeLightOrange() },
+        {0.0, 0.20, "#alpha < 0.20", "_alpha_0p20", HiroshigeYellow()      },
+        {0.0, 0.25, "#alpha < 0.25", "_alpha_0p25", HiroshigeIceBlue()     },
+        {0.0, 0.30, "#alpha < 0.30", "_alpha_0p30", HiroshigeLightBlue()   },
+        {0.0, 0.35, "#alpha < 0.35", "_alpha_0p35", HiroshigeBlue()        },
+        {0.0, 0.40, "#alpha < 0.40", "_alpha_0p40", HiroshigeGrayBlue()    },
+        {0.0, 0.45, "#alpha < 0.45", "_alpha_0p45", HiroshigeNightBlue()   },
     };
 };
 

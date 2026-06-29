@@ -45,13 +45,13 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 static const char* const kMethodKeys[]   = { "gauss",       "trunc90",          "trunc95"          };
 static const char* const kMethodLabels[] = { "Gauss fit",   "Trunc. mean 90%",  "Trunc. mean 95%"  };
-static const Color_t     kMethodColors[] = { HiroshigeNightBlue, HiroshigeOrange, HiroshigeLightRed };
+static const Color_t     kMethodColors[] = { HiroshigeNightBlue(), HiroshigeOrange(), HiroshigeLightRed() };
 static const int         kMethodStyles[] = { 20, 21, 22 };   // circle / square / triangle-up
 static constexpr int     kNMethods = 3;
 
 // colors for the eta-symmetry comparison
-static const Color_t kColFull = HiroshigeLightRed;
-static const Color_t kColRefl = HiroshigeNightBlue;
+static const Color_t kColFull = HiroshigeLightRed();
+static const Color_t kColRefl = HiroshigeNightBlue();
 
 // ============================================================
 // Canvas helpers
@@ -937,8 +937,8 @@ static void DrawKinematics1D(TH1D* h, const TString& xTitle, bool logy) {
     h->GetYaxis()->SetTitle("Jets");
     h->GetXaxis()->CenterTitle();
     h->GetYaxis()->CenterTitle();
-    h->SetLineColor(HiroshigeNightBlue);
-    h->SetMarkerColor(HiroshigeNightBlue);
+    h->SetLineColor(HiroshigeNightBlue());
+    h->SetMarkerColor(HiroshigeNightBlue());
     h->SetMarkerStyle(20);
     h->SetLineWidth(2);
     h->Draw("hist");
@@ -1077,7 +1077,7 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hallc->SetFillColor(kGray + 1);
             hallc->SetFillStyle(1001);
             hallc->SetLineWidth(1);
-            StyleH(hvzc, HiroshigeNightBlue, 20, 2.0f);
+            StyleH(hvzc, HiroshigeNightBlue(), 20, 2.0f);
 
             double ymax = std::max(hallc->GetMaximum(), hvzc->GetMaximum()) * 1.2;
             hallc->SetMaximum(ymax);
@@ -1117,8 +1117,8 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             hfilt->GetYaxis()->SetTitle("Events");
             hfilt->GetXaxis()->CenterTitle();
             hfilt->GetYaxis()->CenterTitle();
-            hfilt->SetLineColor(HiroshigeNightBlue);
-            hfilt->SetFillColor(HiroshigeLightBlue);
+            hfilt->SetLineColor(HiroshigeNightBlue());
+            hfilt->SetFillColor(HiroshigeLightBlue());
             hfilt->SetFillStyle(1001);
             hfilt->Draw("hist");
             SavePlot(c, outDir, "", "event", {}, "event_ppvF");
@@ -1139,8 +1139,8 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
             htrig->GetYaxis()->SetTitle("Events");
             htrig->GetXaxis()->CenterTitle();
             htrig->GetYaxis()->CenterTitle();
-            htrig->SetLineColor(HiroshigeNightBlue);
-            htrig->SetFillColor(HiroshigeLightBlue);
+            htrig->SetLineColor(HiroshigeNightBlue());
+            htrig->SetFillColor(HiroshigeLightBlue());
             htrig->SetFillStyle(1001);
             htrig->Draw("hist");
             SavePlot(c, outDir, "", "event", {}, "event_hlt_j80");
