@@ -33,8 +33,10 @@ cd "${CMSSW_SRC}"
 eval "$(scramv1 runtime -sh)"
 cd "${START_DIR}"
 
-# The shared library libl2residuals.so was transferred to the sandbox directory.
-export LD_LIBRARY_PATH=.:${LD_LIBRARY_PATH:-}
+# Binary is compiled against system ROOT 6.38. Prepend its lib dir before CMSSW's
+# ROOT so dlopen finds system libCling (not CMSSW's incompatible version).
+# Also prepend . for libl2residuals.so transferred to the sandbox.
+export LD_LIBRARY_PATH="./:/usr/lib64/root${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 echo "Input:  ${INPUT}"
 echo "Output: ${OUTPUT}"
