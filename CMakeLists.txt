@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.10)
+
+# Must be before project(): CMSSW's cvmfs GCC has annobin baked into its specs
+# but the plugin .so is absent, causing every compile to fail. Use system GCC instead.
+if(DEFINED ENV{CMSSW_BASE})
+    set(CMAKE_C_COMPILER   /usr/bin/gcc CACHE PATH "" FORCE)
+    set(CMAKE_CXX_COMPILER /usr/bin/g++ CACHE PATH "" FORCE)
+endif()
+
 project(L2Residuals)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -8,11 +16,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 # find ROOT
 find_package(ROOT REQUIRED COMPONENTS RIO Tree Hist MathCore)
 include(${ROOT_USE_FILE})
-
-# CMSSW's GCC has -fplugin=annobin baked into its specs but the .so is often absent
-if(DEFINED ENV{CMSSW_BASE})
-    add_compile_options(-fno-plugins)
-endif()
 
 # Embed the found ROOT lib path as RPATH so cmsenv's LD_LIBRARY_PATH cannot
 # swap in a different ROOT version at runtime
