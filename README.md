@@ -1,8 +1,11 @@
 
 <h1> L2Residual Jet Energy Corrections </h1>
+<br>
 
 <b> Dijet Residuals via p<sub>T</sub>-Balance </b>
+
 Residual jet energy corrections are determined to account for differences in data and simulation by enforcing conservation of transverse momentum. This repository derives L2Residual corrections for the pp reference run collected for the heavy ion collisions in 2024 by CMS. Build this C++ project with CMake to generate standalone binaries and use provided bash scripts to execute them with HTCondor. The versatility of this workflow is in the ability to rebin almost any dimension, overlay different methods of abstraction or calculation, and run any of the steps as compiled executables or interpret the code directly with cling using ROOT.
+<br><br>
 
 <b> Step 1 - Find Dijet Asymmetries from HiForest files </b>
 <br>
@@ -15,10 +18,11 @@ Residual jet energy corrections are determined to account for differences in dat
 <b> Step 3 - Write Corrections in Plain Text </b>
 <br>
 <i> Plot correction factors vs p<sub>T</sub><sup>avg</sup> fitting and extrapolation. </i>
-<br>
+<br><br>
 
-<b>Workflow: </b>
+<b>Workflow:</b> \
 Fill Dijet Asymmetry Histograms → Hadd Asymmetry Histograms → Extract Residual Correction Values → Write Correction Text File
+<br><br>
 
 <h1> Quick Start </h1>
 
@@ -32,7 +36,11 @@ cmake .. && make
 cd ..
 ```
 
-> Rebuild: `rm -rf build bin lib && mkdir build && cd build && cmake .. && make && cd ..`
+<strong> Rebuild </strong>
+
+```
+rm -rf build bin lib && mkdir build && cd build && cmake .. && make && cd ..
+```
 
 <strong> Batch Process Asymmetries </strong>
 
