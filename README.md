@@ -2,24 +2,27 @@
 <h1> L2Residual Jet Energy Corrections </h1>
 
 <b> Dijet Residuals via p<sub>T</sub>-Balance </b>
-Residual jet energy corrections are determined to account for differences in data and simulation by enforcing conservation of transverse momentum. This repository derives L2Residual corrections for the pp reference run collected for the heavy ion collisions in 2024 by CMS. Build this C++ project with cmake to generate standalone binaries and use provided bash sctipts to execute them with HTCondor. The versatility of this work flow is in the ability to rebin almost any dimension, overlay different methods of abstraction or calculation, and run any of the steps as compiled executables or interpret the code directly with cling using ROOT.
+Residual jet energy corrections are determined to account for differences in data and simulation by enforcing conservation of transverse momentum. This repository derives L2Residual corrections for the pp reference run collected for the heavy ion collisions in 2024 by CMS. Build this C++ project with CMake to generate standalone binaries and use provided bash scripts to execute them with HTCondor. The versatility of this workflow is in the ability to rebin almost any dimension, overlay different methods of abstraction or calculation, and run any of the steps as compiled executables or interpret the code directly with cling using ROOT.
 
-<b> Step 1 - Dijet Asymmetries from HiForest files </b>
+<b> Step 1 - Find Dijet Asymmetries from HiForest files </b>
 <br>
 <i> Plot various jet collection kinematics and event information. </i>
 
-<b> Step 2 - Residual Corrections Determination </b>
+<b> Step 2 - Determine Residual Corrections </b>
 <br>
 <i> Plot asymmetries, k<sub>FSR</sub> extrapolations, data to simulation response ratios, method comparisons, and more! </i>
 
-<b> Step 3 - Text file for Analysis Application </b>
+<b> Step 3 - Write Corrections in Plain Text </b>
 <br>
 <i> Plot correction factors vs p<sub>T</sub><sup>avg</sup> fitting and extrapolation. </i>
-<br><br>
+<br>
+
+<b>Workflow: </b>
+Fill Dijet Asymmetry Histograms → Hadd Asymmetry Histograms → Extract Residual Correction Values → Write Correction Text File
 
 <h1> Quick Start </h1>
 
-<strong> Install & Build </strong>
+<strong> Clone and Build </strong>
 
 ```
 git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git
@@ -31,34 +34,34 @@ cd ..
 
 > Rebuild: `rm -rf build bin lib && mkdir build && cd build && cmake .. && make && cd ..`
 
-<strong> Batch Process </strong>
+<strong> Batch Process Asymmetries </strong>
 
 ```
-bash ./condor/make_condor.sh <output_dir> <input_HiForest_filelist.txt>
-```
-
-```
-bash ./condor/batch_hadd.sh <asymmetry_file.root> <input_glob> <batch_size> <N_parallel>
-```
-
-<strong> Derive Corrections </strong>
-
-```
-./bin/runResiduals <data_asymmetries_file.root> <mc_asymmetries_file.root> <output_residuals_file.root>
+bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt>
 ```
 
 ```
-./bin/runTextFile.C <residuals_hp_file.root> <residuals_zb_file.root> <output_corrections_file.txt>
+bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_size> <N_parallel>
+```
+
+<strong> Get Residual Corrections </strong>
+
+```
+./bin/runResiduals <input_data-asymmetries-file.root> <mc_asymmetries_file.root> <output_residuals-file.root>
+```
+
+```
+./bin/runTextFile <input_data-residuals-file.root> <input_mc-residuals-file.root> <output_JEC-file.txt>
 ```
 
 <strong> Plot </strong>
 
 ```
-./macros/plotResiduals <output_plots_dir> <asymmetry_file.root>
+./macros/plotResiduals <output_plots-dir> <input_asymmetry-file.root>
 ```
 
 ```
-./macros/plotResiduals <output_plots_dir> <residuals_file.root>
+./macros/plotResiduals <output_plots-dir> <input_residuals-file.root>
 ```
 
 <h1> Usage </h1> 
@@ -69,7 +72,6 @@ bash ./condor/batch_hadd.sh <asymmetry_file.root> <input_glob> <batch_size> <N_p
 - CMake ≥ 3.10
 - C++17
 - [nlohmann/json](https://github.com/nlohmann/json) (for applying golden JSON)
-<br>
 
 <h3> Clone </h3>
 
@@ -91,7 +93,7 @@ Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
 Read HiForest ROOT files, apply L2Relative JEC, select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
 
 ```
-./bin/runAsymmetry <input_HiForest.root> <output_asymmetry.root>
+./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root>
 ```
 
 Flags for each type of dataset: `-hp`, `-zb`, `-mc`. 
@@ -111,7 +113,7 @@ ak4PF/
 Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
 
 ```
-./bin/runResiduals <data_asymmetry.root> <mc_asymmetry.root> <output_residuals.root>
+./bin/runResiduals <input_data-asymmetry-file.root> <input_mc-asymmetry-file.root> <output_residuals-file.root>
 ```
 
 <u> Output Structure: </u>
@@ -131,7 +133,7 @@ ak4PF/
 In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and write a plain text file that can be parsed with a header.
 
 ```
-./bin/runTextFile <residuals.root> <output.txt> [method] [algorithm]
+./bin/runTextFile <input_residuals-file.root> <output_JEC-file.txt> [method] [algorithm]
 
 # methods: gauss (default) | trunc90 | trunc95
 # algorithms: ak4PF (default) | ak2PF | ak3PF | ak5PF | ak6PF
@@ -142,11 +144,12 @@ In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p
 `plotResiduals` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently, and all plots are made if no flags are given.
 
 ```
-./bin/plotResiduals <input.root> <output_dir> [flags]
+./macros/plotResiduals <input_asymmetries-file.root> <output_plots-dir> [flags]
+./macros/plotResiduals <input_residuals-file.root> <output_plots-dir> [flags]
 ```
 
 | Flag | Input | Description |
-|------|-------|-------------|
+| :-:| :-: | - |
 | `event` | Step 1 | v<sub>z</sub>, primary vertex filter, HLT trigger |
 | `kinematics` | Step 1 | η/φ/p<sub>T</sub> distributions and η-φ maps at different p<sub>T</sub> cuts for incl/tag/probe jets |
 | `adist` | Step 2 | Asymmetry distributions for (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bins, Data and MC overlay |
@@ -202,18 +205,18 @@ bash condor/batch_hadd.sh \
   10 2 [z|--zombie-check]
 ```
 
-`batch_hadd.sh` used hadd on batches of files in parallel using tree reduction, and optionally scanning for zombie/corrupt files. Arguments: `OUT_FILE "IN_FILES" BATCH_SIZE NJOBS [-z]`.
+`batch_hadd.sh` uses hadd on batches of files in parallel using tree reduction, and optionally scanning for zombie/corrupt files. Arguments: `OUT_FILE "IN_FILES" BATCH_SIZE NJOBS [-z]`.
 
 <h2> Data Files </h2>
 
 | Path | Contents |
-|------|----------|
+| :-: | - |
 | `data/jec/` | L2Relative JEC text files (one for each clustering algorithm, all 5 cones) |
 | `data/json/` | Golden JSON |
 | `data/veto/` | Jet veto map |
-| `data/txt/` | filelists of HiForest files from HardProbes, ZeroBias, and MonteCarlo datasets|
+| `data/txt/` | filelists of HiForest files from HardProbes, ZeroBias, and MonteCarlo datasets |
 
-All data collected here is for the pp reference (5.36 TeV) collisions in 2024.
+The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 
 <h2> Tests </h2>
 
