@@ -17,12 +17,12 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 #ifndef __CLING__
 #include <iostream>
-int main(int argc, char* argv[]) {
-    if (argc < 4) {
+int main( int argc, char* argv[] ){
+    if( argc < 4 ){
         std::cerr << "Usage: runResiduals <data.root> <mc.root> <output.root>\n";
         return 1;
     }
-    runResiduals(argv[1], argv[2], argv[3]);
+    runResiduals( argv[1], argv[2], argv[3] );
     return 0;
 }
 #endif

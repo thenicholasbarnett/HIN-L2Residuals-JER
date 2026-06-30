@@ -79,7 +79,7 @@ else()
 endif()
 
 # shared library from src/
-file(GLOB SOURCES src/*.cxx)
+file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
     target_include_directories(l2residuals PUBLIC include cfg ${NLOHMANN_JSON_INCLUDE_DIR})
@@ -96,7 +96,7 @@ else()
 endif()
 
 # build each entry-point in macros/ as an executable, output to bin/
-file(GLOB MACROS macros/*.C macros/*.cxx)
+file(GLOB MACROS CONFIGURE_DEPENDS macros/*.C macros/*.cxx)
 foreach(macro ${MACROS})
     get_filename_component(name ${macro} NAME_WE)
     add_executable(${name} ${macro})
@@ -110,7 +110,7 @@ endforeach()
 
 # tests
 enable_testing()
-file(GLOB TESTS tests/*.cxx)
+file(GLOB TESTS CONFIGURE_DEPENDS tests/*.cxx)
 foreach(test ${TESTS})
     get_filename_component(name ${test} NAME_WE)
     add_executable(${name} ${test})

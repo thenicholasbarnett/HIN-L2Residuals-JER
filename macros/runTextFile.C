@@ -20,14 +20,14 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 #ifndef __CLING__
 #include <iostream>
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
+int main( int argc, char* argv[] ){
+    if( argc < 3 ){
         std::cerr << "Usage: runTextFile <residuals.root> <output.txt> [method] [cone]\n";
         return 1;
     }
-    TString method = (argc > 3) ? argv[3] : "gauss";
-    TString cone   = (argc > 4) ? argv[4] : "ak4PF";
-    runTextFile(argv[1], argv[2], method, cone);
+    TString method = ( argc > 3 ) ? argv[3] : "gauss";
+    TString cone   = ( argc > 4 ) ? argv[4] : "ak4PF";
+    runTextFile( argv[1], argv[2], method, cone );
     return 0;
 }
 #endif

@@ -1,0 +1,32 @@
+[paths]
+veto_map = "data/veto/Winter25Prompt25_RunCDE.root"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+files = [
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK2PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK3PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK4PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
+]

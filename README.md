@@ -96,6 +96,101 @@ cmake --build build
 
 Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
 
+<h3> Configuration </h3>
+
+Analysis-specific paths and labels live in:
+
+```
+cfg/2024ppRef.toml
+```
+
+This TOML file replaced the old pattern of hardcoding analysis values directly in
+`cfg/2024ppRef.h`. The header still exists as a compatibility include, but the
+actual values are loaded at runtime through:
+
+```
+include/AnalysisConfig.h
+src/AnalysisConfig.cxx
+```
+
+The basic flow is:
+
+```
+cfg/2024ppRef.toml
+  -> LoadAnalysisConfig(...)
+  -> AnalysisConfig cfg
+  -> Config()
+  -> runAsymmetry / runResiduals / plotResiduals
+```
+
+For example, this TOML entry:
+
+```toml
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+```
+
+is read by `LoadAnalysisConfig(...)` and stored as:
+
+```cpp
+cfg.hltJ80Branch
+cfg.hltJ80Thresh
+cfg.trigCone
+```
+
+Source files then use:
+
+```cpp
+const AnalysisConfig& cfg = Config();
+```
+
+and access values with fields like `cfg.coneLabels`, `cfg.jecFilesPerCone`,
+`cfg.vetoMapPath`, and `cfg.jetTreePaths`.
+
+The TOML file does not automatically "line up" with the C++ struct by name. The
+mapping is explicit in `src/AnalysisConfig.cxx`, where keys such as
+`trees.jets`, `paths.veto_map`, and `cones.labels` are assigned to the matching
+`AnalysisConfig` fields. When adding a new config value, add it in three places:
+
+1. `cfg/2024ppRef.toml`
+2. `include/AnalysisConfig.h`
+3. the assignment block inside `LoadAnalysisConfig(...)`
+
+Some arrays are position-matched. In particular, the order of `cones.labels`,
+`trees.jets`, and `jec.files` must stay aligned:
+
+```toml
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[trees]
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+```
+
+The loader checks that these arrays have matching lengths before the analysis
+runs.
+
+By default, the code reads `cfg/2024ppRef.toml` relative to the directory where
+the program is launched. For running from another directory, either set:
+
+```bash
+export L2RESIDUALS_HOME=/path/to/L2Residuals-2024ppref
+```
+
+or point directly to a config file:
+
+```bash
+export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml
+```
+
 <h3> <b> Step 1 </b> — Fill Asymmetry Histograms </h3>
 
 Read HiForest ROOT files, apply L2Relative JEC, select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.

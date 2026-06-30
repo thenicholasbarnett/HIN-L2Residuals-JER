@@ -28,7 +28,7 @@ inline SortedJets FindLeadingJets( const float* pt, int n ) {
 		s.third = s.sublead;
 		s.sublead = i;
 	}
-        else if ( s.third == -1 || pt[i] > pt[s.third] ) { i
+        else if ( s.third == -1 || pt[i] > pt[s.third] ) {
 		s.third = i; 
 	}
     }
