@@ -157,6 +157,7 @@ In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p
 | `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison |
 | `finals` | Step 2 | α→0 intercepts, all p<sub>T</sub><sup>avg</sup> slices overlaid |
 | `all` | either | All applicable flags (default) |
+
 <br>
 
 Example of multiple flags being passed space-separated as a single quoted argument:
@@ -211,6 +212,7 @@ bash condor/batch_hadd.sh \
 | `data/json/` | Golden JSON |
 | `data/veto/` | Jet veto map |
 | `data/txt/` | filelists of HiForest files from HardProbes, ZeroBias, and MonteCarlo datasets|
+
 All data collected here is for the pp reference (5.36 TeV) collisions in 2024.
 
 <h2> Tests </h2>
