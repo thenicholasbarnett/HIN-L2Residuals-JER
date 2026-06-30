@@ -468,7 +468,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     TString cvName = Form("adist_%s_%s_%s_%s_%s",
                         cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data(), tag.Data());
                     TCanvas* c = new TCanvas(cvName, "", 800, 600);
-                    c->SetRealAspectRatio(kAspectRatio);
+                    RealAspectRatio(c);
                     c->SetLogy();
                     c->SetLeftMargin(0.13);
                     c->SetRightMargin(0.05);
@@ -498,7 +498,7 @@ static void PlotAsymDist(TFile* fIn, const TString& outDir,
                     TString cvName = Form("adist_%s_%s_%s_%s_gauss",
                         cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data());
                     TCanvas* c = new TCanvas(cvName, "", 800, 600);
-                    c->SetRealAspectRatio(kAspectRatio);
+                    RealAspectRatio(c);
                     c->SetLogy();
                     c->SetLeftMargin(0.13);
                     c->SetRightMargin(0.05);
@@ -579,7 +579,7 @@ static void PlotROverlay(TFile* fIn, const TString& outDir,
 
                 TH1D* hRdc = (TH1D*)hRd->Clone(rdName + "_c"); hRdc->SetDirectory(0);
                 TH1D* hRmc = (TH1D*)hRm->Clone(rmName + "_c"); hRmc->SetDirectory(0);
-                TH1D* hRat = RatioH(hRdc, hRmc, rdName + "_rat");
+                TH1D* hRat = RatioH(hRmc, hRdc, rdName + "_rat");
 
                 const TString cvName = Form("roverlay_%s_%s_%s_%s",
                     cone.Data(), kMethodKeys[m], ptKey.Data(), alphaKey.Data());
@@ -622,7 +622,7 @@ static void PlotROverlay(TFile* fIn, const TString& outDir,
                 cv.ratio->SetGridx(); cv.ratio->SetGridy();
 
                 StyleH(hRat, kBlack, 20, 1.5f);
-                TuneRatio(hRat, "|#eta|", "Data/MC", 0.93, 1.07);
+                TuneRatio(hRat, "|#eta|", "MC/Data", 0.93, 1.07);
                 hRat->Draw("E1");
                 RefLine(cv.ratio, (double)kAbsEtaEdges.front(), (double)kAbsEtaEdges.back(), 1.0);
 
@@ -662,16 +662,17 @@ static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                 TString ptKey = L2Name::PtKey(ptSl);
                 TString gname = L2Name::ObjectName(cone, "R",
                     {L2Name::EtaModeKey(false), etaKey, ptKey}, {kMethodKeys[m]});
+                TString gnorm = gname + "_norm";
                 TString oldGName = Form("%s_R_%s%s_eta%02d",
                     cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), ie);
 
-                TGraphErrors* gr = GetGraphAny(dGraphs, {gname, oldGName});
+                TGraphErrors* gr = GetGraphAny(dGraphs, {gnorm, gname, oldGName});
 
                 if (!gr || gr->GetN() < 2) {
                     pb.Update();
                     continue;
                 }
-                TGraphErrors* gc = (TGraphErrors*)gr->Clone(gname + "_c");
+                TGraphErrors* gc = (TGraphErrors*)gr->Clone(gnorm + "_c");
 
                 const TString cvName = Form("alphafit_%s_%s_%s_%s",
                     cone.Data(), kMethodKeys[m], etaKey.Data(), ptKey.Data());
@@ -686,7 +687,7 @@ static void PlotAlphaFit(TFile* fIn, const TString& outDir,
                 gc->SetMarkerSize(0.9);
 
                 gc->GetXaxis()->SetTitle("#alpha threshold");
-                gc->GetYaxis()->SetTitle("R_{data}/R_{MC}");
+                gc->GetYaxis()->SetTitle("R_{MC}/R_{data}|_{#alpha} / R_{MC}/R_{data}|_{#alpha=0.30}");
                 gc->GetXaxis()->CenterTitle();
                 gc->GetYaxis()->CenterTitle();
                 gc->GetXaxis()->SetLimits(0.0, 0.50);
@@ -770,7 +771,7 @@ static void PlotEtaSym(TFile* fIn, const TString& outDir,
 
             auto [ylo, yhi] = YRange({hFull, hRefl});
             hFull->GetYaxis()->SetRangeUser(ylo, yhi);
-            hFull->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha#rightarrow0");
+            hFull->GetYaxis()->SetTitle("R_{MC}/R_{data} at #alpha#rightarrow0");
             hFull->GetYaxis()->SetTitleSize(0.055);
             hFull->GetYaxis()->SetTitleOffset(1.10);
             hFull->GetYaxis()->SetLabelSize(0.050);
@@ -888,7 +889,7 @@ static void PlotMethodComp(TFile* fIn, const TString& outDir,
             if (!hists[m]) continue;
             StyleH(hists[m], kMethodColors[m], kMethodStyles[m], 2.f);
             hists[m]->GetYaxis()->SetRangeUser(ylo, yhi);
-            hists[m]->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha#rightarrow0");
+            hists[m]->GetYaxis()->SetTitle("R_{MC}/R_{data} at #alpha#rightarrow0");
             hists[m]->GetYaxis()->SetTitleSize(0.055);
             hists[m]->GetYaxis()->SetTitleOffset(1.10);
             hists[m]->GetYaxis()->SetLabelSize(0.050);
@@ -1003,7 +1004,7 @@ static void PlotFinals(TFile* fIn, const TString& outDir,
                 const auto& ptSl = bins.ptavgSlices[ip];
                 StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
                 hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
-                hists[ip]->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha#rightarrow0");
+                hists[ip]->GetYaxis()->SetTitle("R_{MC}/R_{data} at #alpha#rightarrow0");
                 hists[ip]->GetYaxis()->SetTitleSize(0.052);
                 hists[ip]->GetYaxis()->SetTitleOffset(1.15);
                 hists[ip]->GetYaxis()->SetLabelSize(0.048);
@@ -1431,18 +1432,170 @@ static void PlotEvent(TFile* fIn, const TString& outDir, ProgressBar& pb) {
 }
 
 // ============================================================
+// Plot type: Direct vs kFSR-norm correction factor overlay
+//
+// For each (cone, method, eta mode): one two-panel canvas with
+//   top panel  — direct intercept (filled circles) and kFSR-norm (open circles) vs eta,
+//                all pT slices overlaid, same color per pT slice
+//   bottom panel — (kFSR-norm) / direct ratio per pT slice
+// ============================================================
+
+static void PlotNormComp(TFile* fIn, const TString& outDir,
+                         const TString& cone, const BinningConfig& bins,
+                         bool fullEta, ProgressBar& pb) {
+    const TString etaMode = L2Name::EtaModeKey(fullEta);
+    const TString xTitle  = fullEta ? "#eta" : "|#eta|";
+    const double  xMin    = fullEta ? kEtaEdges.front()    : (double)kAbsEtaEdges.front();
+    const double  xMax    = fullEta ? kEtaEdges.back()     : (double)kAbsEtaEdges.back();
+    const int nPt = (int)bins.ptavgSlices.size();
+    const TString sfx = fullEta ? "_fulleta" : "";
+
+    for (int m = 0; m < kNMethods; m++) {
+        std::vector<TH1D*> hDirect(nPt, nullptr);
+        std::vector<TH1D*> hNorm(nPt, nullptr);
+
+        for (int ip = 0; ip < nPt; ip++) {
+            const auto& sl = bins.ptavgSlices[ip];
+            TString ptKey = L2Name::PtKey(sl);
+            TString nameDirect = L2Name::ObjectName(cone, "intercept",
+                {etaMode, ptKey}, {kMethodKeys[m]});
+            TString nameNorm   = nameDirect + "_norm";
+            TString oldDirect  = Form("%s_intercept_%s%s%s",
+                cone.Data(), kMethodKeys[m], sl.shortName.Data(), sfx.Data());
+            hDirect[ip] = GetHAny(fIn, {cone + "/" + nameDirect, nameDirect, oldDirect});
+            hNorm[ip]   = GetHAny(fIn, {cone + "/" + nameNorm,   nameNorm,   oldDirect + "_norm"});
+        }
+
+        bool anyValid = false;
+        for (int ip = 0; ip < nPt; ip++)
+            if (hDirect[ip] && hNorm[ip]) { anyValid = true; break; }
+
+        if (!anyValid) {
+            for (auto* h : hDirect) delete h;
+            for (auto* h : hNorm)   delete h;
+            pb.Update();
+            continue;
+        }
+
+        // ratio: norm / direct
+        std::vector<TH1D*> hRatios(nPt, nullptr);
+        for (int ip = 0; ip < nPt; ip++) {
+            if (!hDirect[ip] || !hNorm[ip]) continue;
+            TString rn = Form("normcomp_%s_%s_%s_r%d",
+                cone.Data(), etaMode.Data(), kMethodKeys[m], ip);
+            hRatios[ip] = RatioH(hNorm[ip], hDirect[ip], rn);
+        }
+
+        const TString cvName = Form("normcomp_%s_%s_%s",
+            cone.Data(), kMethodKeys[m], etaMode.Data());
+        TwoPad cv = MakeTwoPad(cvName);
+
+        // ---- main pad ----
+        cv.main->cd();
+        cv.main->SetGridx(); cv.main->SetGridy();
+
+        // combined y-range over direct + norm
+        std::vector<TH1D*> allMain;
+        for (int ip = 0; ip < nPt; ip++) {
+            if (hDirect[ip]) allMain.push_back(hDirect[ip]);
+            if (hNorm[ip])   allMain.push_back(hNorm[ip]);
+        }
+        auto [ylo, yhi] = YRange(allMain);
+
+        // find first valid histogram for cloning dummy legend entries
+        TH1D* firstD = nullptr;
+        for (int ip = 0; ip < nPt; ip++) if (hDirect[ip]) { firstD = hDirect[ip]; break; }
+
+        TH1D* dummyD = (TH1D*)firstD->Clone("_nc_dd"); dummyD->SetDirectory(0);
+        TH1D* dummyN = (TH1D*)firstD->Clone("_nc_dn"); dummyN->SetDirectory(0);
+        StyleH(dummyD, kGray + 2, 20, 1.5f);
+        StyleH(dummyN, kGray + 2, 24, 1.5f);
+
+        TLegend* legStyle = new TLegend(0.16, 0.14, 0.46, 0.25);
+        legStyle->SetBorderSize(0); legStyle->SetFillStyle(0); legStyle->SetTextSize(0.046);
+        legStyle->AddEntry(dummyD, "Direct",     "lp");
+        legStyle->AddEntry(dummyN, "kFSR norm.", "lp");
+
+        TLegend* legPt = new TLegend(0.60, 0.88 - 0.055 * nPt, 0.94, 0.88);
+        legPt->SetBorderSize(0); legPt->SetFillStyle(0); legPt->SetTextSize(0.046);
+
+        bool first = true;
+        for (int ip = 0; ip < nPt; ip++) {
+            if (!hDirect[ip]) continue;
+            const auto& ptSl = bins.ptavgSlices[ip];
+            StyleH(hDirect[ip], ptSl.color, 20, 1.5f);
+            hDirect[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
+            hDirect[ip]->GetYaxis()->SetTitle("R_{MC}/R_{data} at #alpha#rightarrow0");
+            hDirect[ip]->GetYaxis()->SetTitleSize(0.052);
+            hDirect[ip]->GetYaxis()->SetTitleOffset(1.15);
+            hDirect[ip]->GetYaxis()->SetLabelSize(0.048);
+            hDirect[ip]->GetXaxis()->SetLabelSize(0.0);
+            hDirect[ip]->GetXaxis()->SetTitle("");
+            hDirect[ip]->SetTitle("");
+            hDirect[ip]->Draw(first ? "E1" : "E1 same");
+            first = false;
+            if (hNorm[ip]) {
+                StyleH(hNorm[ip], ptSl.color, 24, 1.5f);
+                hNorm[ip]->SetTitle("");
+                hNorm[ip]->Draw("E1 same");
+            }
+            legPt->AddEntry(hDirect[ip], ptSl.title, "lp");
+        }
+        RefLine(cv.main, xMin, xMax, 1.0);
+        legStyle->Draw();
+        legPt->Draw();
+
+        TLatex* tex = new TLatex();
+        tex->SetNDC(); tex->SetTextSize(0.051); tex->SetTextFont(62);
+        tex->DrawLatex(0.16, 0.91, Form("%s   |   %s   |   %s",
+            cone.Data(), kMethodLabels[m], xTitle.Data()));
+
+        // ---- ratio pad ----
+        cv.ratio->cd();
+        cv.ratio->SetGridx(); cv.ratio->SetGridy();
+
+        auto [rlo, rhi] = YRange(hRatios);
+        if (rlo > rhi) { rlo = 0.985; rhi = 1.015; }
+
+        bool firstR = true;
+        for (int ip = 0; ip < nPt; ip++) {
+            if (!hRatios[ip]) continue;
+            StyleH(hRatios[ip], bins.ptavgSlices[ip].color, 20, 1.5f);
+            TuneRatio(hRatios[ip], xTitle, "Norm / Direct", rlo, rhi);
+            hRatios[ip]->Draw(firstR ? "E1" : "E1 same");
+            firstR = false;
+        }
+        if (!firstR) RefLine(cv.ratio, xMin, xMax, 1.0);
+
+        cv.c->cd();
+        SavePlot(cv.c, outDir, cone, "normcomp", {etaMode}, cvName);
+        pb.Update();
+
+        delete dummyD;
+        delete dummyN;
+        // hDirect and hNorm entries where one is null were not drawn — delete explicitly
+        for (int ip = 0; ip < nPt; ip++) {
+            if (!hDirect[ip] && hNorm[ip]) delete hNorm[ip];
+        }
+        // all drawn objects (hDirect, hNorm, hRatios, legends, tex) cascade-deleted with canvas
+        delete cv.c;
+    }
+}
+
+// ============================================================
 // Entry point
 //
 // flags (space-separated keywords, default "all"):
-//   "etasym"     — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
-//   "methods"    — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
-//   "finals"     — final R_data/R_MC at alpha→0, all pT slices overlaid (PlotFinals)
-//   "adist"      — asymmetry distributions per bin with log-y and truncation lines
-//   "roverlay"   — R_data and R_MC overlay with ratio panel per alpha/pT
-//   "alpha"      — alpha fit plots: all 9 points, fit line through 0.05–0.30
-//   "kinematics" — Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
-//   "event"      — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
-//   "all"        — run all plots including kinematics and event (default)
+//   "etasym"    — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
+//   "methods"   — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
+//   "finals"    — final R_MC/R_data at alpha→0, all pT slices overlaid (PlotFinals)
+//   "normcomp"  — direct vs kFSR-norm correction factor overlay with ratio panel (PlotNormComp)
+//   "adist"     — asymmetry distributions per bin with log-y and truncation lines
+//   "roverlay"  — R_data and R_MC overlay with ratio panel per alpha/pT
+//   "alpha"     — kFSR-normalized alpha fit plots: R_MC/R_data(α)/R_MC/R_data(0.30) vs alpha
+//   "kinematics"— Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
+//   "event"     — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
+//   "all"       — run all plots including kinematics and event (default)
 // ============================================================
 
 void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "all") {
@@ -1472,39 +1625,43 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
     const int nAlpha    = (int)bins.alphaSlices.size();
     const int nEta      = (int)kAbsEtaEdges.size() - 1;
 
-    const bool doAll     = flags.IsNull() || flags == "all";
-    const bool doEtaSym  = doAll || flags.Contains("etasym");
-    const bool doMethods = doAll || flags.Contains("methods");
-    const bool doFinals  = doAll || flags.Contains("finals");
-    const bool doAdist   = doAll || flags.Contains("adist");
-    const bool doRover   = doAll || flags.Contains("roverlay");
-    const bool doAlpha   = doAll || flags.Contains("alpha");
-    const bool doKine    = doAll || flags.Contains("kinematics");
-    const bool doEvent   = doAll || flags.Contains("event");
+    const bool doAll      = flags.IsNull() || flags == "all";
+    const bool doEtaSym   = doAll || flags.Contains("etasym");
+    const bool doMethods  = doAll || flags.Contains("methods");
+    const bool doFinals   = doAll || flags.Contains("finals");
+    const bool doNormComp = doAll || flags.Contains("normcomp");
+    const bool doAdist    = doAll || flags.Contains("adist");
+    const bool doRover    = doAll || flags.Contains("roverlay");
+    const bool doAlpha    = doAll || flags.Contains("alpha");
+    const bool doKine     = doAll || flags.Contains("kinematics");
+    const bool doEvent    = doAll || flags.Contains("event");
 
     int totalPlots = 0;
-    if (doEtaSym)  totalPlots += nCones * kNMethods * nPtSlices;
-    if (doMethods) totalPlots += nCones * 2 * nPtSlices;
-    if (doFinals)  totalPlots += nCones * kNMethods * 2;
-    if (doAdist)   totalPlots += 3 * nCones * nAlpha * nPtSlices * nEta;
-    if (doRover)   totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
-    if (doAlpha)   totalPlots += nCones * kNMethods * nPtSlices * nEta;
-    if (doKine)    totalPlots += nCones * (kNKinematicsCollections * (3 + kNKinematicsPtMins) + 3);
-    if (doEvent)   totalPlots += 3;
+    if (doEtaSym)   totalPlots += nCones * kNMethods * nPtSlices;
+    if (doMethods)  totalPlots += nCones * 2 * nPtSlices;
+    if (doFinals)   totalPlots += nCones * kNMethods * 2;
+    if (doNormComp) totalPlots += nCones * kNMethods * 2;
+    if (doAdist)    totalPlots += 3 * nCones * nAlpha * nPtSlices * nEta;
+    if (doRover)    totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
+    if (doAlpha)    totalPlots += nCones * kNMethods * nPtSlices * nEta;
+    if (doKine)     totalPlots += nCones * (kNKinematicsCollections * (3 + kNKinematicsPtMins) + 3);
+    if (doEvent)    totalPlots += 3;
 
     ProgressBar pb("Saving plots:", totalPlots);
 
     if (doEvent) PlotEvent(fIn, outDir, pb);
 
     for (const TString& cone : kConeLabels) {
-        if (doEtaSym)  PlotEtaSym   (fIn, outDir, cone, bins,        pb);
-        if (doMethods) PlotMethodComp(fIn, outDir, cone, bins, false, pb);
-        if (doMethods) PlotMethodComp(fIn, outDir, cone, bins, true,  pb);
-        if (doFinals)  PlotFinals   (fIn, outDir, cone, bins,        pb);
-        if (doAdist)   PlotAsymDist (fIn, outDir, cone, bins,        pb);
-        if (doRover)   PlotROverlay (fIn, outDir, cone, bins,        pb);
-        if (doAlpha)   PlotAlphaFit (fIn, outDir, cone, bins,        pb);
-        if (doKine)    PlotKinematics(fIn, outDir, cone,             pb);
+        if (doEtaSym)   PlotEtaSym    (fIn, outDir, cone, bins,        pb);
+        if (doMethods)  PlotMethodComp(fIn, outDir, cone, bins, false, pb);
+        if (doMethods)  PlotMethodComp(fIn, outDir, cone, bins, true,  pb);
+        if (doFinals)   PlotFinals    (fIn, outDir, cone, bins,        pb);
+        if (doNormComp) PlotNormComp  (fIn, outDir, cone, bins, false, pb);
+        if (doNormComp) PlotNormComp  (fIn, outDir, cone, bins, true,  pb);
+        if (doAdist)    PlotAsymDist  (fIn, outDir, cone, bins,        pb);
+        if (doRover)    PlotROverlay  (fIn, outDir, cone, bins,        pb);
+        if (doAlpha)    PlotAlphaFit  (fIn, outDir, cone, bins,        pb);
+        if (doKine)     PlotKinematics(fIn, outDir, cone,              pb);
     }
 
     pb.Finish();
@@ -1516,7 +1673,7 @@ void plotResiduals(TString residualsFile, TString outDir = "", TString flags = "
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
-                  << "  flags: all etasym methods finals adist roverlay alpha kinematics event (space-separated)\n";
+                  << "  flags: all etasym methods finals normcomp adist roverlay alpha kinematics event (space-separated)\n";
         return 1;
     }
     plotResiduals(argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all");

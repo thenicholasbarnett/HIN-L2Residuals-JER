@@ -15,6 +15,7 @@
 #include "TLegend.h"
 #include "TLine.h"
 #include "TPad.h"
+#include "TROOT.h"
 #include "TStyle.h"
 #include "TSystem.h"
 #include "TArrayD.h"
@@ -258,7 +259,7 @@ inline TCanvas* MakeSinglePadCanvas(const TString& name, const PlotConfig& cfg, 
     c->SetBottomMargin(0.12);
     c->SetLeftMargin(0.12);
     c->SetRightMargin(0.05);
-    c->SetRealAspectRatio();
+    if (!gROOT->IsBatch()) c->SetRealAspectRatio();
     if(grid){c->SetGridx(); c->SetGridy();}
     return c;
 }
@@ -269,7 +270,7 @@ inline TCanvas* MakeColzCanvas(const TString& name, const PlotConfig& cfg){
     c->SetBottomMargin(0.12);
     c->SetLeftMargin(0.12);
     c->SetRightMargin(0.15);
-    c->SetRealAspectRatio();
+    if (!gROOT->IsBatch()) c->SetRealAspectRatio();
     return c;
 }
 

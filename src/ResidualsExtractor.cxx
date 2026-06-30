@@ -100,18 +100,22 @@ static std::pair<int,int> FindTruncBins(TH1D* h, double fraction) {
 }
 
 // Compute the mean of h restricted to bins [binLo, binHi].
+// Converts nEff to entry-equivalent count so MC histograms filled with XS weights
+// (where Integral() << GetEntries()) are handled correctly.
 static TruncResult TruncMeanInRange(TH1D* h, int binLo, int binHi) {
     TruncResult r;
     if (binLo > binHi) return r;
     double nEff = h->Integral(binLo, binHi);
-    if (nEff < 10) return r;
+    double hTotal = h->Integral();
+    double nEffEntries = (hTotal > 1e-10) ? h->GetEntries() * nEff / hTotal : nEff;
+    if (nEffEntries < 10) return r;
     h->GetXaxis()->SetRange(binLo, binHi);
     double mean = h->GetMean();
     double rms  = h->GetRMS();
     h->GetXaxis()->SetRange(0, 0);
     r.mean    = mean;
-    r.meanErr = rms / TMath::Sqrt(nEff);
-    r.nEff    = nEff;
+    r.meanErr = rms / TMath::Sqrt(nEffEntries);
+    r.nEff    = nEffEntries;
     r.valid   = true;
     return r;
 }
@@ -142,7 +146,7 @@ static void ResetRange(THnSparse* h, int axis) { h->GetAxis(axis)->SetRange(0, 0
 //   {cone}_R_mc_{etaMode}_{ptSlice}_{alphaSlice}_{method}
 //
 // Outputs in dGraphs per (method, ptSlice, etaBin):
-//   TGraphErrors of R_data/R_MC vs alpha (all 9 bins), with fit function [0,0.31] embedded
+//   TGraphErrors of R_MC/R_data vs alpha (all 9 bins), with fit function [0,0.31] embedded
 // ============================================================
 
 static void ExtractAndFit(
@@ -253,8 +257,8 @@ static void ExtractAndFit(
                     if (std::abs(Ad) > kMaxAbsA_fit || std::abs(Am) > kMaxAbsA_fit) return;
                     double Rd = ToR(Ad), Rm = ToR(Am);
                     double eRd = ToRErr(Ad, eAd), eRm = ToRErr(Am, eAm);
-                    if (std::abs(Rm) < 1e-6) return;
-                    double ratio  = Rd / Rm;
+                    if (std::abs(Rd) < 1e-6) return;
+                    double ratio  = Rm / Rd;
                     double eRatio = ratio * TMath::Sqrt(
                         (eRd/Rd)*(eRd/Rd) + (eRm/Rm)*(eRm/Rm));
                     rpts[method][ipt][ieta].push_back({alphaX, ratio, eRatio});
@@ -311,12 +315,12 @@ static void ExtractAndFit(
             TH1D* hCorr = new TH1D(corrName, "",
                 (int)etaEdges.size() - 1, etaEdges.data());
             hCorr->GetXaxis()->SetTitle(nameSuffix.IsNull() ? "|#eta|" : "#eta");
-            hCorr->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha=0");
+            hCorr->GetYaxis()->SetTitle("R_{MC}/R_{data} at #alpha=0");
 
             TH1D* hCorrNorm = new TH1D(corrName + "_norm", "",
                 (int)etaEdges.size() - 1, etaEdges.data());
             hCorrNorm->GetXaxis()->SetTitle(hCorr->GetXaxis()->GetTitle());
-            hCorrNorm->GetYaxis()->SetTitle("R_{data}/R_{MC} at #alpha=0 (norm.)");
+            hCorrNorm->GetYaxis()->SetTitle("k_{FSR} #cdot R_{MC}/R_{data}|_{#alpha=0.30}");
 
             for (int ieta = 0; ieta < nEta; ieta++) {
                 const auto& pts = rpts[method][ipt][ieta];
@@ -334,7 +338,7 @@ static void ExtractAndFit(
                 TGraphErrors* gr = new TGraphErrors(n,
                     x.data(), y.data(), ex.data(), ey.data());
                 gr->SetName(gname);
-                gr->SetTitle(";#alpha threshold;R_{data}/R_{MC}");
+                gr->SetTitle(";#alpha threshold;R_{MC}/R_{data}");
                 gr->SetMarkerStyle(20);
                 gr->SetMarkerColor(ptSlice.color);
                 gr->SetLineColor(ptSlice.color);
@@ -379,9 +383,18 @@ static void ExtractAndFit(
                             TMath::Power(err030 / val030, 2.0));
                     }
                     if (!bad && nfit >= 2) {
+                        TString gnorm = gname + "_norm";
                         TGraphErrors* grn = new TGraphErrors(nfit,
                             xn.data(), yn.data(), exn.data(), eyn.data());
-                        TF1* fn = new TF1(gname + "_fitnorm", "[0]+[1]*x", 0.0, kAlphaFitHi);
+                        grn->SetName(gnorm);
+                        grn->SetTitle(";#alpha threshold;R_{MC}/R_{data} (norm.)");
+                        grn->SetMarkerStyle(20);
+                        grn->SetMarkerColor(ptSlice.color);
+                        grn->SetLineColor(ptSlice.color);
+                        TF1* fn = new TF1(gnorm + "_fit", "[0]+[1]*x", 0.0, kAlphaFitHi);
+                        fn->SetParameter(0, 1.0);
+                        fn->SetParameter(1, 0.0);
+                        fn->SetLineColor(ptSlice.color);
                         grn->Fit(fn, "QR");
 
                         double c0n = fn->GetParameter(0);
@@ -394,7 +407,10 @@ static void ExtractAndFit(
                             : ec0n * val030;
 
                         hCorrNorm->SetBinContent(ieta + 1, c0);
-                        hCorrNorm->SetBinError (ieta + 1, ec0);
+                        hCorrNorm->SetBinError(ieta + 1, ec0);
+
+                        dGraphs->cd();
+                        grn->Write();
                         delete fn;
                         delete grn;
                     }
