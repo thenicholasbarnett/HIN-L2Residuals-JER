@@ -20,48 +20,48 @@
 
 struct ConeHistograms {
 
-    static constexpr int kEtaAxis   = 0;
+    static constexpr int kEtaAxis = 0;
     static constexpr int kPtAvgAxis = 1;
     static constexpr int kAlphaAxis = 2;
-    static constexpr int kAAxis     = 3;
+    static constexpr int kAAxis = 3;
 
-    THnSparse* hAsym     = nullptr;
-    TH3D*      hInclJet  = nullptr;
-    TH3D*      hTagJet   = nullptr;
-    TH3D*      hProbeJet = nullptr;
+    THnSparse* hAsym = nullptr;
+    TH3D* hInclJet = nullptr;
+    TH3D* hTagJet = nullptr;
+    TH3D* hProbeJet = nullptr;
 
-    void Init(const TString& prefix, const BinningConfig& bins) {
-        hAsym = MakeTHnSparse<THnSparseD>(prefix + "_asym", "",
-            {bins.eta, bins.ptavg, bins.alpha, bins.asymmetry});
-        SetEtaBins(hAsym, kEtaAxis);
+    void Init( const TString& prefix, const BinningConfig& bins ){
+        hAsym = MakeTHnSparse<THnSparseD>( prefix + "_asym", "",
+            { bins.eta, bins.ptavg, bins.alpha, bins.asymmetry } );
+        SetEtaBins( hAsym, kEtaAxis );
         hAsym->Sumw2();
 
-        hInclJet  = MakeTH3DEtaPhiPt(prefix + "_incl",  kEtaEdges, bins.phi, bins.pt);
-        hTagJet   = MakeTH3DEtaPhiPt(prefix + "_tag",   kEtaEdges, bins.phi, bins.pt);
-        hProbeJet = MakeTH3DEtaPhiPt(prefix + "_probe", kEtaEdges, bins.phi, bins.pt);
+        hInclJet = MakeTH3DEtaPhiPt( prefix + "_incl", kEtaEdges, bins.phi, bins.pt );
+        hTagJet = MakeTH3DEtaPhiPt( prefix + "_tag", kEtaEdges, bins.phi, bins.pt );
+        hProbeJet = MakeTH3DEtaPhiPt( prefix + "_probe", kEtaEdges, bins.phi, bins.pt );
     }
 
-    void Fill(const DijetResult& d, const float* pt, const float* eta,
-              const float* phi, float weight) {
-        double x[4] = {eta[d.probeIdx], d.ptavg, d.alpha, d.A};
-        hAsym->Fill(x, weight);
+    void Fill( const DijetResult& d, const float* pt, const float* eta,
+              const float* phi, float weight ){
+        double x[4] = { eta[d.probeIdx], d.ptavg, d.alpha, d.A };
+        hAsym->Fill( x, weight );
 
-        hTagJet  ->Fill(eta[d.tagIdx],   phi[d.tagIdx],   pt[d.tagIdx],   weight);
-        hProbeJet->Fill(eta[d.probeIdx], phi[d.probeIdx], pt[d.probeIdx], weight);
+        hTagJet ->Fill( eta[d.tagIdx], phi[d.tagIdx], pt[d.tagIdx], weight );
+        hProbeJet->Fill( eta[d.probeIdx], phi[d.probeIdx], pt[d.probeIdx], weight );
     }
 
-    void FillInclJet(float corrPt, float jetEta, float jetPhi, float weight) {
-        hInclJet->Fill(jetEta, jetPhi, corrPt, weight);
+    void FillInclJet( float corrPt, float jetEta, float jetPhi, float weight ){
+        hInclJet->Fill( jetEta, jetPhi, corrPt, weight );
     }
 
-    void Write(TDirectory* dir = nullptr) {
+    void Write( TDirectory* dir = nullptr ){
         TDirectory* saved = gDirectory;
-        if (dir) dir->cd();
-        WriteAll(hAsym);
-        WriteAll(hInclJet);
-        WriteAll(hTagJet);
-        WriteAll(hProbeJet);
-        if (dir && saved) saved->cd();
+        if( dir ) dir->cd();
+        WriteAll( hAsym );
+        WriteAll( hInclJet );
+        WriteAll( hTagJet );
+        WriteAll( hProbeJet );
+        if( dir && saved ) saved->cd();
     }
 };
 

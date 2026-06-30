@@ -24,7 +24,7 @@
 
 // global constants
 static constexpr int kMinEntries = 100;
-static constexpr int kNAlphaFit = 6;     // alpha thresholds 0.05–0.30 used for linear fit
+static constexpr int kNAlphaFit = 6;  // alpha thresholds 0.05–0.30 used for linear fit
 static constexpr double kGausFitHW = 0.5;
 static constexpr double kMaxAbsA_fit = 0.9;
 static constexpr double kAlphaFitHi = 0.31;  // alpha fitting max > 0.30
@@ -35,8 +35,8 @@ static constexpr int kPtAvgAxis = 1;
 static constexpr int kAlphaAxis = 2;
 static constexpr int kAAxis = 3;
 
-// methods 
-static constexpr int     kNMethods      = 3;
+// methods
+static constexpr int kNMethods = 3;
 static const char* const kMethodNames[] = { "gauss", "trunc90", "trunc95" };
 
 // ---- result structs ----
@@ -64,11 +64,11 @@ static GaussResult FitGauss( TH1D* h ){
 
     TFitResultPtr res = h->Fit( g, "NQSR" );
     if( res.Get() && res->IsValid() ){
-        r.mean    = res->Parameter( 1 );
+        r.mean = res->Parameter( 1 );
         r.meanErr = res->ParError( 1 );
-        r.sigma   = res->Parameter( 2 );
+        r.sigma = res->Parameter( 2 );
         r.chi2ndf = ( res->Ndf() > 0 ) ? res->Chi2() / res->Ndf() : -1.0;
-        r.valid   = true;
+        r.valid = true;
     }
     delete g;
     return r;
@@ -78,10 +78,10 @@ static GaussResult FitGauss( TH1D* h ){
 
 // Find the bin range that contains the central `fraction` of h's area.
 // Returns {1, 0} (lo > hi = invalid) if h has fewer than kMinEntries.
-static std::pair<int,int> FindTruncBins( TH1D* h, double fraction ){
-    if( !CanFit( h, kMinEntries ) ) return {1, 0};
+static std::pair<int, int> FindTruncBins( TH1D* h, double fraction ){
+    if( !CanFit( h, kMinEntries ) ) return { 1, 0 };
     double total = h->Integral();
-    if( total <= 0 ) return {1, 0};
+    if( total <= 0 ) return { 1, 0 };
     double tailN = 0.5 * ( 1.0 - fraction ) * total;
     int nBins = h->GetNbinsX();
     double running = 0;
@@ -96,7 +96,7 @@ static std::pair<int,int> FindTruncBins( TH1D* h, double fraction ){
         running += h->GetBinContent( b );
         if( running > tailN ){ binHi = b; break; }
     }
-    return {binLo, binHi};
+    return { binLo, binHi };
 }
 
 // Compute the mean of h restricted to bins [binLo, binHi].
@@ -111,18 +111,18 @@ static TruncResult TruncMeanInRange( TH1D* h, int binLo, int binHi ){
     if( nEffEntries < 10 ) return r;
     h->GetXaxis()->SetRange( binLo, binHi );
     double mean = h->GetMean();
-    double rms  = h->GetRMS();
+    double rms = h->GetRMS();
     h->GetXaxis()->SetRange( 0, 0 );
-    r.mean    = mean;
+    r.mean = mean;
     r.meanErr = rms / TMath::Sqrt( nEffEntries );
-    r.nEff    = nEffEntries;
-    r.valid   = true;
+    r.nEff = nEffEntries;
+    r.valid = true;
     return r;
 }
 
 // ---- <A> → R and propagated error ----
 
-static double ToR( double A )               { return ( 1.0 + A ) / ( 1.0 - A ); }
+static double ToR( double A ){ return ( 1.0 + A ) / ( 1.0 - A ); }
 static double ToRErr( double A, double dA ){ return dA * 2.0 / ( ( 1.0 - A ) * ( 1.0 - A ) ); }
 
 static void ResetRange( THnSparse* h, int axis ){ h->GetAxis( axis )->SetRange( 0, 0 ); }
@@ -160,9 +160,9 @@ static void ExtractAndFit(
     const std::vector<Double_t>& etaEdges,
     const TString& nameSuffix,
     ProgressBar& pb ){
-    const int nPt    = ( int )bins.ptavgSlices.size();
+    const int nPt = ( int )bins.ptavgSlices.size();
     const int nAlpha = ( int )bins.alphaSlices.size();
-    const int nEta   = hData->GetAxis( kEtaAxis )->GetNbins();
+    const int nEta = hData->GetAxis( kEtaAxis )->GetNbins();
     const bool fullEta = !nameSuffix.IsNull();
     const TString etaMode = L2Name::EtaModeKey( fullEta );
 
@@ -182,12 +182,12 @@ static void ExtractAndFit(
         for( int ia = 0; ia < nAlpha; ia++ ){
             for( int ip = 0; ip < nPt; ip++ ){
                 TString bn = L2Name::ObjectName( cone, "R_data",
-                    {etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] )},
-                    {kMethodNames[m]} );
+                    { etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] ) },
+                    { kMethodNames[m] } );
                 hRd[m][ia][ip] = new TH1D( bn, "", ( int )etaEdges.size() - 1, etaEdges.data() );
                 bn = L2Name::ObjectName( cone, "R_mc",
-                    {etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] )},
-                    {kMethodNames[m]} );
+                    { etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] ) },
+                    { kMethodNames[m] } );
                 hRm[m][ia][ip] = new TH1D( bn, "", ( int )etaEdges.size() - 1, etaEdges.data() );
             }
         }
@@ -202,9 +202,9 @@ static void ExtractAndFit(
             const auto& aSlice = bins.alphaSlices[ialpha];
 
             hData->GetAxis( kPtAvgAxis )->SetRangeUser( ptSlice.lo, ptSlice.hi );
-            hMC  ->GetAxis( kPtAvgAxis )->SetRangeUser( ptSlice.lo, ptSlice.hi );
-            hData->GetAxis( kAlphaAxis )->SetRangeUser( aSlice.lo,  aSlice.hi );
-            hMC  ->GetAxis( kAlphaAxis )->SetRangeUser( aSlice.lo,  aSlice.hi );
+            hMC->GetAxis( kPtAvgAxis )->SetRangeUser( ptSlice.lo, ptSlice.hi );
+            hData->GetAxis( kAlphaAxis )->SetRangeUser( aSlice.lo, aSlice.hi );
+            hMC->GetAxis( kAlphaAxis )->SetRangeUser( aSlice.lo, aSlice.hi );
 
             // One 2D (eta, A) projection per (ipt, ialpha) instead of nEta 1D projections.
             // Projection(yDim, xDim) → TH2D with x=eta, y=A.
@@ -213,12 +213,12 @@ static void ExtractAndFit(
             {
                 TDirectory::TContext nodir( nullptr );
                 h2Data = hData->Projection( kAAxis, kEtaAxis );
-                h2MC   = hMC  ->Projection( kAAxis, kEtaAxis );
+                h2MC = hMC->Projection( kAAxis, kEtaAxis );
             }
 
             for( int ieta = 0; ieta < nEta; ieta++ ){
-                TString etaKey   = L2Name::EtaKey( ieta );
-                TString ptKey    = L2Name::PtKey( ptSlice );
+                TString etaKey = L2Name::EtaKey( ieta );
+                TString ptKey = L2Name::PtKey( ptSlice );
                 TString alphaKey = L2Name::AlphaKey( aSlice );
 
                 TH1D* hAData;
@@ -226,26 +226,26 @@ static void ExtractAndFit(
                 {
                     TDirectory::TContext nodir( nullptr );
                     hAData = h2Data->ProjectionY(
-                        L2Name::ObjectName( cone, "A_data", {etaMode, etaKey, ptKey, alphaKey} ),
+                        L2Name::ObjectName( cone, "A_data", { etaMode, etaKey, ptKey, alphaKey } ),
                         ieta + 1, ieta + 1 );
                     hAMC = h2MC->ProjectionY(
-                        L2Name::ObjectName( cone, "A_mc",   {etaMode, etaKey, ptKey, alphaKey} ),
+                        L2Name::ObjectName( cone, "A_mc", { etaMode, etaKey, ptKey, alphaKey } ),
                         ieta + 1, ieta + 1 );
                 }
 
                 dQA_data->cd(); hAData->Write();
-                dQA_mc  ->cd(); hAMC  ->Write();
+                dQA_mc ->cd(); hAMC ->Write();
 
-                GaussResult gd   = FitGauss( hAData );
-                GaussResult gm   = FitGauss( hAMC );
+                GaussResult gd = FitGauss( hAData );
+                GaussResult gm = FitGauss( hAMC );
                 auto [dlo90, dhi90] = FindTruncBins( hAData, 0.90 );
-                auto [mlo90, mhi90] = FindTruncBins( hAMC,   0.90 );
+                auto [mlo90, mhi90] = FindTruncBins( hAMC, 0.90 );
                 auto [dlo95, dhi95] = FindTruncBins( hAData, 0.95 );
-                auto [mlo95, mhi95] = FindTruncBins( hAMC,   0.95 );
+                auto [mlo95, mhi95] = FindTruncBins( hAMC, 0.95 );
                 TruncResult td90 = TruncMeanInRange( hAData, dlo90, dhi90 );
-                TruncResult tm90 = TruncMeanInRange( hAMC,   mlo90, mhi90 );
+                TruncResult tm90 = TruncMeanInRange( hAMC, mlo90, mhi90 );
                 TruncResult td95 = TruncMeanInRange( hAData, dlo95, dhi95 );
-                TruncResult tm95 = TruncMeanInRange( hAMC,   mlo95, mhi95 );
+                TruncResult tm95 = TruncMeanInRange( hAMC, mlo95, mhi95 );
 
                 double alphaX = aSlice.hi;
 
@@ -257,17 +257,17 @@ static void ExtractAndFit(
                     double Rd = ToR( Ad ), Rm = ToR( Am );
                     double eRd = ToRErr( Ad, eAd ), eRm = ToRErr( Am, eAm );
                     if( std::abs( Rd ) < 1e-6 ) return;
-                    double ratio  = Rm / Rd;
+                    double ratio = Rm / Rd;
                     double eRatio = ratio * TMath::Sqrt(
                         ( eRd/Rd )*( eRd/Rd ) + ( eRm/Rm )*( eRm/Rm ) );
-                    rpts[method][ipt][ieta].push_back( {alphaX, ratio, eRatio} );
+                    rpts[method][ipt][ieta].push_back( { alphaX, ratio, eRatio } );
                     hRd[method][ialpha][ipt]->SetBinContent( ieta + 1, Rd );
-                    hRd[method][ialpha][ipt]->SetBinError  ( ieta + 1, eRd );
+                    hRd[method][ialpha][ipt]->SetBinError( ieta + 1, eRd );
                     hRm[method][ialpha][ipt]->SetBinContent( ieta + 1, Rm );
-                    hRm[method][ialpha][ipt]->SetBinError  ( ieta + 1, eRm );
+                    hRm[method][ialpha][ipt]->SetBinError( ieta + 1, eRm );
                 };
 
-                acrunning( 0, gd.mean,   gd.meanErr,   gm.mean,   gm.meanErr,   gd.valid  && gm.valid );
+                acrunning( 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
                 acrunning( 1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
                 acrunning( 2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
 
@@ -279,9 +279,9 @@ static void ExtractAndFit(
             delete h2MC;
 
             ResetRange( hData, kPtAvgAxis );
-            ResetRange( hMC,   kPtAvgAxis );
+            ResetRange( hMC, kPtAvgAxis );
             ResetRange( hData, kAlphaAxis );
-            ResetRange( hMC,   kAlphaAxis );
+            ResetRange( hMC, kAlphaAxis );
         }
 
         pb.Update();
@@ -309,7 +309,7 @@ static void ExtractAndFit(
 
             TString ptKey = L2Name::PtKey( ptSlice );
             TString corrName = L2Name::ObjectName( cone, "intercept",
-                {etaMode, ptKey}, {kMethodNames[method]} );
+                { etaMode, ptKey }, { kMethodNames[method] } );
 
             TH1D* hCorr = new TH1D( corrName, "",
                 ( int )etaEdges.size() - 1, etaEdges.data() );
@@ -326,13 +326,13 @@ static void ExtractAndFit(
                 int n = ( int )pts.size();
                 std::vector<double> x( n ), y( n ), ex( n, 0.0 ), ey( n );
                 for( int k = 0; k < n; k++ ){
-                    x[k]  = pts[k].alpha;
-                    y[k]  = pts[k].val;
+                    x[k] = pts[k].alpha;
+                    y[k] = pts[k].val;
                     ey[k] = pts[k].err;
                 }
 
                 TString gname = L2Name::ObjectName( cone, "R",
-                    {etaMode, L2Name::EtaKey( ieta ), ptKey}, {kMethodNames[method]} );
+                    { etaMode, L2Name::EtaKey( ieta ), ptKey }, { kMethodNames[method] } );
 
                 TGraphErrors* gr = new TGraphErrors( n,
                     x.data(), y.data(), ex.data(), ey.data() );
@@ -342,7 +342,7 @@ static void ExtractAndFit(
                 gr->SetMarkerColor( ptSlice.color );
                 gr->SetLineColor( ptSlice.color );
 
-                if( !CanFit( gr, {0.0, kAlphaFitHi}, 2 ) ){ delete gr; continue; }
+                if( !CanFit( gr, { 0.0, kAlphaFitHi }, 2 ) ){ delete gr; continue; }
 
                 // "R" option: only points within [0, kAlphaFitHi] enter the chi2 — those above
                 // 0.30 are displayed in the graph but excluded from the fit
@@ -353,7 +353,7 @@ static void ExtractAndFit(
                 gr->Fit( fitFn, "QR" );
 
                 hCorr->SetBinContent( ieta + 1, fitFn->GetParameter( 0 ) );
-                hCorr->SetBinError  ( ieta + 1, fitFn->GetParError( 0 ) );
+                hCorr->SetBinError( ieta + 1, fitFn->GetParError( 0 ) );
 
                 // ---- normalized variant: divide each point by the value at alpha=0.30,
                 //      fit, then multiply the intercept back. Errors differ from direct
@@ -375,8 +375,8 @@ static void ExtractAndFit(
                     bool bad = false;
                     for( int k = 0; k < nfit; k++ ){
                         if( std::abs( pts[k].val ) < 1e-6 ){ bad = true; break; }
-                        xn[k]  = pts[k].alpha;
-                        yn[k]  = pts[k].val / val030;
+                        xn[k] = pts[k].alpha;
+                        yn[k] = pts[k].val / val030;
                         eyn[k] = yn[k] * TMath::Sqrt(
                             TMath::Power( pts[k].err / pts[k].val, 2.0 ) +
                             TMath::Power( err030 / val030, 2.0 ) );
@@ -416,7 +416,7 @@ static void ExtractAndFit(
                 }
 
                 dGraphs->cd();
-                gr->Write();   // fit function clone is embedded in graph by ROOT's Fit()
+                gr->Write();  // fit function clone is embedded in graph by ROOT's Fit()
                 delete fitFn;  // delete the original (clone in graph list is separately owned)
                 delete gr;
             }
@@ -437,9 +437,9 @@ void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
     const AnalysisConfig& cfg = Config();
 
     TFile* fData = TFile::Open( dataFile, "read" );
-    TFile* fMC   = TFile::Open( mcFile, "read" );
+    TFile* fMC = TFile::Open( mcFile, "read" );
     if( !fData || fData->IsZombie() ){ std::cerr << "Cannot open " << dataFile << "\n"; return; }
-    if( !fMC || fMC->IsZombie() ){ std::cerr << "Cannot open " << mcFile   << "\n"; return; }
+    if( !fMC || fMC->IsZombie() ){ std::cerr << "Cannot open " << mcFile << "\n"; return; }
 
     TFile* fOut = new TFile( outputFile, "recreate" );
 

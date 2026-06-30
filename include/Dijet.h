@@ -16,21 +16,21 @@ struct SortedJets {
     int third = -1;
 };
 
-inline SortedJets FindLeadingJets( const float* pt, int n ) {
+inline SortedJets FindLeadingJets( const float* pt, int n ){
     SortedJets s;
-    for ( int i = 0; i < n; i++ ) {
-        if ( s.lead == -1 || pt[i] > pt[s.lead] ) { 
-		s.third = s.sublead;
-		s.sublead = s.lead;
-		s.lead = i;
-	}
-        else if ( s.sublead == -1 || pt[i] > pt[s.sublead] ) { 
-		s.third = s.sublead;
-		s.sublead = i;
-	}
-        else if ( s.third == -1 || pt[i] > pt[s.third] ) {
-		s.third = i; 
-	}
+    for( int i = 0; i < n; i++ ){
+        if( s.lead == -1 || pt[i] > pt[s.lead] ){
+            s.third = s.sublead;
+            s.sublead = s.lead;
+            s.lead = i;
+        }
+        else if( s.sublead == -1 || pt[i] > pt[s.sublead] ){
+            s.third = s.sublead;
+            s.sublead = i;
+        }
+        else if( s.third == -1 || pt[i] > pt[s.third] ){
+            s.third = i;
+        }
     }
     return s;
 }
@@ -45,44 +45,44 @@ struct DijetResult {
     float dphi = 0.0f;
 };
 
-inline float DijetDPhi( float phi1, float phi2 ) {
+inline float DijetDPhi( float phi1, float phi2 ){
     float d = std::fabs( phi1 - phi2 );
-    if ( d > ( float )TMath::Pi() ) { d = 2.0f * ( float )TMath::Pi() - d; }
+    if( d > ( float )TMath::Pi() ){ d = 2.0f * ( float )TMath::Pi() - d; }
     return d;
 }
 
 inline DijetResult MakeDijet( SortedJets s, bool hasThird,
                               const float* pt, const float* eta, const float* phi,
-                              ULong64_t eventNumber ) {
+                              ULong64_t eventNumber ){
     DijetResult d;
 
-    bool leadBarrel = std::fabs ( eta[s.lead] ) < kBarrelEtaCut;
+    bool leadBarrel = std::fabs( eta[s.lead] ) < kBarrelEtaCut;
     bool subleadBarrel = std::fabs( eta[s.sublead] ) < kBarrelEtaCut;
 
-    if ( !leadBarrel && !subleadBarrel ) { return d; }
-    if ( pt[s.sublead] < kSubleadPtCut ) { return d; }
+    if( !leadBarrel && !subleadBarrel ){ return d; }
+    if( pt[s.sublead] < kSubleadPtCut ){ return d; }
 
     float dphi = DijetDPhi( phi[s.lead], phi[s.sublead] );
-    if ( dphi < kDphiCut ) { return d; }
+    if( dphi < kDphiCut ){ return d; }
 
     int tagIdx, probeIdx;
-    if ( leadBarrel && !subleadBarrel ) { 
-	    tagIdx = s.lead;    
-	    probeIdx = s.sublead; 
+    if( leadBarrel && !subleadBarrel ){
+        tagIdx = s.lead;
+        probeIdx = s.sublead;
     }
-    else if ( !leadBarrel &&  subleadBarrel ) { 
-	    tagIdx = s.sublead; 
-	    probeIdx = s.lead;    
+    else if( !leadBarrel && subleadBarrel ){
+        tagIdx = s.sublead;
+        probeIdx = s.lead;
     }
     else {
-        if (eventNumber % 2 == 0) { 
-		tagIdx = s.lead;    
-		probeIdx = s.sublead; 
-	}
+        if( eventNumber % 2 == 0 ){
+            tagIdx = s.lead;
+            probeIdx = s.sublead;
+        }
         else {
-		tagIdx = s.sublead;
-		probeIdx = s.lead;    
-	}
+            tagIdx = s.sublead;
+            probeIdx = s.lead;
+        }
     }
 
     float ptsum = pt[tagIdx] + pt[probeIdx];
@@ -91,7 +91,7 @@ inline DijetResult MakeDijet( SortedJets s, bool hasThird,
     d.tagIdx = tagIdx;
     d.probeIdx = probeIdx;
     d.ptavg = 0.5f * ptsum;
-    d.A = (pt[probeIdx] - pt[tagIdx]) / ptsum;
+    d.A = ( pt[probeIdx] - pt[tagIdx] ) / ptsum;
     d.alpha = hasThird ? pt[s.third] / d.ptavg : 0.0f;
     d.dphi = dphi;
 

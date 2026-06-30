@@ -113,12 +113,12 @@ inline THnSparse* FoldEtaAxis( THnSparse* h, Int_t etaAxis, const TString& newNa
         TAxis* ax = h->GetAxis( i );
         if( i == etaAxis ){
             nbins[i] = nAbsEta;
-            xmin[i]  = 0.0;
-            xmax[i]  = ax->GetXmax();
+            xmin[i] = 0.0;
+            xmax[i] = ax->GetXmax();
         } else {
             nbins[i] = ax->GetNbins();
-            xmin[i]  = ax->GetXmin();
-            xmax[i]  = ax->GetXmax();
+            xmin[i] = ax->GetXmin();
+            xmax[i] = ax->GetXmax();
         }
     }
 
@@ -189,7 +189,7 @@ inline bool CanFit( const TH1* h, int minEntries = 1 ){
     return h && h->GetEntries() >= minEntries;
 }
 
-inline bool CanFit( TH1* h, std::pair<double,double> range, int minEntries = 1 ){
+inline bool CanFit( TH1* h, std::pair<double, double> range, int minEntries = 1 ){
     if( !h ) return false;
     int blo = h->FindBin( range.first );
     int bhi = h->FindBin( range.second );
@@ -200,7 +200,7 @@ inline bool CanFit( const TGraphErrors* gr, int minPts = 1 ){
     return gr && gr->GetN() >= minPts;
 }
 
-inline bool CanFit( const TGraphErrors* gr, std::pair<double,double> range, int minPts = 1 ){
+inline bool CanFit( const TGraphErrors* gr, std::pair<double, double> range, int minPts = 1 ){
     if( !gr ) return false;
     int n = 0;
     for( int i = 0; i < gr->GetN(); i++ )
@@ -228,14 +228,14 @@ inline TH3D* MakeTH3DEtaPhiPt( const TString& name,
                                const TString& etaTitle = "#eta" ){
     std::vector<Double_t> phiEdges( phi.nBins + 1 ), ptEdges( pt.nBins + 1 );
     for( int i = 0; i <= phi.nBins; i++ )
-        phiEdges[i] = phi.lo + i * (phi.hi - phi.lo) / phi.nBins;
+        phiEdges[i] = phi.lo + i * ( phi.hi - phi.lo ) / phi.nBins;
     for( int i = 0; i <= pt.nBins; i++ )
-        ptEdges[i] = pt.lo + i * (pt.hi - pt.lo) / pt.nBins;
+        ptEdges[i] = pt.lo + i * ( pt.hi - pt.lo ) / pt.nBins;
 
     TH3D* h = new TH3D( name.Data(), "",
-        (Int_t)etaEdges.size() - 1, etaEdges.data(),
+        ( Int_t )etaEdges.size() - 1, etaEdges.data(),
         phi.nBins, phiEdges.data(),
-        pt.nBins,  ptEdges.data() );
+        pt.nBins, ptEdges.data() );
     h->GetXaxis()->SetTitle( etaTitle );
     h->GetYaxis()->SetTitle( phi.title );
     h->GetZaxis()->SetTitle( pt.title );
@@ -253,14 +253,14 @@ inline void NormalizeTH1( TH1* h ){
 struct PlotConfig {
     TString runNumber = "";
     TString globalTag = "";
-    TString jetAlgo   = "";
+    TString jetAlgo = "";
 
-    float xmin  = 15.0;
-    float xmax  = 200.0;
-    float ymax  = 1.1;
-    float ymin  = 0.0;
+    float xmin = 15.0;
+    float xmax = 200.0;
+    float ymax = 1.1;
+    float ymin = 0.0;
 
-    int canvasSize   = 2400;
+    int canvasSize = 2400;
     float imageScaling = 1.0;
 
     float legfrac = 0.2;
@@ -293,9 +293,9 @@ inline TCanvas* MakeColzCanvas( const TString& name, const PlotConfig& cfg ){
 }
 
 struct SplitCanvas {
-    TCanvas* c       = nullptr;
-    TPad*    plotpad = nullptr;
-    TPad*    legpad  = nullptr;
+    TCanvas* c = nullptr;
+    TPad* plotpad = nullptr;
+    TPad* legpad = nullptr;
 };
 
 inline SplitCanvas MakeSplitPadCanvas( const TString& name, const PlotConfig& cfg ){
@@ -338,9 +338,9 @@ inline TLegend* MakeLegend( float xmin = 0.575, float ymin = 0.75, float xmax = 
 }
 
 inline void AddInfoEntries( TLegend* l, const PlotConfig& cfg ){
-    if( !cfg.runNumber.IsNull() ) l->AddEntry( (TObject*)nullptr, "Run " + cfg.runNumber, "" );
-    if( !cfg.globalTag.IsNull() ) l->AddEntry( (TObject*)nullptr, cfg.globalTag, "" );
-    if( !cfg.jetAlgo.IsNull() ) l->AddEntry( (TObject*)nullptr, cfg.jetAlgo, "" );
+    if( !cfg.runNumber.IsNull() ) l->AddEntry( ( TObject* )nullptr, "Run " + cfg.runNumber, "" );
+    if( !cfg.globalTag.IsNull() ) l->AddEntry( ( TObject* )nullptr, cfg.globalTag, "" );
+    if( !cfg.jetAlgo.IsNull() ) l->AddEntry( ( TObject* )nullptr, cfg.jetAlgo, "" );
 }
 
 inline TString MakePlotDir( const TString& prefix = "plots" ){

@@ -55,7 +55,7 @@ struct JetStruct {
     } gen;
 
     // mapping variables to branches
-    std::vector<std::pair<TString, void*>> BranchMap( bool isMC ) {
+    std::vector<std::pair<TString, void*>> BranchMap( bool isMC ){
         std::vector<std::pair<TString, void*>> map = {
             { "nref", &reco.nref },
             { "rawpt", reco.rawpt },
@@ -75,7 +75,7 @@ struct JetStruct {
         };
 
         // including gen and ref jet collections iff MC
-        if( isMC ) {
+        if( isMC ){
             map.insert( map.end(), {
                 { "refpt", ref.pt },
                 { "refeta", ref.eta },
@@ -83,7 +83,7 @@ struct JetStruct {
                 { "genpt", gen.pt },
                 { "geneta", gen.eta },
                 { "genphi", gen.phi },
-            });
+            } );
         }
         return map;
     }

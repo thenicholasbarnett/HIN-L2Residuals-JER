@@ -21,17 +21,17 @@ struct EventStruct {
     UInt_t lumi;
 
     // mapping from variables to branches
-    std::vector<std::pair<TString, void*>> BranchMap( bool isMC ) {
-	    std::vector<std::pair<TString, void*>> branches = {
-            { "vz",  &vz },
+    std::vector<std::pair<TString, void*>> BranchMap( bool isMC ){
+        std::vector<std::pair<TString, void*>> branches = {
+            { "vz", &vz },
             { "evt", &event }
         };
         if( isMC ){
             branches.push_back( { "weight", &w } );
-        } 
-	else {
-            branches.insert(branches.end(), {
-                { "run",  &run },
+        }
+        else {
+            branches.insert( branches.end(), {
+                { "run", &run },
                 { "lumi", &lumi }
             } );
         }
@@ -43,7 +43,7 @@ struct FiltersStruct {
 
     // primary vertex filter
     Int_t ppvF;
-    std::vector<std::pair<TString, void*>> BranchMap() {
+    std::vector<std::pair<TString, void*>> BranchMap(){
         return{
             { "pprimaryVertexFilter", &ppvF }
         };

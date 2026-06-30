@@ -39,18 +39,18 @@ struct ProgressBar {
     ProgressBar( const std::string& label, int total, Color color = kRandom )
         : label( label ), total( total ), color( color ), startTime( time( nullptr ) )
     {
-        if( this->color == kRandom ) {
+        if( this->color == kRandom ){
             static const Color all[] = { kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite };
-            static const int N = ( int ) ( sizeof( all )/sizeof( all[0] ) );
+            static const int N = ( int ) ( sizeof( all ) / sizeof( all[0] ) );
             static bool seeded = false;
             static Color lastColor = kRandom;
             static Color deck[N];
             static int remaining = 0;
-            if( !seeded ) { srand( ( unsigned int ) ( time( nullptr ) ^ ( unsigned int )getpid() ) ); seeded = true; }
-            if( remaining == 0 ) {
-                for( int i = 0; i < N; i++ ) { deck[i] = all[i]; }
-                for( int i = N-1; i > 0; i--){ int j = rand()%( i+1 ); Color t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
-                if( deck[0] == lastColor && N > 1 ) { Color t = deck[0]; deck[0] = deck[1]; deck[1] = t; }
+            if( !seeded ){ srand( ( unsigned int ) ( time( nullptr ) ^ ( unsigned int )getpid() ) ); seeded = true; }
+            if( remaining == 0 ){
+                for( int i = 0; i < N; i++ ){ deck[i] = all[i]; }
+                for( int i = N-1; i > 0; i-- ){ int j = rand() % ( i + 1 ); Color t = deck[i]; deck[i] = deck[j]; deck[j] = t; }
+                if( deck[0] == lastColor && N > 1 ){ Color t = deck[0]; deck[0] = deck[1]; deck[1] = t; }
                 remaining = N;
             }
             this->color = deck[N - remaining--];
@@ -58,19 +58,19 @@ struct ProgressBar {
         }
     }
 
-    void Update(){ 
-	    current++; Draw(); 
+    void Update(){
+        current++; Draw();
     }
 
-    void Finish(){ 
-	    current = total; 
-	    Draw(); printf("\n\n"); 
-	    fflush(stdout);
+    void Finish(){
+        current = total;
+        Draw(); printf( "\n\n" );
+        fflush( stdout );
     }
 
 private:
     const char* AnsiColor() const {
-        switch( color ) {
+        switch( color ){
             case kGreen: return "\033[32m";
             case kBlue: return "\033[34m";
             case kRed: return "\033[31m";
@@ -92,18 +92,18 @@ private:
 
         std::string bar, gap;
         for( int i = 0; i < filled; i++ ) bar += "\xe2\x96\x88";  // █
-        for( int i = 0; i < empty;  i++ ) gap += "\xe2\x96\x91";  // ░
+        for( int i = 0; i < empty; i++ ) gap += "\xe2\x96\x91";  // ░
 
         long elapsed = ( long ) ( time( nullptr ) - startTime );
 
         char rateBuf[16] = "";
-        if ( current > 0 && elapsed >= 1 )
+        if( current > 0 && elapsed >= 1 )
             snprintf( rateBuf, sizeof( rateBuf ), "  %4.1f/s", ( double )current / elapsed );
 
         char timeBuf[24] = "  --:-- ETA";
-        if ( current >= total && elapsed > 0 )
+        if( current >= total && elapsed > 0 )
             snprintf( timeBuf, sizeof( timeBuf ), "  %02ld:%02ld", elapsed / 60, elapsed % 60 );
-        else if (current > 0 && pct >= 5 && elapsed >= 1 ) {
+        else if( current > 0 && pct >= 5 && elapsed >= 1 ){
             long eta = elapsed * ( long ) ( total - current ) / ( long )current;
             snprintf( timeBuf, sizeof( timeBuf ), "  %02ld:%02ld ETA", eta / 60, eta % 60 );
         }
