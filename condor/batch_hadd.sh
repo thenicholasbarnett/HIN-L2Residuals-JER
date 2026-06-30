@@ -72,7 +72,16 @@ elif [[ "$IN_PAT" == *root && "$IN_PAT" != *.root ]]; then
     IN_PAT="${IN_PAT/%root/.root}"
 fi
 
-mapfile -t FILES < <(find "$IN_DIR" -type f -name "$IN_PAT" | sort)
+if [[ "$IN_DIR" == *'*'* || "$IN_DIR" == *'?'* ]]; then
+    # Directory component contains a glob — expand it, then search each match
+    mapfile -t FILES < <(
+        for d in $IN_DIR; do
+            [[ -d "$d" ]] && find "$d" -maxdepth 1 -type f -name "$IN_PAT"
+        done | sort
+    )
+else
+    mapfile -t FILES < <(find "$IN_DIR" -type f -name "$IN_PAT" | sort)
+fi
 
 if (( ${#FILES[@]} == 0 )); then
     echo "No files matched: $IN_FILES" >&2
