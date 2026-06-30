@@ -7,7 +7,7 @@
 #include <vector>
 #include <utility>
 
-struct EventStruct{
+struct EventStruct {
 
     // weight is 1 for data and is mapped to a branch for MC
     Float_t w = 1.0f;
@@ -20,31 +20,32 @@ struct EventStruct{
     // lumisection
     UInt_t lumi;
 
-    // mapping variables to branches
-    std::vector<std::pair<TString, void*>> BranchMap(bool isMC){
-        std::vector<std::pair<TString, void*>> branches = {
-            {"vz",  &vz},
-            {"evt", &event}
+    // mapping from variables to branches
+    std::vector<std::pair<TString, void*>> BranchMap( bool isMC ) {
+	    std::vector<std::pair<TString, void*>> branches = {
+            { "vz",  &vz },
+            { "evt", &event }
         };
-        if(isMC){
-            branches.push_back({"weight", &w});
-        } else {
+        if( isMC ){
+            branches.push_back( { "weight", &w } );
+        } 
+	else {
             branches.insert(branches.end(), {
-                {"run",  &run},
-                {"lumi", &lumi}
-            });
+                { "run",  &run },
+                { "lumi", &lumi }
+            } );
         }
         return branches;
     }
 };
 
-struct FiltersStruct{
+struct FiltersStruct {
 
+    // primary vertex filter
     Int_t ppvF;
-
-    std::vector<std::pair<TString, void*>> BranchMap(){
+    std::vector<std::pair<TString, void*>> BranchMap() {
         return{
-            {"pprimaryVertexFilter", &ppvF}
+            { "pprimaryVertexFilter", &ppvF }
         };
     }
 };

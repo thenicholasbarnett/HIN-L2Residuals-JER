@@ -1,9 +1,10 @@
 #ifndef DIJET_H
 #define DIJET_H
 
-#include <cmath>
 #include "Rtypes.h"
 #include "TMath.h"
+
+#include <cmath>
 
 static constexpr float kBarrelEtaCut = 1.3f;
 static constexpr float kDphiCut = 2.7f;
@@ -27,7 +28,9 @@ inline SortedJets FindLeadingJets( const float* pt, int n ) {
 		s.third = s.sublead;
 		s.sublead = i;
 	}
-        else if ( s.third == -1 || pt[i] > pt[s.third] ) { s.third = i; }
+        else if ( s.third == -1 || pt[i] > pt[s.third] ) { i
+		s.third = i; 
+	}
     }
     return s;
 }

@@ -4,6 +4,8 @@
 #include "TString.h"
 #include "Rtypes.h"
 
-void runAsymmetry(TString input, TString output, TString modeFlag = "--hard-probes", Long64_t maxEvents = -1);
+// declaration header
+
+void runAsymmetry( TString input, TString output, TString modeFlag = "--hard-probes", Long64_t maxEvents = -1 );
 
 #endif

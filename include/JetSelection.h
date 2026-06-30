@@ -4,50 +4,57 @@
 #include "TMath.h"
 #include "TH2.h"
 #include "TFile.h"
+
 #include <string>
 
-class JetSelect{
+class JetSelect {
 private:
-    void loadVetoMap(const std::string VetoMapPath) {
-        TFile *fvm = TFile::Open(VetoMapPath.c_str(),"read");
-        if(!fvm){throw std::runtime_error("Error: Could not open Jet Veto Map file: " + VetoMapPath);}
-        TH2D *hvetomap = (TH2D*)fvm->Get("jetvetomap_all");
-        if(!hvetomap){throw std::runtime_error("Error: Veto Map histogram 'jetvetomap_all' not in file");}
-        hvetomap_ = (TH2D*)hvetomap->Clone("hvetomap_");
-        hvetomap_->SetDirectory(0);
+    void loadVetoMap( const std::string VetoMapPath ) {
+        TFile *fvm = TFile::Open( VetoMapPath.c_str(), "read" );
+        if( !fvm ) { throw std::runtime_error( "Error: Could not open Jet Veto Map file: " + VetoMapPath ); }
+        TH2D *hvetomap = ( TH2D* )fvm->Get( "jetvetomap_all" );
+        if( !hvetomap ){throw std::runtime_error( "Error: Veto Map histogram 'jetvetomap_all' not in file" ); }
+        hvetomap_ = ( TH2D* )hvetomap->Clone( "hvetomap_" );
+        hvetomap_->SetDirectory( 0 );
         fvm->Close();
     }
+
     TH2D* hvetomap_;
+
 public:
 
     /// Default → file standard on EOS
     JetSelect() {
         std::string defaultPath = "/eos/cms/store/group/phys_heavyions/nbarnett/Winter25Prompt25_RunCDE.root";
-        loadVetoMap(defaultPath);
+        loadVetoMap( defaultPath );
     }
 
     // Custom constructor
-    JetSelect(const std::string &VetoMapPath){loadVetoMap(VetoMapPath);}
+    JetSelect( const std::string &VetoMapPath ) { loadVetoMap( VetoMapPath ); }
 
-    bool JetSelection(Float_t jteta, Float_t jtphi, Float_t CHF, Float_t NHF, Float_t CEF, Float_t NEF, Float_t MUF, Float_t CHM,  Float_t NHM,  Float_t CEM,  Float_t NEM,  Float_t MUM){
+    bool JetSelection (Float_t jteta, Float_t jtphi, Float_t CHF, Float_t NHF, Float_t CEF, Float_t NEF, Float_t MUF, Float_t CHM, Float_t NHM, Float_t CEM, Float_t NEM, Float_t MUM ) {
+
         bool KeepJet=false;
         bool KeepJet_map=false;
         bool KeepJet_id=false;
+
         // multiplicity
-        Int_t m = CHM+NHM+CEM+NEM+MUM;
+        Int_t m = CHM + NHM + CEM + NEM + MUM;
         // charged multiplicity
-        Int_t cm = CHM+CEM+MUM;
+        Int_t cm = CHM + CEM + MUM;
         // nuetral multiplicity
-        Int_t nm = NHM+NEM;
+        Int_t nm = NHM + NEM;
+
         // suggested requirements by eta range
-        if((TMath::Abs(jteta)<=2.6)&&((NHF<0.9)&&(NEF<0.9)&&(m>1)&&(MUF<0.8)&&(CHF>0.01)&&(cm>0)&&(CEF<0.8))){KeepJet_id=true;}
-        if(((TMath::Abs(jteta)>2.6)&&(TMath::Abs(jteta)<=2.7))&&((NHF<0.9)&&(NEF<0.99)&&(MUF<0.8)&&(cm>0)&&(CEF<0.8))){KeepJet_id=true;}
-        if(((TMath::Abs(jteta)>2.7)&&(TMath::Abs(jteta)<=3.0))&&((NEF<0.99)&&(nm>1))){KeepJet_id=true;}
-        if(((TMath::Abs(jteta)>3.0)&&(TMath::Abs(jteta)<=5.0))&&((NHF>0.2)&&(NEF<0.9)&&(nm>10))){KeepJet_id=true;}
+        if( ( TMath::Abs( jteta )<=2.6 ) && ( ( NHF<0.9 ) && ( NEF<0.9 ) && ( m>1 ) && ( MUF<0.8 ) && ( CHF>0.01 ) && ( cm>0 ) &&( CEF<0.8 ) ) ) { KeepJet_id=true; }
+        if( ( ( TMath::Abs( jteta )>2.6 ) && ( TMath::Abs( jteta )<=2.7 ) ) && ( ( NHF<0.9 ) && ( NEF<0.99 ) && ( MUF<0.8 ) && ( cm>0 ) && ( CEF<0.8 ) ) ) { KeepJet_id=true; }
+        if( ( ( TMath::Abs( jteta )>2.7 ) && ( TMath::Abs( jteta )<=3.0 ) ) && ( ( NEF<0.99 ) && ( nm>1 ) ) ) { KeepJet_id=true; }
+        if( ( ( TMath::Abs( jteta )>3.0 ) && ( TMath::Abs( jteta )<=5.0 ) ) && ( ( NHF>0.2 ) && ( NEF<0.9 ) && ( nm>10 ) ) ) { KeepJet_id=true; }
+
         // jet veto map
-        Double_t vetomapval = hvetomap_->GetBinContent(hvetomap_->FindBin(jteta, jtphi));
-        if(vetomapval==0){KeepJet_map=true;}
-        if((KeepJet_id==true)&&(KeepJet_map==true)){KeepJet=true;}
+        Double_t vetomapval = hvetomap_->GetBinContent( hvetomap_->FindBin( jteta, jtphi ) );
+        if( vetomapval==0 ) { KeepJet_map=true; }
+        if( ( KeepJet_id==true ) && ( KeepJet_map==true ) ) { KeepJet=true; }
         return KeepJet;
     }
 };

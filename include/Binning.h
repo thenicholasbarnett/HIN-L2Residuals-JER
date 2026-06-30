@@ -9,6 +9,7 @@
 #include "Colors.h"
 
 #include <vector>
+
 struct AxisBins {
     Int_t nBins;
     Float_t lo;
@@ -38,7 +39,7 @@ inline const std::vector<Double_t> kEtaEdges = {
 
 // Derive AxisBins from an edge vector
 inline AxisBins AxisBinsFromEdges( const std::vector<Double_t>& edges, const TString& title = "" ){
-    return { (Int_t)edges.size() - 1, (Float_t)edges.front(), (Float_t)edges.back(), title };
+    return { ( Int_t )edges.size() - 1, ( Float_t )edges.front(), ( Float_t )edges.back(), title };
 }
 
 inline void SetAbsEtaBins( THnSparse* h, Int_t axis ){
@@ -61,19 +62,19 @@ struct BinningConfig {
     AxisBins abseta = AxisBinsFromEdges( kAbsEtaEdges, "|#eta_{probe}|" );
 
     // control histogram axes
-    AxisBins vz  = { 40, -20.0, 20.0, "v_{z} (cm)" };
-    AxisBins pt  = { 100, 0.0, 1000.0, "p_{T} (GeV)" };
+    AxisBins vz = { 40, -20.0, 20.0, "v_{z} (cm)" };
+    AxisBins pt = { 100, 0.0, 1000.0, "p_{T} (GeV)" };
     AxisBins phi = { 64, -3.2, 3.2, "#phi (rad)" };
     AxisBins trig = { 2, 0, 2, "trigger decision" };
 
     // pT_avg slicing
     std::vector<RangeBin> ptavgSlices = {
-        { 30,  70, "30 < p_{T,avg} < 70 GeV", "_ptavg_30_70",   HiroshigeYellow() },
-        { 70, 100, "70 < p_{T,avg} < 100 GeV", "_ptavg_70_100",  HiroshigeIceBlue() },
+        { 30, 70, "30 < p_{T,avg} < 70 GeV", "_ptavg_30_70", HiroshigeYellow() },
+        { 70, 100, "70 < p_{T,avg} < 100 GeV", "_ptavg_70_100", HiroshigeIceBlue() },
         { 100, 175, "100 < p_{T,avg} < 175 GeV", "_ptavg_100_175", HiroshigeLightBlue() },
         { 175, 250, "175 < p_{T,avg} < 250 GeV", "_ptavg_175_250", HiroshigeBlue() },
         { 250, 500, "250 < p_{T,avg} < 500 GeV", "_ptavg_250_500", HiroshigeGrayBlue() },
-        { 500,1000, "500 < p_{T,avg} < 1000 GeV", "_ptavg_500_1000",HiroshigeNightBlue() },
+        { 500, 1000, "500 < p_{T,avg} < 1000 GeV", "_ptavg_500_1000", HiroshigeNightBlue() },
     };
 
     // cumulative alpha ranges
