@@ -3,21 +3,15 @@ build/
 bin/
 lib/
 
-# plots output
+# analysis outputs
 plots/
-
-# local README draft/archive folder
-readme/
-
-# local closure/reprocessing inputs
-cfg/*clos*.toml
-data/jec/internal/
-
-
-# ROOT / analysis outputs
 *.root
 *.png
 *.pdf
+
+# local closure/reprocessing inputs
+cfg/*clos*.toml
+data/jec/preliminary/
 
 # editor / OS
 *.swp
