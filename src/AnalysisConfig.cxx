@@ -45,6 +45,17 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
         cfg.jecFilesPerCone.push_back( std::move( files ) );
     }
 
+    // Optional — absent entirely, or empty per-cone, both mean "no residual
+    // correction chained in for this cone yet."
+    if( auto* residualArr = doc["jec"]["residual_files"].as_array() ){
+        for( const auto& row : *residualArr ){
+            std::vector<std::string> files;
+            for( const auto& v : *row.as_array() )
+                files.push_back( v.value_or( std::string{} ) );
+            cfg.residualFilesPerCone.push_back( std::move( files ) );
+        }
+    }
+
     for( const auto& v : *doc["binning"]["ptavg_edges"].as_array() )
         cfg.ptavgEdges.push_back( v.value_or( 0.0f ) );
 
@@ -54,6 +65,8 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );
     if( cfg.jecFilesPerCone.size() != cfg.coneLabels.size() )
         throw std::runtime_error( "jec.files and cones.labels have different lengths" );
+    if( !cfg.residualFilesPerCone.empty() && cfg.residualFilesPerCone.size() != cfg.coneLabels.size() )
+        throw std::runtime_error( "jec.residual_files and cones.labels have different lengths" );
     if( cfg.jetTreePaths.size() != cfg.coneLabels.size() )
         throw std::runtime_error( "trees.jets and cones.labels have different lengths" );
     if( cfg.trigCone.IsNull() ) throw std::runtime_error( "trigger.cone is missing" );

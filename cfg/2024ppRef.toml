@@ -30,6 +30,12 @@ files = [
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
 ]
+# L2Residual text files from Step 3, chained onto the JEC above — applied
+# only when runAsymmetry's mode != MC (both -hp and -zb data get them; -mc
+# never does, regardless of what's listed here). Same shape as files: one
+# list per cone, same order as cones.labels. Leave a cone's list empty ([])
+# until its L2Residual text file has actually been derived and validated.
+residual_files = [ [], [], [], [], [] ]
 
 [cuts]
 # Minimum corrected pT (GeV) for a jet to be filled into the Step 1 inclusive

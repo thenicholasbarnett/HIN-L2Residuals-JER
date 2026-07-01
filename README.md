@@ -120,7 +120,7 @@ export L2RESIDUALS_HOME=/path/to/repo               # looks in $L2RESIDUALS_HOME
 
 <h3> <b> Step 1 </b> — Fill Asymmetry Histograms </h3>
 
-Read HiForest ROOT files, apply L2Relative JEC, select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
+Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `-mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
 
 ```
 ./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root>
@@ -246,9 +246,12 @@ bash condor/make_condor.sh /eos/.../l2residuals \
 
 # dry run
 bash condor/make_condor.sh /eos/.../l2residuals -n
+
+# tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
+bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt TAG=abs_eta
 ```
 
-Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root`. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
+Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
 <h2> Hadd Many Files </h2>
 

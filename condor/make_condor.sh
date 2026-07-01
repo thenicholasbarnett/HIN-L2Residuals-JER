@@ -2,13 +2,18 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n]
-#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]
+#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value]
+#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value]
 #
 # OUTPUT_DIR    — absolute EOS/AFS path where output ROOT files are written
 # -a/--all-txt  — submit every .txt filelist found in data/txt/
 # FILELIST.txt  — one or more specific filelists to submit
 # --no-submit/-n — generate submission files without submitting
+# TAG=value     — optional label for this pass (e.g. TAG=abs_eta, TAG=clos_dir_eta).
+#                 Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
+#                 instead of OUTPUT_DIR/condor/asymmetry/<timestamp> — use this to
+#                 keep separate closure/reprocessing passes from landing in the
+#                 same output tree. No slashes allowed in value.
 #
 # Mode is auto-detected per filelist from the filename (case-insensitive):
 #   *hp* or *hardprobes*   → --hard-probes
@@ -23,8 +28,8 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n]" >&2
-    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n]" >&2
+    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value]" >&2
+    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value]" >&2
     exit 1
 }
 
@@ -36,15 +41,22 @@ shift
 USE_ALL=false
 NO_SUBMIT=false
 EXPLICIT_FILELISTS=()
+RUN_TAG=""
 
 for arg in "$@"; do
     case "${arg}" in
         -a|--all-txt)   USE_ALL=true ;;
         --no-submit|-n) NO_SUBMIT=true ;;
+        TAG=*)          RUN_TAG="${arg#TAG=}" ;;
         *.txt)          EXPLICIT_FILELISTS+=("${arg}") ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac
 done
+
+if [[ "${RUN_TAG}" == */* ]]; then
+    echo "ERROR: TAG must not contain '/': ${RUN_TAG}" >&2
+    exit 1
+fi
 
 if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
     echo "ERROR: specify -a/--all-txt or one or more filelist.txt arguments" >&2
@@ -109,12 +121,17 @@ SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
 mkdir -p "${SUBMISSIONS_DIR}"
 WORKDIR="${SUBMISSIONS_DIR}/${TODAY}"
 mkdir -p "${WORKDIR}"
-# Normalize: strip trailing /condor/asymmetry or /condor so the user can pass any of
-# outdir, outdir/condor, or outdir/condor/asymmetry and land in the same place.
+# asymmetry_<TAG> keeps separate passes (e.g. TAG=abs_eta vs TAG=clos_dir_eta)
+# from landing in the same output tree; plain "asymmetry" when no TAG is given.
+ASYM_DIR_NAME="asymmetry"
+if [[ -n "${RUN_TAG}" ]]; then ASYM_DIR_NAME="asymmetry_${RUN_TAG}"; fi
+
+# Normalize: strip trailing /condor/<asym_dir_name> or /condor so the user can pass
+# any of outdir, outdir/condor, or outdir/condor/<asym_dir_name> and land in the same place.
 OUTPUT_DIR="${OUTPUT_DIR%/}"
-OUTPUT_DIR="${OUTPUT_DIR%/condor/asymmetry}"
+OUTPUT_DIR="${OUTPUT_DIR%/condor/${ASYM_DIR_NAME}}"
 OUTPUT_DIR="${OUTPUT_DIR%/condor}"
-OUTPUT_DIR="${OUTPUT_DIR}/condor/asymmetry/${TODAY}"
+OUTPUT_DIR="${OUTPUT_DIR}/condor/${ASYM_DIR_NAME}/${TODAY}"
 
 source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 

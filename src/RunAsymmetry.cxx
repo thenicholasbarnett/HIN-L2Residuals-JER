@@ -62,10 +62,18 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
         return;
     }
 
-    // JetCorrector
+    // JetCorrector — chain per-cone L2Residual files onto the base JEC, but
+    // only for data (HP/ZB); MC must never see residual corrections, so this
+    // check is the only thing that decides that, not what's in the TOML.
     std::vector<JetCorrector> jecs;
     jecs.reserve( nCones );
-    for( size_t c = 0; c < nCones; c++ ){ jecs.emplace_back( cfg.jecFilesPerCone[c] ); }
+    for( size_t c = 0; c < nCones; c++ ){
+        std::vector<std::string> chain = cfg.jecFilesPerCone[c];
+        if( mode != RunMode::MC && !cfg.residualFilesPerCone.empty() ){
+            for( const auto& f : cfg.residualFilesPerCone[c] ){ chain.push_back( f ); }
+        }
+        jecs.emplace_back( chain );
+    }
 
     // loading jet ID, jet veto map, and golden json
     JetSelect js( cfg.vetoMapPath );

@@ -8,6 +8,7 @@
 
 struct AnalysisConfig {
     std::vector<std::vector<std::string>> jecFilesPerCone;
+    std::vector<std::vector<std::string>> residualFilesPerCone;
     std::string vetoMapPath;
     TString jsonPath;
 

@@ -62,6 +62,12 @@ files = [
     [ "REQUIRED_SET_ME/AK5PF.txt" ],
     [ "REQUIRED_SET_ME/AK6PF.txt" ],
 ]
+# L2Residual text files from Step 3, chained onto the JEC above — applied
+# only when runAsymmetry's mode != MC (both -hp and -zb data get them; -mc
+# never does, regardless of what's listed here). Optional: leave empty ([])
+# until this system's L2Residual text file has been derived and validated —
+# that's the state during the first derivation pass, before any closure check.
+residual_files = [ [], [], [], [], [] ]
 
 [cuts]
 # Minimum corrected pT (GeV) for Step 1's inclusive jet TH3D. 10 GeV is a
