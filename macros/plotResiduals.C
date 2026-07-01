@@ -35,7 +35,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include "Naming.h"
 #include "Utilities.h"
 #include "ProgressBar.h"
-#include "2024ppRef.h"
+#include "AnalysisConfig.h"
 
 #include <vector>
 #include <iostream>

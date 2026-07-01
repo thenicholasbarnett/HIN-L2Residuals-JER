@@ -19,7 +19,7 @@
 #include "Dijet.h"
 #include "DijetHistograms.h"
 
-#include "2024ppRef.h"
+#include "AnalysisConfig.h"
 
 #include <memory>
 #include <vector>
