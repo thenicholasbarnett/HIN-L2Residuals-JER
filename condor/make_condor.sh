@@ -83,6 +83,7 @@ if [[ ! -f "${CONFIG_PATH}" ]]; then
     echo "ERROR: CONFIG file not found: ${CONFIG_PATH}" >&2
     exit 1
 fi
+CONFIG_PATH="$(cd "$(dirname "${CONFIG_PATH}")" && pwd)/$(basename "${CONFIG_PATH}")"
 
 if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
