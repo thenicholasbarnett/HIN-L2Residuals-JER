@@ -6,6 +6,9 @@ lib/
 # plots output
 plots/
 
+# local README draft/archive folder
+readme/
+
 
 # ROOT / analysis outputs
 *.root
