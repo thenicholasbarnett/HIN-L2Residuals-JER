@@ -22,10 +22,6 @@ threshold = 100.0
 cone = "ak4PF"
 
 [jet_id]
-# Which histogram to read from [paths].veto_map — CMS veto map files often
-# ship several (jetvetomap, jetvetomap_hot, jetvetomap_cold, jetvetomap_all).
-# Recording this is the point: which one was actually used is otherwise a
-# silent, unrecorded choice.
 veto_map_histogram = "jetvetomap_all"
 
 [cones]
@@ -39,37 +35,12 @@ files = [
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
 ]
-# L2Residual text files from Step 3, chained onto the JEC above — applied
-# only when runAsymmetry's mode != MC (both -hp and -zb data get them; -mc
-# never does, regardless of what's listed here). Same shape as files: one
-# list per cone, same order as cones.labels. Leave a cone's list empty ([])
-# until its L2Residual text file has actually been derived and validated.
-residual_files = [ [], [], [], [], [] ]
 
 [cuts]
-# Global minimum corrected jet pT (GeV) floor, used both for the Step 1
-# inclusive jet TH3D (hInclJet, see include/DijetHistograms.h) and as the
-# dijet subleading-jet validity cut in MakeDijet (include/Dijet.h). The third
-# jet's pT (used for alpha) is deliberately NOT subject to this floor —
-# alpha is specifically measuring how much soft extra radiation exists.
 min_jet_pt = 10.0
-# Dijet back-to-back requirement (radians) — |dphi(lead, sublead)| must
-# exceed this for a dijet pair to be considered valid.
 dphi = 2.7
-# Dijet-level |A| acceptance cut — events with |A| above this are dropped
-# entirely in Step 1, before any Step 2 fitting. Distinct from the looser
-# |A| outlier-rejection threshold used internally by Step 2's alpha fit,
-# which is a fitting-implementation detail, not an analysis-level cut.
 max_abs_a = 0.7
-# Minimum entries in a projected A-distribution before Step 2 attempts any
-# fit (Gaussian, double-Gaussian, or truncated mean) on it.
 min_entries_per_bin = 100
 
 [binning]
-# pT_avg slice edges (GeV) used by Step 2/3 and plotResiduals — must be
-# strictly ascending. Step 3 assigns each slice entirely to HP or ZB based on
-# whether slice.lo is at/above [trigger].threshold, so keep an edge exactly at
-# the threshold (or only add edges strictly above/below it) — a slice that
-# straddles the threshold gets assigned to ZB in full, since any part of it
-# below the threshold could be trigger-biased in HP.
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
