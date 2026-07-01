@@ -86,6 +86,12 @@ private:
     }
 
     void Draw() const {
+        if( total <= 0 ){
+            printf( "\r  %-24s [%s\033[0m]  0/0  100%%  00:00\033[K",
+                   label.c_str(), AnsiColor() );
+            fflush( stdout );
+            return;
+        }
         int filled = ( total > 0 && current >= total ) ? width : ( current * width / total );
         int empty = width - filled;
         int pct = ( total > 0 && current >= total ) ? 100 : ( current * 100 / total );
