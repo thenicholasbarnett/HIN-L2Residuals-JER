@@ -249,9 +249,16 @@ bash condor/make_condor.sh /eos/.../l2residuals -n
 
 # tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
 bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt TAG=abs_eta
+
+# submit with a specific TOML (default: cfg/2024ppRef.toml) — independent of TAG,
+# mix and match freely; useful for closure passes or a different run period/system
+bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+    TAG=abs_eta CONFIG=cfg/2024ppRef_abs_eta.toml
 ```
 
 Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
+
+`CONFIG=path` picks which TOML gets submitted with the jobs (default `cfg/2024ppRef.toml`), independent of `TAG` — mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), so `runtime_wrapper.sh` never needs to know the source filename; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
 <h2> Hadd Many Files </h2>
 

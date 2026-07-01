@@ -2,8 +2,8 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value]
-#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value]
+#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value] [CONFIG=path]
+#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value] [CONFIG=path]
 #
 # OUTPUT_DIR    — absolute EOS/AFS path where output ROOT files are written
 # -a/--all-txt  — submit every .txt filelist found in data/txt/
@@ -13,7 +13,13 @@
 #                 Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
 #                 instead of OUTPUT_DIR/condor/asymmetry/<timestamp> — use this to
 #                 keep separate closure/reprocessing passes from landing in the
-#                 same output tree. No slashes allowed in value.
+#                 same output tree. No slashes allowed in value. Independent of
+#                 CONFIG below — mix and match freely, neither implies the other.
+# CONFIG=path   — TOML to submit with (default: cfg/2024ppRef.toml). Whatever is
+#                 selected is transferred to the sandbox under a fixed name
+#                 (analysis_config.toml), so runtime_wrapper.sh never needs to
+#                 know the source filename — pointing this at a different run
+#                 period/collision system's TOML needs no other change here.
 #
 # Mode is auto-detected per filelist from the filename (case-insensitive):
 #   *hp* or *hardprobes*   → --hard-probes
@@ -28,8 +34,8 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value]" >&2
-    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value]" >&2
+    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value] [CONFIG=path]" >&2
+    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value] [CONFIG=path]" >&2
     exit 1
 }
 
@@ -42,12 +48,14 @@ USE_ALL=false
 NO_SUBMIT=false
 EXPLICIT_FILELISTS=()
 RUN_TAG=""
+CONFIG_PATH=""
 
 for arg in "$@"; do
     case "${arg}" in
         -a|--all-txt)   USE_ALL=true ;;
         --no-submit|-n) NO_SUBMIT=true ;;
         TAG=*)          RUN_TAG="${arg#TAG=}" ;;
+        CONFIG=*)       CONFIG_PATH="${arg#CONFIG=}" ;;
         *.txt)          EXPLICIT_FILELISTS+=("${arg}") ;;
         *) echo "Unknown argument: ${arg}" >&2; usage ;;
     esac
@@ -69,6 +77,12 @@ BINARY="${REPO_ROOT}/bin/runAsymmetry"
 LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
 FILELIST_DIR="${REPO_ROOT}/data/txt"
+
+if [[ -z "${CONFIG_PATH}" ]]; then CONFIG_PATH="${REPO_ROOT}/cfg/2024ppRef.toml"; fi
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+    echo "ERROR: CONFIG file not found: ${CONFIG_PATH}" >&2
+    exit 1
+fi
 
 if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
@@ -142,7 +156,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
     cp "${BINARY}"  runAsymmetry
     cp "${LIBRARY}" libl2residuals.so
     cp -r "${DATA_DIR}" data
-    cp "${REPO_ROOT}/cfg/2024ppRef.toml" .
+    cp "${CONFIG_PATH}" analysis_config.toml
     chmod +x runtime_wrapper.sh runAsymmetry
 
     mkdir -p "${OUTPUT_DIR}"
@@ -187,7 +201,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 Transfer_Output_Files   = ""
 
-Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry,$(pwd)/libl2residuals.so,$(pwd)/data,$(pwd)/2024ppRef.toml
+Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry,$(pwd)/libl2residuals.so,$(pwd)/data,$(pwd)/analysis_config.toml
 
 request_cpus            = 1
 
@@ -230,6 +244,7 @@ EOF
 
     echo ""
     echo "Total: ${TOTAL_JOBS} jobs across ${TOTAL_LISTS} filelists"
+    echo "Config used: ${CONFIG_PATH} (transferred as analysis_config.toml, also archived in ${WORKDIR})"
     if [[ "${NO_SUBMIT}" == false ]]; then
         echo "Output directory: ${OUTPUT_DIR}"
     fi
