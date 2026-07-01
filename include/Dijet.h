@@ -53,17 +53,19 @@ inline float DijetDPhi( float phi1, float phi2 ){
 
 inline DijetResult MakeDijet( SortedJets s, bool hasThird,
                               const float* pt, const float* eta, const float* phi,
-                              ULong64_t eventNumber ){
+                              ULong64_t eventNumber,
+                              float subleadPtCut = kSubleadPtCut,
+                              float dphiCut = kDphiCut ){
     DijetResult d;
 
     bool leadBarrel = std::fabs( eta[s.lead] ) < kBarrelEtaCut;
     bool subleadBarrel = std::fabs( eta[s.sublead] ) < kBarrelEtaCut;
 
     if( !leadBarrel && !subleadBarrel ){ return d; }
-    if( pt[s.sublead] < kSubleadPtCut ){ return d; }
+    if( pt[s.sublead] < subleadPtCut ){ return d; }
 
     float dphi = DijetDPhi( phi[s.lead], phi[s.sublead] );
-    if( dphi < kDphiCut ){ return d; }
+    if( dphi < dphiCut ){ return d; }
 
     int tagIdx, probeIdx;
     if( leadBarrel && !subleadBarrel ){

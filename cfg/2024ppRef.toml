@@ -6,6 +6,8 @@ golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 hi = "hiEvtAnalyzer/HiTree"
 skim = "skimanalysis/HltTree"
 trigger = "hltanalysis/HltTree"
+# Primary vertex filter branch, read from the skim tree (data only).
+filter = "pprimaryVertexFilter"
 jets = [
     "ak2PFJetAnalyzer/t",
     "ak3PFJetAnalyzer/t",
@@ -18,6 +20,13 @@ jets = [
 branch = "HLT_AK4PFJet80_v8"
 threshold = 100.0
 cone = "ak4PF"
+
+[jet_id]
+# Which histogram to read from [paths].veto_map — CMS veto map files often
+# ship several (jetvetomap, jetvetomap_hot, jetvetomap_cold, jetvetomap_all).
+# Recording this is the point: which one was actually used is otherwise a
+# silent, unrecorded choice.
+veto_map_histogram = "jetvetomap_all"
 
 [cones]
 labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
@@ -38,10 +47,23 @@ files = [
 residual_files = [ [], [], [], [], [] ]
 
 [cuts]
-# Minimum corrected pT (GeV) for a jet to be filled into the Step 1 inclusive
-# jet TH3D (hInclJet) — see include/DijetHistograms.h. Does not affect dijet
-# selection (lead/sublead/third), only the inclusive-jet kinematics plots.
-min_pt = 10.0
+# Global minimum corrected jet pT (GeV) floor, used both for the Step 1
+# inclusive jet TH3D (hInclJet, see include/DijetHistograms.h) and as the
+# dijet subleading-jet validity cut in MakeDijet (include/Dijet.h). The third
+# jet's pT (used for alpha) is deliberately NOT subject to this floor —
+# alpha is specifically measuring how much soft extra radiation exists.
+min_jet_pt = 10.0
+# Dijet back-to-back requirement (radians) — |dphi(lead, sublead)| must
+# exceed this for a dijet pair to be considered valid.
+dphi = 2.7
+# Dijet-level |A| acceptance cut — events with |A| above this are dropped
+# entirely in Step 1, before any Step 2 fitting. Distinct from the looser
+# |A| outlier-rejection threshold used internally by Step 2's alpha fit,
+# which is a fitting-implementation detail, not an analysis-level cut.
+max_abs_a = 0.7
+# Minimum entries in a projected A-distribution before Step 2 attempts any
+# fit (Gaussian, double-Gaussian, or truncated mean) on it.
+min_entries_per_bin = 100
 
 [binning]
 # pT_avg slice edges (GeV) used by Step 2/3 and plotResiduals — must be

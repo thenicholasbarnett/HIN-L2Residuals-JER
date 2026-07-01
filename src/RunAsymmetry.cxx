@@ -31,7 +31,6 @@ enum class RunMode { MC, ZeroBias, HardProbes };
 
 static constexpr Int_t kNRefMax = 200;
 static constexpr float kVzCut = 15.0f;
-static constexpr float kMaxAbsA = 0.7f;
 
 void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t maxEvents ){
 
@@ -76,7 +75,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     }
 
     // loading jet ID, jet veto map, and golden json
-    JetSelect js( cfg.vetoMapPath );
+    JetSelect js( cfg.vetoMapPath, cfg.vetoMapHist );
     std::unique_ptr<JSON_handler> dcs;
     if( mode != RunMode::MC ){ dcs = std::make_unique<JSON_handler>( cfg.jsonPath.Data() ); }
 
@@ -127,7 +126,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     const bool isMC = ( mode == RunMode::MC );
     SetBranches( trees[kEvtIdx], event.BranchMap( isMC ) );
     for( size_t c = 0; c < nCones; c++ ){ SetBranches( trees[c], jets[c].BranchMap( isMC ) ); }
-    if( mode != RunMode::MC ){ SetBranches( trees[kSkimIdx], filters.BranchMap() ); }
+    if( mode != RunMode::MC ){ SetBranches( trees[kSkimIdx], filters.BranchMap( cfg.filterBranch ) ); }
     if( mode == RunMode::HardProbes ){ SetBranches( trees[kTrigIdx], {{cfg.hltJ80Branch, &hlt_j80}} ); }
 
     // event histograms
@@ -203,9 +202,9 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
         // per-cone: jet ID → dijet → |A| → fill
         for( size_t c = 0; c < nCones; c++ ){
 
-            // incl jets: all corrected jets in this cone passing cfg.minPt
+            // incl jets: all corrected jets in this cone passing cfg.minJetPt
             for( int j = 0; j < jets[c].reco.nref; j++ ){
-                if( corrPt[c][j] >= cfg.minPt ){ cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight ); }
+                if( corrPt[c][j] >= cfg.minJetPt ){ cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight ); }
             }
 
             if( sorted[c].sublead == -1 ){ continue; }
@@ -234,11 +233,12 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
             }
 
             // dijet logic (see include/Dijet.h)
-            DijetResult dijet = MakeDijet( sorted[c], hasThird, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi, event.event );
+            DijetResult dijet = MakeDijet( sorted[c], hasThird, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi,
+                                          event.event, cfg.minJetPt, cfg.dphiCut );
             if( !dijet.valid ){ continue; }
 
-            // |A| < 0.7
-            if( TMath::Abs( dijet.A ) > kMaxAbsA ){ continue; }
+            // dijet-level |A| acceptance cut
+            if( TMath::Abs( dijet.A ) > cfg.maxAbsA ){ continue; }
 
             // fill histograms
             cones[c].Fill( dijet, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi, weight );

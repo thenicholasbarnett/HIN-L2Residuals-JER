@@ -10,12 +10,14 @@ struct AnalysisConfig {
     std::vector<std::vector<std::string>> jecFilesPerCone;
     std::vector<std::vector<std::string>> residualFilesPerCone;
     std::string vetoMapPath;
+    std::string vetoMapHist;
     TString jsonPath;
 
     TString hiTreePath;
     TString skimTreePath;
     TString trigTreePath;
     std::vector<TString> jetTreePaths;
+    TString filterBranch;
 
     TString hltJ80Branch;
     float hltJ80Thresh = 0.0f;
@@ -25,7 +27,10 @@ struct AnalysisConfig {
 
     std::vector<float> ptavgEdges;
 
-    float minPt = 0.0f;
+    float minJetPt = 0.0f;
+    float dphiCut = 0.0f;
+    float maxAbsA = 0.0f;
+    int minEntriesPerBin = 0;
 };
 
 std::string DefaultConfigPath();

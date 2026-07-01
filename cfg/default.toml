@@ -22,6 +22,10 @@ golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 hi = "hiEvtAnalyzer/HiTree"
 skim = "skimanalysis/HltTree"
 trigger = "hltanalysis/HltTree"
+# Primary vertex filter branch, read from the skim tree (data only). A system
+# with multiple event filters ANDed together would need FiltersStruct in
+# include/EventStructs.h extended to a list — today it's exactly one branch.
+filter = "pprimaryVertexFilter"
 jets = [
     "ak2PFJetAnalyzer/t",
     "ak3PFJetAnalyzer/t",
@@ -47,6 +51,13 @@ branch = "REQUIRED_SET_ME"
 threshold = 0.0
 cone = "REQUIRED_SET_ME"
 
+[jet_id]
+# Which histogram to read from [paths].veto_map — CMS veto map files often
+# ship several (jetvetomap, jetvetomap_hot, jetvetomap_cold, jetvetomap_all).
+# Likely reusable, but verify the new system's veto map actually has this
+# histogram under this name.
+veto_map_histogram = "jetvetomap_all"
+
 [cones]
 # Standard CMS anti-kt PF clustering radii (R=0.2..0.6) — likely reusable,
 # but must match the actual jet collections present in the new forest.
@@ -70,10 +81,23 @@ files = [
 residual_files = [ [], [], [], [], [] ]
 
 [cuts]
-# Minimum corrected pT (GeV) for Step 1's inclusive jet TH3D. 10 GeV is a
-# reasonable starting point, not a physical constant — a system with more
-# underlying-event background may want a higher floor.
-min_pt = 10.0
+# Global minimum corrected jet pT (GeV) floor — used both for Step 1's
+# inclusive jet TH3D and as the dijet subleading-jet validity cut. 10 GeV is
+# a reasonable starting point, not a physical constant — a system with more
+# underlying-event background may want a higher floor. The third jet's pT
+# (used for alpha) is deliberately NOT subject to this.
+min_jet_pt = 10.0
+# Dijet back-to-back requirement (radians). Likely reusable as-is.
+dphi = 2.7
+# Dijet-level |A| acceptance cut, applied in Step 1. Likely reusable as-is;
+# distinct from Step 2's internal fit-outlier-rejection threshold, which
+# isn't exposed here (it's an implementation detail of the fit, not an
+# analysis-level cut).
+max_abs_a = 0.7
+# Minimum entries in a projected A-distribution before Step 2 attempts any
+# fit on it. Likely reusable as-is, but a system with less statistics per
+# bin may need to lower this (fewer bins will have valid fits either way).
+min_entries_per_bin = 100
 
 [binning]
 # pT_avg slice edges (GeV) for Step 2/3 and plotResiduals — must be strictly

@@ -43,9 +43,9 @@ struct FiltersStruct {
 
     // primary vertex filter
     Int_t ppvF;
-    std::vector<std::pair<TString, void*>> BranchMap(){
+    std::vector<std::pair<TString, void*>> BranchMap( const TString& filterBranch ){
         return{
-            { "pprimaryVertexFilter", &ppvF }
+            { filterBranch, &ppvF }
         };
     }
 };

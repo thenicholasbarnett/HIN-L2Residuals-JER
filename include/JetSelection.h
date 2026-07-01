@@ -9,11 +9,11 @@
 
 class JetSelect {
 private:
-    void loadVetoMap( const std::string VetoMapPath ){
+    void loadVetoMap( const std::string VetoMapPath, const std::string HistName ){
         TFile* fvm = TFile::Open( VetoMapPath.c_str(), "read" );
         if( !fvm ){ throw std::runtime_error( "Error: Could not open Jet Veto Map file: " + VetoMapPath ); }
-        TH2D* hvetomap = ( TH2D* )fvm->Get( "jetvetomap_all" );
-        if( !hvetomap ){ throw std::runtime_error( "Error: Veto Map histogram 'jetvetomap_all' not in file" ); }
+        TH2D* hvetomap = ( TH2D* )fvm->Get( HistName.c_str() );
+        if( !hvetomap ){ throw std::runtime_error( "Error: Veto Map histogram '" + HistName + "' not in file" ); }
         hvetomap_ = ( TH2D* )hvetomap->Clone( "hvetomap_" );
         hvetomap_->SetDirectory( 0 );
         fvm->Close();
@@ -26,11 +26,13 @@ public:
     /// Default → file standard on EOS
     JetSelect(){
         std::string defaultPath = "/eos/cms/store/group/phys_heavyions/nbarnett/Winter25Prompt25_RunCDE.root";
-        loadVetoMap( defaultPath );
+        loadVetoMap( defaultPath, "jetvetomap_all" );
     }
 
     // Custom constructor
-    JetSelect( const std::string& VetoMapPath ){ loadVetoMap( VetoMapPath ); }
+    JetSelect( const std::string& VetoMapPath, const std::string& HistName = "jetvetomap_all" ){
+        loadVetoMap( VetoMapPath, HistName );
+    }
 
     bool JetSelection( Float_t jteta, Float_t jtphi, Float_t CHF, Float_t NHF, Float_t CEF, Float_t NEF, Float_t MUF, Float_t CHM, Float_t NHM, Float_t CEM, Float_t NEM, Float_t MUM ){
 

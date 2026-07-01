@@ -24,9 +24,12 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     cfg.vetoMapPath  = doc["paths"]["veto_map"].value_or( std::string{} );
     cfg.jsonPath     = TString( doc["paths"]["golden_json"].value_or( std::string{} ).c_str() );
 
+    cfg.vetoMapHist  = doc["jet_id"]["veto_map_histogram"].value_or( std::string{} );
+
     cfg.hiTreePath   = TString( doc["trees"]["hi"].value_or( std::string{} ).c_str() );
     cfg.skimTreePath = TString( doc["trees"]["skim"].value_or( std::string{} ).c_str() );
     cfg.trigTreePath = TString( doc["trees"]["trigger"].value_or( std::string{} ).c_str() );
+    cfg.filterBranch = TString( doc["trees"]["filter"].value_or( std::string{} ).c_str() );
 
     for( const auto& v : *doc["trees"]["jets"].as_array() )
         cfg.jetTreePaths.push_back( TString( v.value_or( std::string{} ).c_str() ) );
@@ -59,7 +62,13 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     for( const auto& v : *doc["binning"]["ptavg_edges"].as_array() )
         cfg.ptavgEdges.push_back( v.value_or( 0.0f ) );
 
-    cfg.minPt = doc["cuts"]["min_pt"].value_or( 0.0f );
+    // min_jet_pt is a single global floor used both for the Step 1 inclusive-
+    // jet histogram and as the dijet subleading-jet validity cut — the third
+    // jet's pT (used for alpha) is deliberately NOT subject to this.
+    cfg.minJetPt        = doc["cuts"]["min_jet_pt"].value_or( 0.0f );
+    cfg.dphiCut         = doc["cuts"]["dphi"].value_or( 0.0f );
+    cfg.maxAbsA         = doc["cuts"]["max_abs_a"].value_or( 0.0f );
+    cfg.minEntriesPerBin = doc["cuts"]["min_entries_per_bin"].value_or( 0 );
 
     if( cfg.jecFilesPerCone.empty() ) throw std::runtime_error( "jec.files is empty" );
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );

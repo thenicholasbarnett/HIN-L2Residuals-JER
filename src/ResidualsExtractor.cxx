@@ -23,7 +23,11 @@
 #include <algorithm>
 
 // global constants
-static constexpr int kMinEntries = 100;
+// kMinEntries is set from cfg.minEntriesPerBin at the top of runResiduals(),
+// before any fit helper below is invoked — not constexpr since Nicky wants
+// it configurable via TOML without recompiling. 100 is just the fallback
+// used if runResiduals() is never called (e.g. unit-testing a helper directly).
+static int kMinEntries = 100;
 static constexpr int kNAlphaFit = 6;  // alpha thresholds 0.05–0.30 used for linear fit
 static constexpr double kGausFitHW = 0.5;
 static constexpr double kMaxAbsA_fit = 0.9;
@@ -480,6 +484,7 @@ static void ExtractAndFit(
 void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
 
     const AnalysisConfig& cfg = Config();
+    if( cfg.minEntriesPerBin > 0 ) kMinEntries = cfg.minEntriesPerBin;
 
     TFile* fData = TFile::Open( dataFile, "read" );
     TFile* fMC = TFile::Open( mcFile, "read" );
