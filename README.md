@@ -31,15 +31,14 @@ Fill Dijet Asymmetry Histograms → Hadd Asymmetry Histograms → Extract Residu
 ```
 git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git
 cd L2Residuals-2024ppref
-mkdir build && cd build
-cmake .. && make
-cd ..
+cmake -B build
+cmake --build build
 ```
 
 <strong> Rebuild </strong>
 
 ```
-rm -rf build bin lib && mkdir build && cd build && cmake .. && make && cd ..
+rm -rf build bin lib && cmake -B build && cmake --build build
 ```
 
 <strong> Batch Process Asymmetries </strong>
@@ -98,97 +97,17 @@ Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
 
 <h3> Configuration </h3>
 
-Analysis-specific paths and labels live in:
+Analysis parameters — file paths, tree names, cone labels, JEC files, and trigger settings — live in `cfg/2024ppRef.toml`. Edit this file and rerun; no recompile needed.
 
-```
-cfg/2024ppRef.toml
-```
+The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched and must stay in the same order. The loader validates lengths before running.
 
-This TOML file replaced the old pattern of hardcoding analysis values directly in
-`cfg/2024ppRef.h`. The header still exists as a compatibility include, but the
-actual values are loaded at runtime through:
+To add a new config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`.
 
-```
-include/AnalysisConfig.h
-src/AnalysisConfig.cxx
-```
-
-The basic flow is:
-
-```
-cfg/2024ppRef.toml
-  -> LoadAnalysisConfig(...)
-  -> AnalysisConfig cfg
-  -> Config()
-  -> runAsymmetry / runResiduals / plotResiduals
-```
-
-For example, this TOML entry:
-
-```toml
-[trigger]
-branch = "HLT_AK4PFJet80_v8"
-threshold = 100.0
-cone = "ak4PF"
-```
-
-is read by `LoadAnalysisConfig(...)` and stored as:
-
-```cpp
-cfg.hltJ80Branch
-cfg.hltJ80Thresh
-cfg.trigCone
-```
-
-Source files then use:
-
-```cpp
-const AnalysisConfig& cfg = Config();
-```
-
-and access values with fields like `cfg.coneLabels`, `cfg.jecFilesPerCone`,
-`cfg.vetoMapPath`, and `cfg.jetTreePaths`.
-
-The TOML file does not automatically "line up" with the C++ struct by name. The
-mapping is explicit in `src/AnalysisConfig.cxx`, where keys such as
-`trees.jets`, `paths.veto_map`, and `cones.labels` are assigned to the matching
-`AnalysisConfig` fields. When adding a new config value, add it in three places:
-
-1. `cfg/2024ppRef.toml`
-2. `include/AnalysisConfig.h`
-3. the assignment block inside `LoadAnalysisConfig(...)`
-
-Some arrays are position-matched. In particular, the order of `cones.labels`,
-`trees.jets`, and `jec.files` must stay aligned:
-
-```toml
-[cones]
-labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
-
-[trees]
-jets = [
-    "ak2PFJetAnalyzer/t",
-    "ak3PFJetAnalyzer/t",
-    "ak4PFJetAnalyzer/t",
-    "ak5PFJetAnalyzer/t",
-    "ak6PFJetAnalyzer/t",
-]
-```
-
-The loader checks that these arrays have matching lengths before the analysis
-runs.
-
-By default, the code reads `cfg/2024ppRef.toml` relative to the directory where
-the program is launched. For running from another directory, either set:
+By default the binary looks for `cfg/2024ppRef.toml` relative to the launch directory. To override:
 
 ```bash
-export L2RESIDUALS_HOME=/path/to/L2Residuals-2024ppref
-```
-
-or point directly to a config file:
-
-```bash
-export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml
+export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml  # point to a specific file
+export L2RESIDUALS_HOME=/path/to/repo               # looks in $L2RESIDUALS_HOME/cfg/
 ```
 
 <h3> <b> Step 1 </b> — Fill Asymmetry Histograms </h3>
