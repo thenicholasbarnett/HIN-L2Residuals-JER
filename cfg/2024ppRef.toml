@@ -31,6 +31,12 @@ files = [
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
 ]
 
+[cuts]
+# Minimum corrected pT (GeV) for a jet to be filled into the Step 1 inclusive
+# jet TH3D (hInclJet) — see include/DijetHistograms.h. Does not affect dijet
+# selection (lead/sublead/third), only the inclusive-jet kinematics plots.
+min_pt = 10.0
+
 [binning]
 # pT_avg slice edges (GeV) used by Step 2/3 and plotResiduals — must be
 # strictly ascending. Step 3 assigns each slice entirely to HP or ZB based on

@@ -23,6 +23,8 @@ struct AnalysisConfig {
     TString trigCone;
 
     std::vector<float> ptavgEdges;
+
+    float minPt = 0.0f;
 };
 
 std::string DefaultConfigPath();

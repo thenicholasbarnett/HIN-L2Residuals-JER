@@ -11,7 +11,7 @@
 
 // One instance per cone size. Each instance owns:
 //   hAsym    — 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet event
-//   hInclJet — TH3D (eta, phi, pT) for all corrected jets passing kMinPt
+//   hInclJet — TH3D (eta, phi, pT) for all corrected jets passing cfg.minPt
 //   hTagJet  — TH3D (eta, phi, pT) for the tag jet of each valid dijet
 //   hProbeJet — TH3D (eta, phi, pT) for the probe jet of each valid dijet
 //

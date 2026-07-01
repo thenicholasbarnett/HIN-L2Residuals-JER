@@ -31,7 +31,6 @@ enum class RunMode { MC, ZeroBias, HardProbes };
 
 static constexpr Int_t kNRefMax = 200;
 static constexpr float kVzCut = 15.0f;
-static constexpr float kMinPt = 10.0f;
 static constexpr float kMaxAbsA = 0.7f;
 
 void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t maxEvents ){
@@ -196,9 +195,9 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
         // per-cone: jet ID → dijet → |A| → fill
         for( size_t c = 0; c < nCones; c++ ){
 
-            // incl jets: all corrected jets in this cone passing kMinPt
+            // incl jets: all corrected jets in this cone passing cfg.minPt
             for( int j = 0; j < jets[c].reco.nref; j++ ){
-                if( corrPt[c][j] >= kMinPt ){ cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight ); }
+                if( corrPt[c][j] >= cfg.minPt ){ cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight ); }
             }
 
             if( sorted[c].sublead == -1 ){ continue; }

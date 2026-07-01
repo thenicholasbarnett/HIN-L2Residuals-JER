@@ -1,0 +1,75 @@
+# Template for a new collision system / dataset.
+#
+# This is a scaffold, not a runnable config — copy it to a new file
+# (e.g. cfg/PbPb.toml) and fill in every REQUIRED_* placeholder before
+# pointing L2RESIDUALS_CONFIG at it. The loader (src/AnalysisConfig.cxx)
+# will happily parse the placeholders below without error — the failures
+# show up later, when Step 1 tries to actually open a file that doesn't
+# exist. Values with no REQUIRED_* marker are reasonable starting points
+# carried over from cfg/2024ppRef.toml, not universal constants — verify
+# or retune them for the new system before trusting the output.
+
+[paths]
+# Jet veto map and golden JSON are entirely per-run-period. No default exists.
+veto_map = "REQUIRED_SET_ME/path/to/veto_map.root"
+golden_json = "REQUIRED_SET_ME/path/to/golden.json"
+
+[trees]
+# Common CMS heavy-ion-forest tree paths — likely reusable, but verify against
+# the actual HiForest producer version for the new dataset. In particular,
+# jets[] assumes plain (non-background-subtracted) PF jets; a system that
+# needs CS/PU subtraction would use akCs4PFJetAnalyzer-style names instead.
+hi = "hiEvtAnalyzer/HiTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+# No universal default — the HLT path name and its efficiency-plateau
+# threshold are specific to this dataset's trigger menu and run period.
+# cone must match one of cones.labels below; it's the collection whose
+# corrected pT the efficiency cut is evaluated against in Step 1 HP mode,
+# and it's also the cutover point Step 3 uses to decide HP vs ZB per
+# pT_avg slice (see [binning] below).
+branch = "REQUIRED_SET_ME"
+threshold = 0.0
+cone = "REQUIRED_SET_ME"
+
+[cones]
+# Standard CMS anti-kt PF clustering radii (R=0.2..0.6) — likely reusable,
+# but must match the actual jet collections present in the new forest.
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+# No default — L2Relative JEC text files are specific to this dataset's
+# JEC campaign. One list per entry in cones.labels, same order.
+files = [
+    [ "REQUIRED_SET_ME/AK2PF.txt" ],
+    [ "REQUIRED_SET_ME/AK3PF.txt" ],
+    [ "REQUIRED_SET_ME/AK4PF.txt" ],
+    [ "REQUIRED_SET_ME/AK5PF.txt" ],
+    [ "REQUIRED_SET_ME/AK6PF.txt" ],
+]
+
+[cuts]
+# Minimum corrected pT (GeV) for Step 1's inclusive jet TH3D. 10 GeV is a
+# reasonable starting point, not a physical constant — a system with more
+# underlying-event background may want a higher floor.
+min_pt = 10.0
+
+[binning]
+# pT_avg slice edges (GeV) for Step 2/3 and plotResiduals — must be strictly
+# ascending. Carried over from cfg/2024ppRef.toml as a starting point; the
+# right slicing depends on how much statistics/reach the new system has.
+# Step 3 assigns each whole slice to HP or ZB based on whether slice.lo is
+# at/above [trigger].threshold, so once that's set, keep an edge exactly at
+# it (or only add edges strictly above/below it) — a slice straddling the
+# threshold gets assigned to ZB in full, since any part of it below the
+# threshold could be trigger-biased in HP.
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]

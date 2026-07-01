@@ -48,6 +48,8 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     for( const auto& v : *doc["binning"]["ptavg_edges"].as_array() )
         cfg.ptavgEdges.push_back( v.value_or( 0.0f ) );
 
+    cfg.minPt = doc["cuts"]["min_pt"].value_or( 0.0f );
+
     if( cfg.jecFilesPerCone.empty() ) throw std::runtime_error( "jec.files is empty" );
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );
     if( cfg.jecFilesPerCone.size() != cfg.coneLabels.size() )
