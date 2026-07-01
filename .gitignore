@@ -9,6 +9,10 @@ plots/
 # local README draft/archive folder
 readme/
 
+# local closure/reprocessing inputs
+cfg/*clos*.toml
+data/jec/internal/
+
 
 # ROOT / analysis outputs
 *.root
