@@ -71,9 +71,25 @@ set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
     # Fall back to pkg-config on systems where the CMake package isn't registered
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(NLOHMANN_JSON REQUIRED nlohmann_json)
-    set(NLOHMANN_JSON_INCLUDE_DIR ${NLOHMANN_JSON_INCLUDE_DIRS})
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(NLOHMANN_JSON QUIET nlohmann_json)
+    endif()
+    if(NLOHMANN_JSON_FOUND)
+        set(NLOHMANN_JSON_INCLUDE_DIR ${NLOHMANN_JSON_INCLUDE_DIRS})
+    else()
+        # Last resort: fetch the header-only library (works on lxplus/cvmfs systems
+        # where nlohmann_json isn't in the system package manager or pkg-config db)
+        message(STATUS "nlohmann_json not found locally; fetching via FetchContent")
+        include(FetchContent)
+        FetchContent_Declare(nlohmann_json
+            GIT_REPOSITORY https://github.com/nlohmann/json.git
+            GIT_TAG v3.11.3
+            GIT_SHALLOW TRUE)
+        FetchContent_MakeAvailable(nlohmann_json)
+        set(nlohmann_json_FOUND TRUE)
+        set(NLOHMANN_JSON_INCLUDE_DIR "")  # imported target carries it
+    endif()
 else()
     set(NLOHMANN_JSON_INCLUDE_DIR "")  # header-only; imported target carries it
 endif()
