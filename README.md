@@ -230,7 +230,7 @@ ak4PF/
 
 <h2> Plotting </h2>
 
-`runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently, and all plots are made if no flags are given.
+`runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `flags` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `"all"` runs every applicable flag unconditionally; a space-separated list runs exactly those flags.
 
 ```
 ./bin/runPlotting <input_asymmetries-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
@@ -238,19 +238,19 @@ ak4PF/
 ./bin/runPlotting <input_corrections-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
 ```
 
-| Flag | Input | Description |
-| :-:| :-: | - |
-| `event` | Step 1 | v<sub>z</sub>, primary vertex filter, HLT trigger |
-| `kinematics` | Step 1 | η/φ/p<sub>T</sub> distributions and η-φ maps at different p<sub>T</sub> cuts for incl/tag/probe jets |
-| `adist` | Step 2 | Asymmetry distributions for (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bins, Data and MC overlay |
-| `roverlay` | Step 2 | Responses for MC and Data vs \|η\| with ratio panel |
-| `alpha` | Step 2 | k<sub>FSR</sub> extrapolations |
-| `methods` | Step 2 | Gauss vs trunc90 vs trunc95 comparison |
-| `etasym` | Step 2 | Full-η vs reflected \|η\| symmetry comparison |
-| `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison |
-| `finals` | Step 2 or 3 | α→0 intercepts (Step 2) or final merged corrections (Step 3), all p<sub>T</sub><sup>avg</sup> slices overlaid |
-| `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn |
-| `all` | any | All applicable flags (default) |
+| Flag | Input | Description | In smart default? |
+| :-:| :-: | - | :-: |
+| `event` | Step 1 | v<sub>z</sub>, primary vertex filter, HLT trigger | yes |
+| `kinematics` | Step 1 | η/φ/p<sub>T</sub> distributions and η-φ maps at different p<sub>T</sub> cuts for incl/tag/probe jets | yes, but tag/probe only — named explicitly (or via `all`) also includes inclusive jets |
+| `adist` | Step 2 | Asymmetry distributions for (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bins, Data and MC overlay | yes |
+| `roverlay` | Step 2 | Responses for MC and Data vs \|η\| with ratio panel | yes |
+| `alpha` | Step 2 | k<sub>FSR</sub> extrapolations | yes |
+| `methods` | Step 2 | Gauss vs trunc90 vs trunc95 comparison | no — explicit only |
+| `etasym` | Step 2 | Full-η vs reflected \|η\| symmetry comparison | no — explicit only |
+| `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison | no — explicit only |
+| `finals` | Step 2 or 3 | α→0 intercepts (Step 2) or final merged corrections (Step 3), all p<sub>T</sub><sup>avg</sup> slices overlaid | Step 3 only (via the corrfinal-grid path); suppressed by default on a Step 2 file even though the flag itself would find data there — pass it explicitly to get it from Step 2 |
+| `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn | yes |
+| `all` | any | Every applicable flag, unconditionally (including inclusive-jet kinematics and `finals` from either source) | n/a |
 
 <br>
 

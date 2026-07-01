@@ -175,7 +175,7 @@ inline int CountNormCompPlots( TFile* fIn, const TString& cone, const BinningCon
     return n;
 }
 
-inline int CountKinematicsPlots( TFile* fIn, const TString& cone ){
+inline int CountKinematicsPlots( TFile* fIn, const TString& cone, bool includeIncl = true ){
     if( !fIn->Get( cone + "/" + cone + "_incl" ) ) return 0;
 
     const int plotsPerCollection = 3 + kNKinematicsPtMins;
@@ -183,6 +183,7 @@ inline int CountKinematicsPlots( TFile* fIn, const TString& cone ){
     bool anyCollection = false;
     for( int ic = 0; ic < kNKinematicsCollections; ic++ ){
         const TString coll = kKinematicsCollections[ic].inputKey;
+        if( !includeIncl && coll == "incl" ) continue;
         if( fIn->Get( cone + "/" + cone + "_" + coll ) ){
             n += plotsPerCollection;
             anyCollection = true;

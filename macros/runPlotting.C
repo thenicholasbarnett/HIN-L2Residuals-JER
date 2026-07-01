@@ -43,7 +43,22 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 // ============================================================
 // Entry point
 //
-// flags (space-separated keywords, default "all"):
+// flags has three modes:
+//   (empty, the default) — curated smart default, NOT every plot family:
+//     event + kinematics (tag/probe only, no inclusive jets) for Step 1;
+//     adist + roverlay + alpha for Step 2 (excludes etasym/methods/normcomp,
+//     which need Step 2's own output but are comparison/QA plots, not
+//     day-to-day output); ptfit + finals for Step 3. "finals" is included
+//     here only when the file provides it via the Step 3 corrfinal-grid
+//     fallback (see PlotFinals) — i.e. only on genuine Step 3 output, never
+//     via Step 2's native intercepts.
+//   "all" — literal firehose: every plot family below, unconditionally,
+//     including inclusive-jet kinematics and "finals" from either data
+//     source. Use this to regenerate everything a file supports.
+//   explicit space-separated keywords — exactly the named flags run, each
+//     behaving as documented below (e.g. "kinematics" always includes
+//     inclusive jets; "finals" always tries both its data sources).
+//
 //   "etasym"    — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
 //   "methods"   — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
 //   "finals"    — final R_MC/R_data at alpha→0, all pT slices overlaid (PlotFinals)
@@ -55,10 +70,27 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 //   "ptfit"     — Step 3 pT-dependence fit: correction factor vs pT_avg per eta bin (PlotPtFit)
 //   "kinematics"— Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
 //   "event"     — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
-//   "all"       — run all plots including kinematics and event (default)
 // ============================================================
 
-void runPlotting( TString residualsFile, TString outDir = "", TString flags = "all" ){
+// Smart-default "finals" inclusion. PlotFinals draws from Step 2's native
+// intercept histograms when present, falling back to Step 3's corrfinal grid
+// otherwise (FinalCorrections.h). The curated default only wants it when the
+// fallback path is what's actually available (a genuine Step 3 file) — not
+// when Step 2's own output happens to contain intercepts too. Checked once
+// against the first cone; a single pipeline run is uniform across cones.
+bool WantsFinalsByDefault( TFile* fIn, const TString& cone, const BinningConfig& bins ){
+    if( bins.ptavgSlices.empty() ) return false;
+    const TString etaMode = L2Name::EtaModeKey( false );
+    const TString interceptName = L2Name::ObjectName( cone, "intercept",
+        { etaMode, L2Name::PtKey( bins.ptavgSlices[0] ) }, { kMethodKeys[0] } );
+    if( HasHAny( fIn, { cone + "/" + interceptName } ) ) return false;
+
+    const TString gridName = L2Name::ObjectName( cone, "corrfinal", { etaMode }, { kMethodKeys[0] } );
+    return HasHAny( fIn, { cone + "/" + gridName + "_norm", gridName + "_norm",
+                           cone + "/" + gridName, gridName } );
+}
+
+void runPlotting( TString residualsFile, TString outDir = "", TString flags = "" ){
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
 
@@ -78,17 +110,26 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = "a
 
     BinningConfig bins;
 
-    const bool doAll      = flags.IsNull() || flags == "all";
-    const bool doEtaSym   = doAll || flags.Contains( "etasym" );
-    const bool doMethods  = doAll || flags.Contains( "methods" );
-    const bool doFinals   = doAll || flags.Contains( "finals" );
-    const bool doNormComp = doAll || flags.Contains( "normcomp" );
-    const bool doAdist    = doAll || flags.Contains( "adist" );
-    const bool doRover    = doAll || flags.Contains( "roverlay" );
-    const bool doAlpha    = doAll || flags.Contains( "alpha" );
-    const bool doPtFit    = doAll || flags.Contains( "ptfit" );
-    const bool doKine     = doAll || flags.Contains( "kinematics" );
-    const bool doEvent    = doAll || flags.Contains( "event" );
+    const bool doAllLiteral   = ( flags == "all" );
+    const bool doSmartDefault = flags.IsNull();
+
+    const bool doEtaSym   = doAllLiteral || flags.Contains( "etasym" );
+    const bool doMethods  = doAllLiteral || flags.Contains( "methods" );
+    const bool doNormComp = doAllLiteral || flags.Contains( "normcomp" );
+    const bool doAdist    = doAllLiteral || doSmartDefault || flags.Contains( "adist" );
+    const bool doRover    = doAllLiteral || doSmartDefault || flags.Contains( "roverlay" );
+    const bool doAlpha    = doAllLiteral || doSmartDefault || flags.Contains( "alpha" );
+    const bool doPtFit    = doAllLiteral || doSmartDefault || flags.Contains( "ptfit" );
+    const bool doKine     = doAllLiteral || doSmartDefault || flags.Contains( "kinematics" );
+    const bool doEvent    = doAllLiteral || doSmartDefault || flags.Contains( "event" );
+
+    // "kinematics" named explicitly (or "all") pulls in inclusive jets too;
+    // the smart default sticks to tag/probe only.
+    const bool kineIncludeIncl = doAllLiteral || flags.Contains( "kinematics" );
+
+    bool doFinals = doAllLiteral || flags.Contains( "finals" );
+    if( doSmartDefault && !cfg.coneLabels.empty() )
+        doFinals = WantsFinalsByDefault( fIn, cfg.coneLabels[0], bins );
 
     int totalPlots = 0;
     if( doEvent ) totalPlots += CountEventPlots( fIn );
@@ -103,7 +144,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = "a
         if( doRover )    totalPlots += CountROverlayPlots( fIn, cone, bins );
         if( doAlpha )    totalPlots += CountAlphaFitPlots( fIn, cone, bins );
         if( doPtFit )    totalPlots += CountPtFitPlots( fIn, cone );
-        if( doKine )     totalPlots += CountKinematicsPlots( fIn, cone );
+        if( doKine )     totalPlots += CountKinematicsPlots( fIn, cone, kineIncludeIncl );
     }
 
     if( totalPlots == 0 ){
@@ -127,7 +168,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = "a
         if( doRover )    PlotROverlay( fIn, outDir, cone, bins,        pb );
         if( doAlpha )    PlotAlphaFit( fIn, outDir, cone, bins,        pb );
         if( doPtFit )    PlotPtFit( fIn, outDir, cone,                   pb );
-        if( doKine )     PlotKinematics( fIn, outDir, cone,              pb );
+        if( doKine )     PlotKinematics( fIn, outDir, cone, kineIncludeIncl, pb );
     }
 
     pb.Finish();
@@ -142,10 +183,12 @@ int main( int argc, char* argv[] ){
     if( args.size() < 1 ){
         std::cerr << "Usage: runPlotting <residuals.root> [out_dir] [flags]"
                   << L2ConfigCli::ConfigUsage() << "\n"
-                  << "  flags: all etasym methods finals normcomp adist roverlay alpha ptfit kinematics event (space-separated)\n";
+                  << "  flags: omit for the curated smart default, \"all\" for every plot\n"
+                  << "         unconditionally, or a space-separated list of:\n"
+                  << "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n";
         return 1;
     }
-    runPlotting( args[0], args.size() >= 2 ? args[1] : "", args.size() >= 3 ? args[2] : "all" );
+    runPlotting( args[0], args.size() >= 2 ? args[1] : "", args.size() >= 3 ? args[2] : "" );
     return 0;
 }
 #endif

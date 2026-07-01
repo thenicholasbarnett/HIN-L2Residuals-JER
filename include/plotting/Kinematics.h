@@ -29,6 +29,12 @@
 // For each cone and collection, writes pT, eta, phi projections plus eta-phi
 // maps above a few pT thresholds. This mode expects a Step-1 runAsymmetry file,
 // not a Step-2 residuals file.
+//
+// includeIncl: when false, skips the inclusive-jet collection (both its own
+// per-collection plots and its contribution to the incl/probe/tag overview
+// overlays) — used by runPlotting's curated smart-default flag set, which
+// only wants tag+probe by default; explicit "kinematics" or "all" still get
+// all three collections.
 // ============================================================
 
 static constexpr int kNKinematicsCollections = 3;
@@ -90,9 +96,11 @@ inline void SaveKinematicsPlot( TCanvas* c, const TString& outDir,
 }
 
 inline void PlotKinematics( TFile* fIn, const TString& outDir,
-                           const TString& cone, ProgressBar& pb ){
+                           const TString& cone, bool includeIncl, ProgressBar& pb ){
     const int plotsPerCollection = 3 + kNKinematicsPtMins;
     {
+        // "_incl" is used purely as a marker that this is a Step-1 runAsymmetry
+        // file, independent of whether inclusive-jet plots are actually drawn below.
         TH3D* hTest = ( TH3D* )fIn->Get( cone + "/" + cone + "_incl" );
         if( !hTest ){
             return;
@@ -112,6 +120,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
     for( int ic = 0; ic < kNKinematicsCollections; ic++ ){
         const TString coll = kKinematicsCollections[ic].inputKey;
         const TString collPlot = kKinematicsCollections[ic].plotKey;
+        if( !includeIncl && coll == "incl" ) continue;
         TH3D* h3 = ( TH3D* )fIn->Get( cone + "/" + cone + "_" + coll );
 
         if( !h3 ){
