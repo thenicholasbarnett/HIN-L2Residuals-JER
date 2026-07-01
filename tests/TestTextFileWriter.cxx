@@ -213,6 +213,39 @@ void TestNormSelection(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
+// [2c] Single-file overload: no HP/ZB split, every pT slice reads from the
+// one residuals file regardless of cfg.hltJ80Thresh.
+void TestSingleFileMode(){
+    std::cout << "\n[2c] Single-file mode (no HP/ZB split)\n";
+
+    const char* resPath = "/tmp/tw_single.root";
+    const char* rootPath = "/tmp/tw_out_single.root";
+    const char* prefix = "/tmp/tw_out_single";
+    CleanupFiles( resPath, resPath, rootPath, prefix );
+
+    MakeResiduals( resPath, 3.0, 0.001, {0, 1, 2, 3, 4, 5} );
+    runTextFile( resPath, rootPath, prefix, "gauss", false );
+
+    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() ).good(),
+        "single-file run writes the abseta text file" );
+
+    TFile* fOut = TFile::Open( rootPath, "read" );
+    TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
+    Check( hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output" );
+    if( hGrid ){
+        // y-bin 1 = ptavg_30_70 (below threshold, would be ZB in two-file mode);
+        // y-bin 3 = ptavg_100_175 (at/above threshold, would be HP) — both must
+        // come from the single file regardless, so both equal 3.0.
+        Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 3.0 ) < 1e-6,
+            "low-pT slice reads from the single file" );
+        Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 3.0 ) < 1e-6,
+            "high-pT slice also reads from the single file" );
+    }
+    if( fOut ) fOut->Close();
+
+    CleanupFiles( resPath, resPath, rootPath, prefix );
+}
+
 // [3] Eta ordering in the abseta (mirrored) text file
 void TestEtaOrdering(){
     std::cout << "\n[3] Eta ordering (abseta, mirrored)\n";
@@ -432,6 +465,7 @@ int main(){
     TestFileStructure();
     TestMergeSourceSelection();
     TestNormSelection();
+    TestSingleFileMode();
     TestEtaOrdering();
     TestEtaFileOrdering();
     TestUnityFallback_TooFewSlices();

@@ -1,4 +1,5 @@
 // Compiled:    ./bin/runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct]
+//              ./bin/runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct]
 // Interpreted: root -l -b -q 'macros/runTextFile.C("hp.root","zb.root","out.root","corrections/hp0_zb0")'
 //              (build the library first: cmake --build build)
 //              (run from the repo root so relative paths resolve correctly)
@@ -7,6 +8,8 @@
 // if the slice starts at or above cfg.hltJ80Thresh, otherwise zb_residuals.
 // Writes "<output_text_prefix>_<cone>_abseta[_norm].txt" and "..._<cone>_eta[_norm].txt".
 //
+// --single: for a dataset with no HP/ZB split (e.g. one min-bias or
+//           single-trigger sample) — every pT slice reads from <residuals.root>.
 // method: gauss (default) | doubleGauss | trunc90 | trunc95
 // [direct]: pass the literal word "direct" to use the non-normalized intercepts
 //           instead of the kFSR-normalized ones (the standard/default method).
@@ -26,10 +29,19 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #ifndef __CLING__
 #include <iostream>
 int main( int argc, char* argv[] ){
-    if( argc < 5 ){
-        std::cerr << "Usage: runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct]\n";
-        return 1;
+    static const char* const kUsage =
+        "Usage: runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct]\n"
+        "       runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct]\n";
+
+    if( argc > 1 && TString( argv[1] ) == "--single" ){
+        if( argc < 5 ){ std::cerr << kUsage; return 1; }
+        TString method = ( argc > 5 ) ? argv[5] : "gauss";
+        bool useNorm = !( ( argc > 6 ) && TString( argv[6] ) == "direct" );
+        runTextFile( argv[2], argv[3], argv[4], method, useNorm );
+        return 0;
     }
+
+    if( argc < 5 ){ std::cerr << kUsage; return 1; }
     TString method = ( argc > 5 ) ? argv[5] : "gauss";
     bool useNorm = !( ( argc > 6 ) && TString( argv[6] ) == "direct" );
     runTextFile( argv[1], argv[2], argv[3], argv[4], method, useNorm );

@@ -170,6 +170,12 @@ Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<s
 #           pass the literal word "direct" for the non-normalized variant instead
 ```
 
+For a dataset with no HP/ZB split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold):
+
+```
+./bin/runTextFile --single <residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct]
+```
+
 For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `direct` is passed:
 
 ```

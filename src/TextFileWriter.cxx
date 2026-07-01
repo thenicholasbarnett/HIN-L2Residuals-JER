@@ -270,3 +270,11 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
     fHP->Close();
     fZB->Close();
 }
+
+void runTextFile( TString residualsFile, TString outputRootFile,
+                 TString outputTextPrefix,
+                 TString method, bool useNorm ){
+    std::cout << "Single dataset mode (no HP/ZB merge) — using " << residualsFile
+              << " for every pT_avg slice\n";
+    runTextFile( residualsFile, residualsFile, outputRootFile, outputTextPrefix, method, useNorm );
+}

@@ -25,4 +25,14 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                   TString outputRootFile, TString outputTextPrefix,
                   TString method = "gauss", bool useNorm = true );
 
+// Single-dataset convenience overload, for systems with no HP/ZB split (e.g.
+// a single min-bias or single-trigger sample — everything above threshold
+// is unbiased, everything isn't, or there's simply only one dataset to use).
+// Equivalent to calling the two-file version with the same file for both
+// hpResidualsFile and zbResidualsFile: every pT slice reads from this one
+// file regardless of cfg.hltJ80Thresh, so the merge becomes a no-op.
+void runTextFile( TString residualsFile, TString outputRootFile,
+                  TString outputTextPrefix,
+                  TString method = "gauss", bool useNorm = true );
+
 #endif

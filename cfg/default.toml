@@ -37,6 +37,12 @@ jets = [
 # corrected pT the efficiency cut is evaluated against in Step 1 HP mode,
 # and it's also the cutover point Step 3 uses to decide HP vs ZB per
 # pT_avg slice (see [binning] below).
+#
+# If this system has no HP/ZB split (only one dataset), branch/threshold
+# are effectively unused: run Step 1 in whichever mode applies and feed
+# Step 3 that one residuals file via `runTextFile --single`. cone still
+# must be non-null (the loader requires it) — set it to any entry in
+# cones.labels below even if the HP-efficiency-cut concept doesn't apply.
 branch = "REQUIRED_SET_ME"
 threshold = 0.0
 cone = "REQUIRED_SET_ME"
