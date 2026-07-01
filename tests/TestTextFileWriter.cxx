@@ -31,19 +31,24 @@ void Check( bool cond, const char* msg ){
 // given pT-slice indices (into BinningConfig::ptavgSlices) with intercept
 // histograms — both abseta and fulleta — set to corrValue ± corrErr in every
 // bin. The ak4PF TDirectory always exists, even if sliceIndices is empty.
+// norm appends "_norm" to the histogram names; recreate=false appends to an
+// existing file (opened "update") instead of overwriting it, so a norm
+// variant can be added to a file that already has the direct variant.
 static TString MakeResiduals( const char* path, double corrValue, double corrErr,
-                              const std::vector<int>& sliceIndices ){
-    TFile* f = new TFile( path, "recreate" );
+                              const std::vector<int>& sliceIndices,
+                              bool norm = false, bool recreate = true ){
+    TFile* f = new TFile( path, recreate ? "recreate" : "update" );
     BinningConfig bins;
-    TDirectory* coneDir = f->mkdir( "ak4PF" );
+    TDirectory* coneDir = recreate ? f->mkdir( "ak4PF" ) : ( TDirectory* )f->Get( "ak4PF" );
     coneDir->cd();
+    const TString suffix = norm ? "_norm" : "";
     for( int ip : sliceIndices ){
         for( int em = 0; em < 2; em++ ){
             const bool fullEta = ( em == 1 );
             const std::vector<Double_t>& edges = fullEta ? kEtaEdges : kAbsEtaEdges;
             const int nEta = ( int )edges.size() - 1;
             TString name = L2Name::ObjectName( "ak4PF", "intercept",
-                { L2Name::EtaModeKey( fullEta ), L2Name::PtKey( bins.ptavgSlices[ip] ) }, { "gauss" } );
+                { L2Name::EtaModeKey( fullEta ), L2Name::PtKey( bins.ptavgSlices[ip] ) }, { "gauss" } ) + suffix;
             TH1D* h = new TH1D( name, "", nEta, edges.data() );
             for( int ieta = 1; ieta <= nEta; ieta++ ){
                 h->SetBinContent( ieta, corrValue );
@@ -75,6 +80,8 @@ static void CleanupFiles( const char* hpPath, const char* zbPath,
     std::remove( rootPath );
     std::remove( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() );
     std::remove( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data() );
+    std::remove( ( TString( prefix ) + "_ak4PF_abseta_norm.txt" ).Data() );
+    std::remove( ( TString( prefix ) + "_ak4PF_eta_norm.txt" ).Data() );
 }
 
 // Parse one data line from the JEC text file.
@@ -165,6 +172,42 @@ void TestMergeSourceSelection(){
         // y-bin 3 = ptavg_100_175 (lo=100 >= 100 threshold) -> HP value
         Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 5.0 ) < 1e-6, "ptavg_100_175 pulled from HP" );
     }
+    if( fOut ) fOut->Close();
+
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+}
+
+// [2b] useNorm selects the "_norm"-suffixed intercepts and suffixes the
+// output objects/filenames accordingly, leaving the direct variant untouched.
+void TestNormSelection(){
+    std::cout << "\n[2b] Normalized variant selection\n";
+
+    const char* hpPath = "/tmp/tw_hp2b.root";
+    const char* zbPath = "/tmp/tw_zb2b.root";
+    const char* rootPath = "/tmp/tw_out2b.root";
+    const char* prefix = "/tmp/tw_out2b";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+
+    // direct variant = 1.0, norm variant = 9.0, both present in the same file
+    MakeResiduals( hpPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
+    MakeResiduals( hpPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
+    MakeResiduals( zbPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
+    MakeResiduals( zbPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
+
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", true );
+
+    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_abseta_norm.txt" ).Data() ).good(),
+        "norm run writes a _norm-suffixed abseta text file" );
+    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_eta_norm.txt" ).Data() ).good(),
+        "norm run writes a _norm-suffixed eta text file" );
+    Check( !std::ifstream( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() ).good(),
+        "norm run does not also write the direct-variant filename" );
+
+    TFile* fOut = TFile::Open( rootPath, "read" );
+    TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss_norm" ) : nullptr;
+    Check( hGrid != nullptr, "corrfinal_abseta_gauss_norm TH2D exists in output" );
+    if( hGrid ) Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 9.0 ) < 1e-6,
+        "grid picked up the norm value (9.0), not the direct value (1.0)" );
     if( fOut ) fOut->Close();
 
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
@@ -388,6 +431,7 @@ int main(){
 
     TestFileStructure();
     TestMergeSourceSelection();
+    TestNormSelection();
     TestEtaOrdering();
     TestEtaFileOrdering();
     TestUnityFallback_TooFewSlices();

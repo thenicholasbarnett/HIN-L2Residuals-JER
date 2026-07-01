@@ -50,17 +50,14 @@ static double SliceCenter( const RangeBin& sl ){
 }
 
 // Fetch an intercept histogram, preferring the cone/name path, then a flat
-// name at file root, then the legacy pre-cone-TDirectory flat naming scheme.
+// name at file root, then a flat legacy name (pre-cone-TDirectory naming).
+// name and oldName must already carry any "_norm" suffix the caller wants.
 static TH1D* FetchIntercept( TFile* f, const TString& cone, const TString& name,
-                             const RangeBin& ptSlice, const TString& method ){
+                             const TString& oldName ){
     TDirectory* coneDir = ( TDirectory* )f->Get( cone );
     TH1D* h = coneDir ? ( TH1D* )coneDir->Get( name ) : nullptr;
     if( !h ) h = ( TH1D* )f->Get( name );
-    if( !h ){
-        TString oldName = Form( "%s_intercept_%s%s",
-            cone.Data(), method.Data(), ptSlice.shortName.Data() );
-        h = ( TH1D* )f->Get( oldName );
-    }
+    if( !h ) h = ( TH1D* )f->Get( oldName );
     return h;
 }
 
@@ -146,13 +143,16 @@ static bool WriteFullEtaTextFile( const TString& path, const std::vector<FitResu
 
 void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                  TString outputRootFile, TString outputTextPrefix,
-                 TString method ){
+                 TString method, bool useNorm ){
+
+    const TString suffix = useNorm ? "_norm" : "";
 
     std::cout << "HP residuals: " << hpResidualsFile  << "\n"
               << "ZB residuals: " << zbResidualsFile  << "\n"
               << "Output ROOT:  " << outputRootFile   << "\n"
               << "Text prefix:  " << outputTextPrefix << "\n"
-              << "Method:       " << method           << "\n";
+              << "Method:       " << method           << "\n"
+              << "Normalized:   " << ( useNorm ? "yes (kFSR-norm)" : "no (direct)" ) << "\n";
 
     const AnalysisConfig& cfg = Config();
 
@@ -202,8 +202,10 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                 const auto& ptSlice = bins.ptavgSlices[ip];
                 TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fHP : fZB;
                 TString name = L2Name::ObjectName( cone, "intercept",
-                    {etaMode, L2Name::PtKey( ptSlice )}, {method} );
-                hSlice[ip] = FetchIntercept( src, cone, name, ptSlice, method );
+                    {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
+                TString oldName = Form( "%s_intercept_%s%s",
+                    cone.Data(), method.Data(), ptSlice.shortName.Data() ) + suffix;
+                hSlice[ip] = FetchIntercept( src, cone, name, oldName );
                 if( !hSlice[ip] ){
                     std::cerr << "WARNING: " << name << " not found in "
                               << ( src == fHP ? "HP" : "ZB" ) << " residuals file\n";
@@ -211,7 +213,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
             }
 
             // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
-            TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {method} );
+            TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {method} ) + suffix;
             TH2D* hGrid = new TH2D( gridName, "", nEta, etaEdges.data(), nPt, ptEdges.data() );
             hGrid->GetXaxis()->SetTitle( fullEta ? "#eta_{probe}" : "|#eta_{probe}|" );
             hGrid->GetYaxis()->SetTitle( "p_{T,avg} [GeV]" );
@@ -243,7 +245,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                     corrErr.push_back( e > 0.0 ? e : 1e-4 );
                 }
                 TString graphName = L2Name::ObjectName( cone, "ptcorr",
-                    {etaMode, L2Name::EtaKey( ieta )}, {method} );
+                    {etaMode, L2Name::EtaKey( ieta )}, {method} ) + suffix;
                 fits[ieta] = FitPtSlices( ptX, corr, corrErr, graphName, dGraphs );
                 if( !fits[ieta].valid ){
                     std::cerr << "WARNING: pT fit failed for " << cone << " " << etaMode
@@ -253,8 +255,8 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
             }
         }
 
-        TString absEtaTxt = outputTextPrefix + "_" + cone + "_abseta.txt";
-        TString etaTxt    = outputTextPrefix + "_" + cone + "_eta.txt";
+        TString absEtaTxt = outputTextPrefix + "_" + cone + "_abseta" + suffix + ".txt";
+        TString etaTxt    = outputTextPrefix + "_" + cone + "_eta" + suffix + ".txt";
         if( !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
             std::cerr << "Cannot open output file " << absEtaTxt << "\n";
         if( !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )

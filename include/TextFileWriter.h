@@ -14,10 +14,14 @@
 //                    graphs/ dir of per-eta-bin pT-dependence fit TGraphErrors.
 // outputTextPrefix: base path; writes "<prefix>_<cone>_abseta.txt" (mirrored
 //                    |eta| fit) and "<prefix>_<cone>_eta.txt" (independent
-//                    full-eta fit, no mirroring) per cone.
-// method:           "gauss" | "trunc90" | "trunc95"  (default: "gauss")
+//                    full-eta fit, no mirroring) per cone. When useNorm is
+//                    true, both get a "_norm" suffix before ".txt".
+// method:           "gauss" | "doubleGauss" | "trunc90" | "trunc95"  (default: "gauss")
+// useNorm:          use the kFSR-normalized intercepts instead of the direct
+//                    ones (default: false). Affects the corrfinal grid and
+//                    ptcorr graph names too (both get a "_norm" suffix).
 void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                   TString outputRootFile, TString outputTextPrefix,
-                  TString method = "gauss" );
+                  TString method = "gauss", bool useNorm = false );
 
 #endif

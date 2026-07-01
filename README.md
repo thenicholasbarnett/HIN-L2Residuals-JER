@@ -136,7 +136,7 @@ ak4PF/
 
 <h3> <b> Step 2 </b> — Extract Residuals </h3>
 
-Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
+Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
 
 ```
 ./bin/runResiduals <input_data-asymmetry-file.root> <input_mc-asymmetry-file.root> <output_residuals-file.root>
@@ -159,24 +159,25 @@ ak4PF/
 Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<sub>T</sub><sup>avg</sup> slice, uses HP if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and ZB otherwise — HP is trigger-biased below its efficiency plateau, ZB fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method]
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [norm]
 
-# methods: gauss (default) | trunc90 | trunc95
+# methods: gauss (default) | doubleGauss | trunc90 | trunc95
+# norm:    direct (default) | norm  — use the kFSR-normalized intercepts instead of the direct ones
 ```
 
-For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header:
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. When `norm` is used, both filenames get a `_norm` suffix:
 
 ```
-<output_text-prefix>_<cone>_abseta.txt   ← fit on |η|, mirrored onto both eta halves
-<output_text-prefix>_<cone>_eta.txt      ← independent fit per full-η bin, no mirroring
+<output_text-prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
+<output_text-prefix>_<cone>_eta[_norm].txt      ← independent fit per full-η bin, no mirroring
 ```
 
 <u> Output ROOT Structure: </u>
 ```
 ak4PF/
-  ak4PF_corrfinal_abseta_gauss   ← TH2D: |η| vs p_{T,avg}, z = final merged correction (method used)
-  ak4PF_corrfinal_fulleta_gauss  ← same, vs full η
-  graphs/                        ← TGraphErrors of correction vs p_{T,avg} per eta bin, with the 3-parameter fit embedded
+  ak4PF_corrfinal_abseta_gauss[_norm]   ← TH2D: |η| vs p_{T,avg}, z = final merged correction (method/variant used)
+  ak4PF_corrfinal_fulleta_gauss[_norm]  ← same, vs full η
+  graphs/                                ← TGraphErrors of correction vs p_{T,avg} per eta bin, with the 3-parameter fit embedded
 ```
 
 <h2> Plotting </h2>

@@ -36,8 +36,8 @@ static constexpr int kAlphaAxis = 2;
 static constexpr int kAAxis = 3;
 
 // methods
-static constexpr int kNMethods = 3;
-static const char* const kMethodNames[] = { "gauss", "trunc90", "trunc95" };
+static constexpr int kNMethods = 4;
+static const char* const kMethodNames[] = { "gauss", "doubleGauss", "trunc90", "trunc95" };
 
 // ---- result structs ----
 
@@ -69,6 +69,48 @@ static GaussResult FitGauss( TH1D* h ){
         r.sigma = res->Parameter( 2 );
         r.chi2ndf = ( res->Ndf() > 0 ) ? res->Chi2() / res->Ndf() : -1.0;
         r.valid = true;
+    }
+    delete g;
+    return r;
+}
+
+// ---- Double-Gaussian fit (narrow core + wide component) in [-kGausFitHW, +kGausFitHW] ----
+//
+// Reports the amplitude*sigma-weighted mean of the two components — i.e. the
+// mean of the fitted mixture distribution (each component's contribution
+// weighted by its integral, amp*sigma), not just the core. meanErr treats the
+// two component means as independent, which is an approximation but standard
+// for a quick per-bin estimate (see TruncMeanInRange for a similar tradeoff).
+
+static GaussResult FitDoubleGauss( TH1D* h ){
+    GaussResult r;
+    if( !CanFit( h, kMinEntries ) ) return r;
+
+    TF1* g = new TF1( Form( "_dgf_%s", h->GetName() ), "gaus(0)+gaus(3)", -kGausFitHW, kGausFitHW );
+    const double rms = std::max( h->GetRMS(), 1e-3 );
+    g->SetParameter( 0, h->GetMaximum() );        // core amplitude
+    g->SetParameter( 1, h->GetMean() );           // core mean
+    g->SetParameter( 2, 0.5 * rms );              // core sigma (narrow)
+    g->SetParameter( 3, 0.3 * h->GetMaximum() );  // tail amplitude
+    g->SetParameter( 4, h->GetMean() );           // tail mean
+    g->SetParameter( 5, 1.5 * rms );              // tail sigma (wide)
+
+    TFitResultPtr res = h->Fit( g, "NQSR" );
+    if( res.Get() && res->IsValid() ){
+        const double amp1 = res->Parameter( 0 ), mean1 = res->Parameter( 1 ), sigma1 = res->Parameter( 2 );
+        const double amp2 = res->Parameter( 3 ), mean2 = res->Parameter( 4 ), sigma2 = res->Parameter( 5 );
+        const double w1 = std::fabs( amp1 * sigma1 );
+        const double w2 = std::fabs( amp2 * sigma2 );
+        const double wsum = w1 + w2;
+        if( wsum > 0 ){
+            const double f1 = w1 / wsum, f2 = w2 / wsum;
+            r.mean = f1 * mean1 + f2 * mean2;
+            r.meanErr = std::sqrt( TMath::Power( f1 * res->ParError( 1 ), 2 ) + TMath::Power( f2 * res->ParError( 4 ), 2 ) );
+            r.sigma = std::sqrt( std::max( 0.0,
+                f1 * ( sigma1 * sigma1 + mean1 * mean1 ) + f2 * ( sigma2 * sigma2 + mean2 * mean2 ) - r.mean * r.mean ) );
+            r.chi2ndf = ( res->Ndf() > 0 ) ? res->Chi2() / res->Ndf() : -1.0;
+            r.valid = true;
+        }
     }
     delete g;
     return r;
@@ -238,6 +280,8 @@ static void ExtractAndFit(
 
                 GaussResult gd = FitGauss( hAData );
                 GaussResult gm = FitGauss( hAMC );
+                GaussResult ddg = FitDoubleGauss( hAData );
+                GaussResult mdg = FitDoubleGauss( hAMC );
                 auto [dlo90, dhi90] = FindTruncBins( hAData, 0.90 );
                 auto [mlo90, mhi90] = FindTruncBins( hAMC, 0.90 );
                 auto [dlo95, dhi95] = FindTruncBins( hAData, 0.95 );
@@ -268,8 +312,9 @@ static void ExtractAndFit(
                 };
 
                 acrunning( 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
-                acrunning( 1, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
-                acrunning( 2, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
+                acrunning( 1, ddg.mean, ddg.meanErr, mdg.mean, mdg.meanErr, ddg.valid && mdg.valid );
+                acrunning( 2, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
+                acrunning( 3, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
 
                 delete hAData;
                 delete hAMC;

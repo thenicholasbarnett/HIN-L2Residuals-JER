@@ -44,11 +44,11 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 // ---- method palette ----
 
-static const char* const kMethodKeys[]   = { "gauss",       "trunc90",          "trunc95"          };
-static const char* const kMethodLabels[] = { "Gauss fit",   "Trunc. mean 90%",  "Trunc. mean 95%"  };
-static const Color_t     kMethodColors[] = { HiroshigeNightBlue(), HiroshigeOrange(), HiroshigeLightRed() };
-static const int         kMethodStyles[] = { 20, 21, 22 };   // circle / square / triangle-up
-static constexpr int     kNMethods = 3;
+static const char* const kMethodKeys[]   = { "gauss",       "doubleGauss",     "trunc90",          "trunc95"          };
+static const char* const kMethodLabels[] = { "Gauss fit",   "Double-Gauss fit", "Trunc. mean 90%",  "Trunc. mean 95%"  };
+static const Color_t     kMethodColors[] = { HiroshigeNightBlue(), KlimtGreen(), HiroshigeOrange(), HiroshigeLightRed() };
+static const int         kMethodStyles[] = { 20, 34, 21, 22 };   // circle / cross / square / triangle-up
+static constexpr int     kNMethods = 4;
 
 // colors for the eta-symmetry comparison
 static const Color_t kColFull = HiroshigeLightRed();
@@ -756,8 +756,11 @@ static void PlotPtFit( TFile* fIn, const TString& outDir,
             for( int ie = 0; ie < nEta; ie++ ){
                 TString etaKey = L2Name::EtaKey( ie );
                 TString gname = L2Name::ObjectName( cone, "ptcorr", {etaMode, etaKey}, {kMethodKeys[m]} );
+                TString gnorm = gname + "_norm";
 
-                TGraphErrors* gr = GetGraphAny( dGraphs, {gname} );
+                // Step 3 stores only whichever of direct/kFSR-norm it was run with —
+                // try norm first (matches PlotAlphaFit's convention), then direct.
+                TGraphErrors* gr = GetGraphAny( dGraphs, {gnorm, gname} );
                 if( !gr || gr->GetN() < 2 ){
                     pb.Update();
                     continue;
@@ -1068,8 +1071,12 @@ static void PlotFinals( TFile* fIn, const TString& outDir,
             // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
             // grid's Y edges are built from exactly those slices in order.
             if( !anyValid ){
+                // Step 3 stores only whichever of direct/kFSR-norm it was run with —
+                // try norm first (matches PlotAlphaFit's convention), then direct.
                 TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {kMethodKeys[m]} );
-                TH2D* h2 = GetH2Any( fIn, {cone + "/" + gridName, gridName} );
+                TString gridNormName = gridName + "_norm";
+                TH2D* h2 = GetH2Any( fIn, {cone + "/" + gridNormName, gridNormName,
+                                           cone + "/" + gridName, gridName} );
                 if( h2 ){
                     for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
                         TH1D* px;
