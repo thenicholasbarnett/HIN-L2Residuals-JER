@@ -125,6 +125,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
     cp "${BINARY}"  runAsymmetry
     cp "${LIBRARY}" libl2residuals.so
     cp -r "${DATA_DIR}" data
+    cp "${REPO_ROOT}/cfg/2024ppRef.toml" .
     chmod +x runtime_wrapper.sh runAsymmetry
 
     mkdir -p "${OUTPUT_DIR}"
@@ -169,7 +170,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 Transfer_Output_Files   = ""
 
-Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry,$(pwd)/libl2residuals.so,$(pwd)/data
+Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry,$(pwd)/libl2residuals.so,$(pwd)/data,$(pwd)/2024ppRef.toml
 
 request_cpus            = 1
 

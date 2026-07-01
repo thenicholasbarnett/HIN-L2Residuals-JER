@@ -32,6 +32,7 @@ source /cvmfs/cms.cern.ch/cmsset_default.sh
 cd "${CMSSW_SRC}"
 eval "$(scramv1 runtime -sh)"
 cd "${START_DIR}"
+export L2RESIDUALS_CONFIG="${START_DIR}/2024ppRef.toml"
 
 # Binary is compiled against CMSSW ROOT (which has libCling).
 # Prepend . for libl2residuals.so transferred to the sandbox.
