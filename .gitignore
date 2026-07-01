@@ -1,9 +1,17 @@
+# build outputs
 build/
 bin/
 lib/
-.noannobin.specs
 
-readme/
+# plots output
 plots/
-data/sample/
-condor/submissions/
+
+
+# ROOT / analysis outputs
+*.root
+*.png
+*.pdf
+
+# editor / OS
+*.swp
+.DS_Store
