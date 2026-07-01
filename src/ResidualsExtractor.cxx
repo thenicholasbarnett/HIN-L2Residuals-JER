@@ -484,6 +484,7 @@ static void ExtractAndFit(
 void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
 
     const AnalysisConfig& cfg = Config();
+    PrintConfigSummary( cfg );
     if( cfg.minEntriesPerBin > 0 ) kMinEntries = cfg.minEntriesPerBin;
 
     TFile* fData = TFile::Open( dataFile, "read" );

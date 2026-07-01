@@ -1,5 +1,22 @@
 cmake_minimum_required(VERSION 3.10)
 
+execute_process(COMMAND hostname
+    OUTPUT_VARIABLE L2RESIDUALS_HOSTNAME
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+if(L2RESIDUALS_HOSTNAME MATCHES "lxplus" AND NOT DEFINED ENV{CMSSW_BASE})
+    message(FATAL_ERROR
+        "This looks like lxplus (${L2RESIDUALS_HOSTNAME}), but cmsenv is not active.\n"
+        "Builds intended for HTCondor must use CMSSW GCC + CMSSW ROOT.\n"
+        "Run something like:\n"
+        "  source /cvmfs/cms.cern.ch/cmsset_default.sh\n"
+        "  cd <CMSSW_RELEASE>/src\n"
+        "  cmsenv\n"
+        "  cd /path/to/L2Residuals-2024ppref\n"
+        "  cmake -S . -B build\n"
+        "  cmake --build build")
+endif()
+
 # Must be before project(): CMSSW GCC has a broken annobin plugin and
 # system ROOT on lxplus lacks libCling.so — both fixed with CMSSW GCC + CMSSW ROOT.
 if(DEFINED ENV{CMSSW_BASE})
@@ -76,11 +93,13 @@ file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
     target_include_directories(l2residuals PUBLIC include cfg ${NLOHMANN_JSON_INCLUDE_DIR})
+    target_compile_definitions(l2residuals PUBLIC L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(l2residuals ${ROOT_LIBRARIES})
 else()
     # header-only placeholder until src/ is populated
     add_library(l2residuals INTERFACE)
     target_include_directories(l2residuals INTERFACE include cfg)
+    target_compile_definitions(l2residuals INTERFACE L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(l2residuals INTERFACE ${ROOT_LIBRARIES})
 endif()
 
@@ -110,10 +129,8 @@ foreach(test ${TESTS})
         target_link_libraries(${name} ${ROOT_LIBRARIES})
     endif()
     add_test(NAME ${name} COMMAND ${name})
-    # Any test that constructs a BinningConfig (even just for kEtaEdges) now
-    # calls Config() via BuildPtAvgSlices — DefaultConfigPath()'s relative
-    # lookup ("cfg/2024ppRef.toml") needs CWD = repo root, not ctest's default
-    # of the build directory.
+    # Keep test CWD at the repo root so any test-created output paths stay
+    # predictable. Config/data paths are resolved from the compiled repo root.
     set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endforeach()
 

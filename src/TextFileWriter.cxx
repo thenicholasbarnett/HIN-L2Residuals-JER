@@ -149,6 +149,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
               << "Normalized:   " << ( useNorm ? "yes (kFSR-norm)" : "no (direct)" ) << "\n";
 
     const AnalysisConfig& cfg = Config();
+    PrintConfigSummary( cfg );
 
     TFile* fHP = TFile::Open( hpResidualsFile, "read" );
     TFile* fZB = TFile::Open( zbResidualsFile, "read" );

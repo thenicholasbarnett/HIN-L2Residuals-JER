@@ -1,7 +1,7 @@
-// Compiled:    ./bin/runResiduals <data.root> <mc.root> <output.root>
+// Compiled:    ./bin/runResiduals <data.root> <mc.root> <output.root> [CONFIG=path]
 // Interpreted: root -l -b -q 'macros/runResiduals.C("data.root","mc.root","out.root")'
 //              (build the library first: cmake --build build)
-//              (run from the repo root so relative paths resolve correctly)
+//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -14,15 +14,19 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "ResidualsExtractor.h"
+#include "ConfigCli.h"
 
 #ifndef __CLING__
 #include <iostream>
 int main( int argc, char* argv[] ){
-    if( argc < 4 ){
-        std::cerr << "Usage: runResiduals <data.root> <mc.root> <output.root>\n";
+    L2ConfigCli::ApplyConfigArgument( argc, argv );
+    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
+    if( args.size() < 3 ){
+        std::cerr << "Usage: runResiduals <data.root> <mc.root> <output.root>"
+                  << L2ConfigCli::ConfigUsage() << "\n";
         return 1;
     }
-    runResiduals( argv[1], argv[2], argv[3] );
+    runResiduals( args[0], args[1], args[2] );
     return 0;
 }
 #endif

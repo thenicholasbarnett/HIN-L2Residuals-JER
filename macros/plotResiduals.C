@@ -1,6 +1,6 @@
-// Compiled:    ./bin/plotResiduals <residuals.root> [out_dir]
+// Compiled:    ./bin/plotResiduals <residuals.root> [out_dir] [flags] [CONFIG=path]
 // Interpreted: root -l -b -q 'macros/plotResiduals.C("residuals.root")'
-//              (run from repo root so relative paths resolve)
+//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -36,6 +36,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include "Utilities.h"
 #include "ProgressBar.h"
 #include "AnalysisConfig.h"
+#include "ConfigCli.h"
 
 #include <vector>
 #include <iostream>
@@ -1882,6 +1883,7 @@ static int CountEventPlots( TFile* fIn ){
 
 void plotResiduals( TString residualsFile, TString outDir = "", TString flags = "all" ){
     const AnalysisConfig& cfg = Config();
+    PrintConfigSummary( cfg );
 
     gStyle->SetOptStat( 0 );
     gStyle->SetPadTickX( 1 );
@@ -1964,12 +1966,15 @@ void plotResiduals( TString residualsFile, TString outDir = "", TString flags = 
 #ifndef __CLING__
 #include <iostream>
 int main( int argc, char* argv[] ){
-    if( argc < 2 ){
-        std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
+    L2ConfigCli::ApplyConfigArgument( argc, argv );
+    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
+    if( args.size() < 1 ){
+        std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]"
+                  << L2ConfigCli::ConfigUsage() << "\n"
                   << "  flags: all etasym methods finals normcomp adist roverlay alpha ptfit kinematics event (space-separated)\n";
         return 1;
     }
-    plotResiduals( argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all" );
+    plotResiduals( args[0], args.size() >= 2 ? args[1] : "", args.size() >= 3 ? args[2] : "all" );
     return 0;
 }
 #endif

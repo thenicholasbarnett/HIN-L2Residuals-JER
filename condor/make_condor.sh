@@ -27,9 +27,12 @@
 #   *mc* or *montecarlo*   → --monte-carlo
 #
 # Prerequisites:
-#   - Build the project first:  cmake --build build  (from repo root)
+#   - On lxplus, run cmsenv before configuring/building this repo:
+#       source /cvmfs/cms.cern.ch/cmsset_default.sh
+#       cd <CMSSW_RELEASE>/src && cmsenv && cd /path/to/L2Residuals-2024ppref
+#       cmake -S . -B build && cmake --build build
 #   - All five cone JEC files must be present in data/jec/ before submitting
-#   - Set CMSSW_SRC in condor/runtime_wrapper.sh
+#   - Set [condor].cmssw_src in the selected TOML
 
 set -euo pipefail
 
@@ -85,11 +88,34 @@ if [[ ! -f "${CONFIG_PATH}" ]]; then
 fi
 CONFIG_PATH="$(cd "$(dirname "${CONFIG_PATH}")" && pwd)/$(basename "${CONFIG_PATH}")"
 
+CMSSW_SRC_FROM_CONFIG="$(awk '
+    /^[[:space:]]*\[/ {
+        in_condor = ( $0 ~ /^[[:space:]]*\[condor\][[:space:]]*(#.*)?$/ )
+        next
+    }
+    in_condor && $0 ~ /^[[:space:]]*cmssw_src[[:space:]]*=/ {
+        line = $0
+        sub( /^[^=]*=[[:space:]]*"/, "", line )
+        sub( /"[[:space:]]*(#.*)?$/, "", line )
+        print line
+        exit
+    }
+' "${CONFIG_PATH}")"
+if [[ -z "${CMSSW_SRC_FROM_CONFIG}" || "${CMSSW_SRC_FROM_CONFIG}" == REQUIRED_* ]]; then
+    echo "ERROR: ${CONFIG_PATH} must set [condor].cmssw_src to the CMSSW src directory used for worker jobs" >&2
+    exit 1
+fi
+if [[ ! -d "${CMSSW_SRC_FROM_CONFIG}" ]]; then
+    echo "ERROR: [condor].cmssw_src does not exist: ${CMSSW_SRC_FROM_CONFIG}" >&2
+    exit 1
+fi
+
 if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
     echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
     echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
-    echo "       cmake --build build  # if not already built" >&2
+    echo "       cd /path/to/L2Residuals-2024ppref" >&2
+    echo "       cmake -S . -B build && cmake --build build" >&2
     exit 1
 fi
 
@@ -107,7 +133,8 @@ fi
 BINARY_RPATH="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
 if [[ -n "${BINARY_RPATH}" ]] && ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
     echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${BINARY_RPATH}" >&2
-    echo "       Binary was built without cmsenv. Rebuild: cmake --build build" >&2
+    echo "       Binary was built without cmsenv. Reconfigure and rebuild after cmsenv:" >&2
+    echo "       cmake -S . -B build && cmake --build build" >&2
     exit 1
 fi
 
@@ -153,7 +180,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 (
     cd "${WORKDIR}"
 
-    cp "${CONDOR_DIR}/runtime_wrapper.sh" .
+    CMSSW_SRC_ESCAPED="${CMSSW_SRC_FROM_CONFIG//\\/\\\\}"
+    CMSSW_SRC_ESCAPED="${CMSSW_SRC_ESCAPED//&/\\&}"
+    sed "s|@CMSSW_SRC@|${CMSSW_SRC_ESCAPED}|g" "${CONDOR_DIR}/runtime_wrapper.sh" > runtime_wrapper.sh
     cp "${BINARY}"  runAsymmetry
     cp "${LIBRARY}" libl2residuals.so
     cp -r "${DATA_DIR}" data

@@ -3,26 +3,81 @@
 #include "toml.hpp"
 
 #include <cstdlib>
+#include <filesystem>
+#include <iostream>
 #include <stdexcept>
+
+namespace {
+
+namespace fs = std::filesystem;
+
+bool IsAbsolutePath( const std::string& path ){
+    return !path.empty() && fs::path( path ).is_absolute();
+}
+
+std::string RepoRoot(){
+    const char* envHome = std::getenv( "L2RESIDUALS_HOME" );
+    if( envHome && envHome[0] ) return envHome;
+
+#ifdef L2RESIDUALS_SOURCE_DIR
+    return L2RESIDUALS_SOURCE_DIR;
+#else
+    return ".";
+#endif
+}
+
+std::string ResolvePath( const std::string& path, const std::string& root ){
+    if( path.empty() || IsAbsolutePath( path ) ) return path;
+    return ( fs::path( root ) / path ).lexically_normal().string();
+}
+
+std::string ResolveConfigPath( const std::string& path ){
+    if( path.empty() ) return path;
+    return ResolvePath( path, RepoRoot() );
+}
+
+std::string ConfigRoot( const std::string& configPath ){
+    const char* envHome = std::getenv( "L2RESIDUALS_HOME" );
+    if( envHome && envHome[0] ) return envHome;
+
+    if( IsAbsolutePath( configPath ) ){
+        fs::path configDir = fs::path( configPath ).parent_path();
+        if( configDir.filename() == "cfg" ) return configDir.parent_path().string();
+        return configDir.string();
+    }
+
+    return RepoRoot();
+}
+
+TString ResolvePath( const TString& path, const std::string& root ){
+    return TString( ResolvePath( std::string( path.Data() ), root ).c_str() );
+}
+
+}
 
 std::string DefaultConfigPath(){
     const char* envConfig = std::getenv( "L2RESIDUALS_CONFIG" );
-    if( envConfig && envConfig[0] ) return envConfig;
+    if( envConfig && envConfig[0] ) return ResolveConfigPath( envConfig );
 
     const char* envHome = std::getenv( "L2RESIDUALS_HOME" );
     if( envHome && envHome[0] ) return std::string( envHome ) + "/cfg/2024ppRef.toml";
 
-    return "cfg/2024ppRef.toml";
+    return ResolvePath( std::string( "cfg/2024ppRef.toml" ), RepoRoot() );
 }
 
 AnalysisConfig LoadAnalysisConfig( const std::string& path ){
-    const std::string configPath = path.empty() ? DefaultConfigPath() : path;
+    const bool explicitConfig = !path.empty() || ( std::getenv( "L2RESIDUALS_CONFIG" ) && std::getenv( "L2RESIDUALS_CONFIG" )[0] );
+    const std::string configPath = path.empty() ? DefaultConfigPath() : ResolveConfigPath( path );
     const auto doc = toml::parse_file( configPath );
+    const std::string repoRoot = ConfigRoot( configPath );
 
     AnalysisConfig cfg;
+    cfg.configPath = configPath;
+    cfg.repoRoot = repoRoot;
+    cfg.usedDefaultConfig = !explicitConfig;
 
-    cfg.vetoMapPath  = doc["paths"]["veto_map"].value_or( std::string{} );
-    cfg.jsonPath     = TString( doc["paths"]["golden_json"].value_or( std::string{} ).c_str() );
+    cfg.vetoMapPath  = ResolvePath( doc["paths"]["veto_map"].value_or( std::string{} ), repoRoot );
+    cfg.jsonPath     = ResolvePath( TString( doc["paths"]["golden_json"].value_or( std::string{} ).c_str() ), repoRoot );
 
     cfg.vetoMapHist  = doc["jet_id"]["veto_map_histogram"].value_or( std::string{} );
 
@@ -44,7 +99,7 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     for( const auto& row : *doc["jec"]["files"].as_array() ){
         std::vector<std::string> files;
         for( const auto& v : *row.as_array() )
-            files.push_back( v.value_or( std::string{} ) );
+            files.push_back( ResolvePath( v.value_or( std::string{} ), repoRoot ) );
         cfg.jecFilesPerCone.push_back( std::move( files ) );
     }
 
@@ -54,7 +109,7 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
         for( const auto& row : *residualArr ){
             std::vector<std::string> files;
             for( const auto& v : *row.as_array() )
-                files.push_back( v.value_or( std::string{} ) );
+                files.push_back( ResolvePath( v.value_or( std::string{} ), repoRoot ) );
             cfg.residualFilesPerCone.push_back( std::move( files ) );
         }
     }
@@ -90,4 +145,19 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
 const AnalysisConfig& Config(){
     static const AnalysisConfig cfg = LoadAnalysisConfig();
     return cfg;
+}
+
+void PrintConfigSummary( const AnalysisConfig& cfg ){
+    static constexpr const char* kBoldYellow = "\033[1;33m";
+    static constexpr const char* kReset = "\033[0m";
+
+    std::cout << "Config: " << cfg.configPath << "\n";
+    if( cfg.usedDefaultConfig ){
+        std::cout << kBoldYellow
+                  << "WARNING: no CONFIG=path or L2RESIDUALS_CONFIG was provided; "
+                  << "using the default cfg/2024ppRef.toml. Pass CONFIG="
+                  << cfg.configPath
+                  << " to make this run explicit."
+                  << kReset << "\n";
+    }
 }

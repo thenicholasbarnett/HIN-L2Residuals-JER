@@ -35,6 +35,7 @@ static constexpr float kVzCut = 15.0f;
 void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t maxEvents ){
 
     const AnalysisConfig& cfg = Config();
+    PrintConfigSummary( cfg );
 
     RunMode mode = RunMode::HardProbes;
     if( modeFlag == "--monte-carlo" || modeFlag == "-mc" ) mode = RunMode::MC;

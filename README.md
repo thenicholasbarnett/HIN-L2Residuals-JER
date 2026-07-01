@@ -54,25 +54,25 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 <strong> Get Residual Corrections </strong>
 
 ```
-./bin/runResiduals <input_data-asymmetries-file.root> <mc_asymmetries_file.root> <output_residuals-file.root>
+./bin/runResiduals <input_data-asymmetries-file.root> <mc_asymmetries_file.root> <output_residuals-file.root> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix>
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 <strong> Plot </strong>
 
 ```
-./macros/plotResiduals <input_asymmetry-file.root> <output_plots-dir>
+./bin/plotResiduals <input_asymmetry-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
-./macros/plotResiduals <input_residuals-file.root> <output_plots-dir>
+./bin/plotResiduals <input_residuals-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
-./macros/plotResiduals <input_corrections-file.root> <output_plots-dir>
+./bin/plotResiduals <input_corrections-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 <h1> Usage </h1> 
@@ -101,7 +101,7 @@ Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
 
 <h3> Configuration </h3>
 
-Analysis parameters — file paths, tree names, cone labels, JEC files, trigger settings, the p<sub>T</sub><sup>avg</sup> slice binning, and cut thresholds — live in `cfg/2024ppRef.toml`. Edit this file and rerun; no recompile needed.
+Analysis parameters — file paths, tree names, cone labels, JEC files, trigger settings, the p<sub>T</sub><sup>avg</sup> slice binning, cut thresholds, and Condor runtime metadata live in `cfg/2024ppRef.toml`. Edit this file and rerun; no recompile needed.
 
 The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched and must stay in the same order. The loader validates lengths before running.
 
@@ -109,11 +109,11 @@ The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched an
 
 `[cuts]` holds `min_jet_pt` (global floor — inclusive jets and the dijet subleading-jet cut; the third jet used for α is exempt), `dphi` (back-to-back requirement), `max_abs_a` (Step 1 dijet acceptance), and `min_entries_per_bin` (Step 2 fit-attempt floor). `[trees] filter` and `[jet_id] veto_map_histogram` name the event-filter branch and which histogram to read from the veto map file.
 
-To add a new config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`.
+To add a new C++ analysis config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`. Condor-only keys such as `[condor].cmssw_src` are consumed by `condor/make_condor.sh`.
 
-Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and point `L2RESIDUALS_CONFIG` at it.
+Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and pass it explicitly with `CONFIG=path`.
 
-By default the binary looks for `cfg/2024ppRef.toml` relative to the launch directory. To override:
+Each compiled entry point accepts an optional `CONFIG=path` argument and prints the resolved TOML path at startup. By default compiled binaries look for `cfg/2024ppRef.toml` under the compiled repo source directory, so they can be launched from outside the repo. Relative paths inside the TOML, such as `data/veto/...`, `data/json/...`, and `data/jec/...`, are resolved relative to that same repo root. Absolute paths are left unchanged. To override globally:
 
 ```bash
 export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml  # point to a specific file
@@ -160,7 +160,7 @@ plots/ak4PF/adist/eta_0p0_0p261/ptavg_30_70/alpha_0p05/
 Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `-mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
 
 ```
-./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root>
+./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root> [mode] [maxEvents] [CONFIG=cfg/2024ppRef.toml]
 ```
 
 Flags for each type of dataset: `-hp`, `-zb`, `-mc`. 
@@ -180,7 +180,7 @@ ak4PF/
 Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
 
 ```
-./bin/runResiduals <input_data-asymmetry-file.root> <input_mc-asymmetry-file.root> <output_residuals-file.root>
+./bin/runResiduals <input_data-asymmetry-file.root> <input_mc-asymmetry-file.root> <output_residuals-file.root> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 <u> Output Structure: </u>
@@ -200,7 +200,7 @@ ak4PF/
 Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<sub>T</sub><sup>avg</sup> slice, uses HP if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and ZB otherwise — HP is trigger-biased below its efficiency plateau, ZB fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct]
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
 
 # methods:  gauss (default) | doubleGauss | trunc90 | trunc95
 # [direct]: kFSR-normalized intercepts are used by default (the standard method);
@@ -210,7 +210,7 @@ Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<s
 For a dataset with no HP/ZB split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold):
 
 ```
-./bin/runTextFile --single <residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct]
+./bin/runTextFile --single <residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
 ```
 
 For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `direct` is passed:
@@ -233,9 +233,9 @@ ak4PF/
 `plotResiduals` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently, and all plots are made if no flags are given.
 
 ```
-./macros/plotResiduals <input_asymmetries-file.root> <output_plots-dir> [flags]
-./macros/plotResiduals <input_residuals-file.root> <output_plots-dir> [flags]
-./macros/plotResiduals <input_corrections-file.root> <output_plots-dir> [flags]
+./bin/plotResiduals <input_asymmetries-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/plotResiduals <input_residuals-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/plotResiduals <input_corrections-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
 ```
 
 | Flag | Input | Description |
@@ -256,7 +256,7 @@ ak4PF/
 
 Example of multiple flags being passed space-separated as a single quoted argument:
 ```bash
-./bin/plotResiduals residuals.root plots/ "finals etasym methods"
+./bin/plotResiduals residuals.root plots/ "finals etasym methods" CONFIG=cfg/2024ppRef.toml
 ```
 
 <h2> Condor Submission </h2>
@@ -264,8 +264,19 @@ Example of multiple flags being passed space-separated as a single quoted argume
 <b>Step 1</b> runs on HTCondor — one job per HiForest input file. <b>Step 2</b> and <b>Step 3</b> run locally after using hadd on the output files from <b>Step 1</b>.
 
 <strong> Before First Submission: </strong>
-1. Set `CMSSW_SRC` in `condor/runtime_wrapper.sh`
-2. Build the project on LXPLUS: `cmake --build build`
+1. Set `[condor].cmssw_src` in the TOML you will pass with `CONFIG=...`
+2. On LXPLUS, activate CMSSW before configuring/building so the binary links against CMSSW ROOT:
+
+```bash
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cd <CMSSW_RELEASE>/src
+cmsenv
+cd /path/to/L2Residuals-2024ppref
+cmake -S . -B build
+cmake --build build
+```
+
+CMake refuses to configure on lxplus without `cmsenv`, and `make_condor.sh` checks both `[condor].cmssw_src` and the built binary's cvmfs ROOT RPATH before submitting. The runtime wrapper copied into each submission is stamped with the TOML's `cmssw_src` value.
 
 <strong> Submitting HTCondor Jobs </strong>
 
@@ -295,7 +306,7 @@ bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024p
 
 Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
-`CONFIG=path` picks which TOML gets submitted with the jobs (default `cfg/2024ppRef.toml`), independent of `TAG` — mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), so `runtime_wrapper.sh` never needs to know the source filename; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
+`CONFIG=path` picks which TOML gets submitted with the jobs (default `cfg/2024ppRef.toml`), independent of `TAG` — mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), and its `[condor].cmssw_src` value is stamped into the worker `runtime_wrapper.sh`; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
 <h2> Hadd Many Files </h2>
 

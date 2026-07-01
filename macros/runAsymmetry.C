@@ -1,7 +1,7 @@
-// Compiled:    ./bin/runAsymmetry <input.root> <output.root> [--monte-carlo|-mc|--zero-bias|-zb|--hard-probes|-hp] [maxEvents]
+// Compiled:    ./bin/runAsymmetry <input.root> <output.root> [--monte-carlo|-mc|--zero-bias|-zb|--hard-probes|-hp] [maxEvents] [CONFIG=path]
 // Interpreted: root -l -b -q 'macros/runAsymmetry.C("in.root","out.root")'
 //              (build the library first: cmake --build build)
-//              (run from the repo root so relative paths resolve correctly)
+//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -14,20 +14,24 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "RunAsymmetry.h"
+#include "ConfigCli.h"
 
 #ifndef __CLING__
 #include <iostream>
 #include <cstdlib>
 #include <exception>
 int main( int argc, char* argv[] ){
-    if( argc < 3 ){
+    L2ConfigCli::ApplyConfigArgument( argc, argv );
+    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
+    if( args.size() < 2 ){
         std::cerr << "Usage: runAsymmetry <input.root> <output.root>"
-                     " [--mc|--zero-bias|--hard-probes] [maxEvents]\n";
+                     " [--mc|--zero-bias|--hard-probes] [maxEvents]"
+                  << L2ConfigCli::ConfigUsage() << "\n";
         return 1;
     }
-    Long64_t maxEvents = ( argc > 4 ) ? std::atoll( argv[4] ) : -1;
+    Long64_t maxEvents = ( args.size() > 3 ) ? std::atoll( args[3].c_str() ) : -1;
     try {
-        runAsymmetry( argv[1], argv[2], argc > 3 ? argv[3] : "--hard-probes", maxEvents );
+        runAsymmetry( args[0], args[1], args.size() > 2 ? args[2] : "--hard-probes", maxEvents );
     } catch( const std::exception& e ){
         std::cerr << e.what() << "\n";
         return 1;

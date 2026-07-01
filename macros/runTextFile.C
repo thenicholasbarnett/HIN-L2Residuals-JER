@@ -1,8 +1,8 @@
-// Compiled:    ./bin/runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct]
-//              ./bin/runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct]
+// Compiled:    ./bin/runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
+//              ./bin/runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
 // Interpreted: root -l -b -q 'macros/runTextFile.C("hp.root","zb.root","out.root","corrections/hp0_zb0")'
 //              (build the library first: cmake --build build)
-//              (run from the repo root so relative paths resolve correctly)
+//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
 // Processes every cone in cfg.coneLabels. Per pT_avg slice, uses hp_residuals
 // if the slice starts at or above cfg.hltJ80Thresh, otherwise zb_residuals.
@@ -25,26 +25,30 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "TextFileWriter.h"
+#include "ConfigCli.h"
 
 #ifndef __CLING__
 #include <iostream>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct]\n"
-        "       runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct]\n";
+        "Usage: runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n"
+        "       runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n";
 
-    if( argc > 1 && TString( argv[1] ) == "--single" ){
-        if( argc < 5 ){ std::cerr << kUsage; return 1; }
-        TString method = ( argc > 5 ) ? argv[5] : "gauss";
-        bool useNorm = !( ( argc > 6 ) && TString( argv[6] ) == "direct" );
-        runTextFile( argv[2], argv[3], argv[4], method, useNorm );
+    L2ConfigCli::ApplyConfigArgument( argc, argv );
+    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
+
+    if( !args.empty() && TString( args[0] ) == "--single" ){
+        if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
+        TString method = ( args.size() > 4 ) ? args[4] : "gauss";
+        bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
+        runTextFile( args[1], args[2], args[3], method, useNorm );
         return 0;
     }
 
-    if( argc < 5 ){ std::cerr << kUsage; return 1; }
-    TString method = ( argc > 5 ) ? argv[5] : "gauss";
-    bool useNorm = !( ( argc > 6 ) && TString( argv[6] ) == "direct" );
-    runTextFile( argv[1], argv[2], argv[3], argv[4], method, useNorm );
+    if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
+    TString method = ( args.size() > 4 ) ? args[4] : "gauss";
+    bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
+    runTextFile( args[0], args[1], args[2], args[3], method, useNorm );
     return 0;
 }
 #endif

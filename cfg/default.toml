@@ -9,6 +9,11 @@
 veto_map = "REQUIRED_SET_ME/path/to/veto_map.root"
 golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 
+[condor]
+# CMSSW src directory used on HTCondor worker nodes. This should be the same
+# CMSSW release/environment used to configure and build the submitted binary.
+cmssw_src = "REQUIRED_SET_ME/path/to/CMSSW_RELEASE/src"
+
 [trees]
 hi = "hiEvtAnalyzer/HiTree"
 skim = "skimanalysis/HltTree"

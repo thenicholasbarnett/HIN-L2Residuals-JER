@@ -18,12 +18,10 @@ OUTPUT="$3"
 MODE="$4"
 START_DIR="$(pwd)"
 
-# Set this to your CMSSW src directory on AFS, e.g.:
-# /afs/cern.ch/user/n/nbarnett/public/condor/workArea/CMSSW_13_2_4/src
-CMSSW_SRC=""
+CMSSW_SRC="@CMSSW_SRC@"
 
-if [[ -z "${CMSSW_SRC}" ]]; then
-    echo "ERROR: CMSSW_SRC is not set in condor/runtime_wrapper.sh" >&2
+if [[ -z "${CMSSW_SRC}" || "${CMSSW_SRC}" == "@CMSSW_SRC@" ]]; then
+    echo "ERROR: CMSSW_SRC was not stamped into runtime_wrapper.sh by make_condor.sh" >&2
     exit 1
 fi
 

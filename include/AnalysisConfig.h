@@ -7,6 +7,10 @@
 #include <vector>
 
 struct AnalysisConfig {
+    std::string configPath;
+    std::string repoRoot;
+    bool usedDefaultConfig = false;
+
     std::vector<std::vector<std::string>> jecFilesPerCone;
     std::vector<std::vector<std::string>> residualFilesPerCone;
     std::string vetoMapPath;
@@ -36,5 +40,6 @@ struct AnalysisConfig {
 std::string DefaultConfigPath();
 AnalysisConfig LoadAnalysisConfig( const std::string& path = "" );
 const AnalysisConfig& Config();
+void PrintConfigSummary( const AnalysisConfig& cfg );
 
 #endif
