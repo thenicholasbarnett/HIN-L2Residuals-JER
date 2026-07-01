@@ -58,17 +58,21 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 ```
 
 ```
-./bin/runTextFile <input_data-residuals-file.root> <input_mc-residuals-file.root> <output_JEC-file.txt>
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix>
 ```
 
 <strong> Plot </strong>
 
 ```
-./macros/plotResiduals <output_plots-dir> <input_asymmetry-file.root>
+./macros/plotResiduals <input_asymmetry-file.root> <output_plots-dir>
 ```
 
 ```
-./macros/plotResiduals <output_plots-dir> <input_residuals-file.root>
+./macros/plotResiduals <input_residuals-file.root> <output_plots-dir>
+```
+
+```
+./macros/plotResiduals <input_corrections-file.root> <output_plots-dir>
 ```
 
 <h1> Usage </h1> 
@@ -150,15 +154,29 @@ ak4PF/
   ...  (all methods, all pT slices, abseta and fulleta)
 ```
 
-<h3> <b> Step 3 </b> — Write Text file </h3>
+<h3> <b> Step 3 </b> — Write Text Files </h3>
 
-In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and write a plain text file that can be parsed with a header.
+Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<sub>T</sub><sup>avg</sup> slice, uses HP if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and ZB otherwise — HP is trigger-biased below its efficiency plateau, ZB fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <input_residuals-file.root> <output_JEC-file.txt> [method] [algorithm]
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method]
 
 # methods: gauss (default) | trunc90 | trunc95
-# algorithms: ak4PF (default) | ak2PF | ak3PF | ak5PF | ak6PF
+```
+
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header:
+
+```
+<output_text-prefix>_<cone>_abseta.txt   ← fit on |η|, mirrored onto both eta halves
+<output_text-prefix>_<cone>_eta.txt      ← independent fit per full-η bin, no mirroring
+```
+
+<u> Output ROOT Structure: </u>
+```
+ak4PF/
+  ak4PF_corrfinal_abseta_gauss   ← TH2D: |η| vs p_{T,avg}, z = final merged correction (method used)
+  ak4PF_corrfinal_fulleta_gauss  ← same, vs full η
+  graphs/                        ← TGraphErrors of correction vs p_{T,avg} per eta bin, with the 3-parameter fit embedded
 ```
 
 <h2> Plotting </h2>
@@ -168,6 +186,7 @@ In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p
 ```
 ./macros/plotResiduals <input_asymmetries-file.root> <output_plots-dir> [flags]
 ./macros/plotResiduals <input_residuals-file.root> <output_plots-dir> [flags]
+./macros/plotResiduals <input_corrections-file.root> <output_plots-dir> [flags]
 ```
 
 | Flag | Input | Description |
@@ -180,8 +199,9 @@ In |η<sup>probe</sup>| or η<sup>probe</sup> ranges fit correction factors vs p
 | `methods` | Step 2 | Gauss vs trunc90 vs trunc95 comparison |
 | `etasym` | Step 2 | Full-η vs reflected \|η\| symmetry comparison |
 | `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison |
-| `finals` | Step 2 | α→0 intercepts, all p<sub>T</sub><sup>avg</sup> slices overlaid |
-| `all` | either | All applicable flags (default) |
+| `finals` | Step 2 or 3 | α→0 intercepts (Step 2) or final merged corrections (Step 3), all p<sub>T</sub><sup>avg</sup> slices overlaid |
+| `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn |
+| `all` | any | All applicable flags (default) |
 
 <br>
 
@@ -245,4 +265,4 @@ The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 ```
 ctest --test-dir build
 ```
-Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `runTextFile` output format and η ordering, as well as build/library load checks.
+Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `runTextFile` HP/ZB merge selection and output format/η ordering for both text files, as well as build/library load checks.

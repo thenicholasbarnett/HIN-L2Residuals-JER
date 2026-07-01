@@ -136,6 +136,18 @@ static TGraphErrors* GetGraphAny( TDirectory* d, const std::vector<TString>& nam
     return nullptr;
 }
 
+// Clone a TH2D from file, disassociate from directory. 2D analog of GetHAny(TFile*, ...).
+static TH2D* GetH2Any( TFile* f, const std::vector<TString>& names ){
+    for( const auto& name : names ){
+        TH2D* src = ( TH2D* )f->Get( name );
+        if( !src ) continue;
+        TH2D* h = ( TH2D* )src->Clone( name + "_c" );
+        h->SetDirectory( 0 );
+        return h;
+    }
+    return nullptr;
+}
+
 static TString OldEtaSuffix( bool fullEta ){
     return fullEta ? "_fulleta" : "";
 }
@@ -721,6 +733,79 @@ static void PlotAlphaFit( TFile* fIn, const TString& outDir,
         }
     }
 }
+
+// ============================================================
+// Plot type: pT-dependence fit plots (Step 3)
+//
+// For each (cone, method, eta mode, eta bin): one canvas showing the merged
+// HP/ZB correction points vs pT_avg with the 3-parameter fit curve drawn
+// (the fit function is embedded in the graph by TextFileWriter.cxx, so it
+// draws automatically — never re-fit here).
+// ============================================================
+
+static void PlotPtFit( TFile* fIn, const TString& outDir,
+                      const TString& cone, ProgressBar& pb ){
+    TDirectory* dGraphs = ( TDirectory* )fIn->Get( cone + "/graphs" );
+
+    for( int m = 0; m < kNMethods; m++ ){
+        for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
+            const bool fullEta = ( ieta == 1 );
+            const int nEta = fullEta ? ( int )kEtaEdges.size() - 1 : ( int )kAbsEtaEdges.size() - 1;
+            const TString etaMode = L2Name::EtaModeKey( fullEta );
+
+            for( int ie = 0; ie < nEta; ie++ ){
+                TString etaKey = L2Name::EtaKey( ie );
+                TString gname = L2Name::ObjectName( cone, "ptcorr", {etaMode, etaKey}, {kMethodKeys[m]} );
+
+                TGraphErrors* gr = GetGraphAny( dGraphs, {gname} );
+                if( !gr || gr->GetN() < 2 ){
+                    pb.Update();
+                    continue;
+                }
+                TGraphErrors* gc = ( TGraphErrors* )gr->Clone( gname + "_c" );
+
+                const TString cvName = Form( "ptfit_%s_%s_%s_%s",
+                    cone.Data(), kMethodKeys[m], etaMode.Data(), etaKey.Data() );
+                TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+                RealAspectRatio( c );
+                c->SetLeftMargin( 0.13 );
+                c->SetGridx(); c->SetGridy();
+
+                gc->SetMarkerStyle( 20 );
+                gc->SetMarkerColor( kMethodColors[m] );
+                gc->SetLineColor( kMethodColors[m] );
+                gc->SetMarkerSize( 0.9 );
+
+                gc->GetXaxis()->SetTitle( "p_{T,avg} [GeV]" );
+                gc->GetYaxis()->SetTitle( "Correction factor" );
+                gc->GetXaxis()->CenterTitle();
+                gc->GetYaxis()->CenterTitle();
+                gc->SetTitle( "" );
+
+                gc->Draw( "AP" );   // embedded fit function draws automatically
+
+                // horizontal reference at y=1
+                double xlo = gc->GetXaxis()->GetXmin();
+                double xhi = gc->GetXaxis()->GetXmax();
+                TLine* hl = new TLine( xlo, 1.0, xhi, 1.0 );
+                hl->SetLineStyle( 2 ); hl->SetLineColor( kGray+2 ); hl->SetLineWidth( 1 );
+                hl->Draw();
+
+                TLatex* tex = new TLatex();
+                tex->SetNDC(); tex->SetTextSize( 0.042 ); tex->SetTextFont( 62 );
+                tex->DrawLatex( 0.14, 0.92, Form( "%s  |  %s  |  %s  |  eta bin %d",
+                    cone.Data(), kMethodLabels[m], etaMode.Data(), ie ) );
+
+                SavePlot( c, outDir, cone, "ptfit", {etaMode, etaKey}, cvName );
+                pb.Update();
+
+                delete gc;
+                delete c;
+            }
+        }
+    }
+}
+
 //
 // For each (cone, method, ptavg slice): one canvas with
 //   top panel  — full-eta corrections + |eta| reflected, reference at 1
@@ -964,11 +1049,12 @@ static void PlotFinals( TFile* fIn, const TString& outDir,
             const TString xTitle  = fullEta ? "#eta" : "|#eta|";
             const double  xMin    = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
             const double  xMax    = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
+            const TString etaMode = L2Name::EtaModeKey( fullEta );
 
             std::vector<TH1D*> hists;
             for( const auto& ptSl : bins.ptavgSlices ){
                 TString name = L2Name::ObjectName( cone, "intercept",
-                    {L2Name::EtaModeKey( fullEta ), L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
+                    {etaMode, L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
                 TString oldName = Form( "%s_intercept_%s%s%s",
                     cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), suffix.Data() );
                 hists.push_back( GetHAny( fIn, {cone + "/" + name, name, oldName} ) );
@@ -976,13 +1062,35 @@ static void PlotFinals( TFile* fIn, const TString& outDir,
 
             bool anyValid = false;
             for( auto* h : hists ) if( h ){ anyValid = true; break; }
+
+            // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
+            // method) instead of per-slice histograms — project each pT slice's row
+            // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
+            // grid's Y edges are built from exactly those slices in order.
+            if( !anyValid ){
+                TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {kMethodKeys[m]} );
+                TH2D* h2 = GetH2Any( fIn, {cone + "/" + gridName, gridName} );
+                if( h2 ){
+                    for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
+                        TH1D* px;
+                        {
+                            TDirectory::TContext nodir( nullptr );
+                            px = h2->ProjectionX( Form( "%s_px%d", gridName.Data(), ip ), ip + 1, ip + 1 );
+                        }
+                        px->SetDirectory( 0 );
+                        hists[ip] = px;
+                        anyValid = true;
+                    }
+                    delete h2;
+                }
+            }
+
             if( !anyValid ){
                 for( auto* h : hists ) delete h;
                 pb.Update();
                 continue;
             }
 
-            const TString etaMode = L2Name::EtaModeKey( fullEta );
             const TString cvName = Form( "finals_%s_%s_%s",
                 cone.Data(), kMethodKeys[m], etaMode.Data() );
             TCanvas* c = new TCanvas( cvName, "", 800, 600 );
@@ -1589,10 +1697,12 @@ static void PlotNormComp( TFile* fIn, const TString& outDir,
 //   "etasym"    — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
 //   "methods"   — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
 //   "finals"    — final R_MC/R_data at alpha→0, all pT slices overlaid (PlotFinals)
+//                 also reads Step 3's corrfinal TH2D grid as a fallback
 //   "normcomp"  — direct vs kFSR-norm correction factor overlay with ratio panel (PlotNormComp)
 //   "adist"     — asymmetry distributions per bin with log-y and truncation lines
 //   "roverlay"  — R_data and R_MC overlay with ratio panel per alpha/pT
 //   "alpha"     — kFSR-normalized alpha fit plots: R_MC/R_data(α)/R_MC/R_data(0.30) vs alpha
+//   "ptfit"     — Step 3 pT-dependence fit: correction factor vs pT_avg per eta bin (PlotPtFit)
 //   "kinematics"— Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
 //   "event"     — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
 //   "all"       — run all plots including kinematics and event (default)
@@ -1635,8 +1745,11 @@ void plotResiduals( TString residualsFile, TString outDir = "", TString flags = 
     const bool doAdist    = doAll || flags.Contains( "adist" );
     const bool doRover    = doAll || flags.Contains( "roverlay" );
     const bool doAlpha    = doAll || flags.Contains( "alpha" );
+    const bool doPtFit    = doAll || flags.Contains( "ptfit" );
     const bool doKine     = doAll || flags.Contains( "kinematics" );
     const bool doEvent    = doAll || flags.Contains( "event" );
+
+    const int nEtaFull = ( int )kEtaEdges.size() - 1;
 
     int totalPlots = 0;
     if( doEtaSym )   totalPlots += nCones * kNMethods * nPtSlices;
@@ -1646,6 +1759,7 @@ void plotResiduals( TString residualsFile, TString outDir = "", TString flags = 
     if( doAdist )    totalPlots += 3 * nCones * nAlpha * nPtSlices * nEta;
     if( doRover )    totalPlots += nCones * kNMethods * nAlpha * nPtSlices;
     if( doAlpha )    totalPlots += nCones * kNMethods * nPtSlices * nEta;
+    if( doPtFit )    totalPlots += nCones * kNMethods * ( nEta + nEtaFull );
     if( doKine )     totalPlots += nCones * ( kNKinematicsCollections * ( 3 + kNKinematicsPtMins ) + 3 );
     if( doEvent )    totalPlots += 3;
 
@@ -1663,6 +1777,7 @@ void plotResiduals( TString residualsFile, TString outDir = "", TString flags = 
         if( doAdist )    PlotAsymDist( fIn, outDir, cone, bins,        pb );
         if( doRover )    PlotROverlay( fIn, outDir, cone, bins,        pb );
         if( doAlpha )    PlotAlphaFit( fIn, outDir, cone, bins,        pb );
+        if( doPtFit )    PlotPtFit( fIn, outDir, cone,                   pb );
         if( doKine )     PlotKinematics( fIn, outDir, cone,              pb );
     }
 
@@ -1675,7 +1790,7 @@ void plotResiduals( TString residualsFile, TString outDir = "", TString flags = 
 int main( int argc, char* argv[] ){
     if( argc < 2 ){
         std::cerr << "Usage: plotResiduals <residuals.root> [out_dir] [flags]\n"
-                  << "  flags: all etasym methods finals normcomp adist roverlay alpha kinematics event (space-separated)\n";
+                  << "  flags: all etasym methods finals normcomp adist roverlay alpha ptfit kinematics event (space-separated)\n";
         return 1;
     }
     plotResiduals( argv[1], argc >= 3 ? argv[2] : "", argc >= 4 ? argv[3] : "all" );

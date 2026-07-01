@@ -8,7 +8,9 @@
 
 #include "TROOT.h"
 #include "TFile.h"
+#include "TDirectory.h"
 #include "TH1D.h"
+#include "TH2D.h"
 
 #include "Binning.h"
 #include "Naming.h"
@@ -25,29 +27,54 @@ void Check( bool cond, const char* msg ){
 
 // ---- helpers ----
 
-// Build a synthetic residuals ROOT file with `nSlices` pT-slice intercept
-// TH1Ds for ak4PF/gauss, each bin set to `corrValue` ± `corrErr`.
-// Use corrValue=0, corrErr=0 to produce entirely empty histograms.
-
+// Build a synthetic residuals ROOT file for cone "ak4PF", populating only the
+// given pT-slice indices (into BinningConfig::ptavgSlices) with intercept
+// histograms — both abseta and fulleta — set to corrValue ± corrErr in every
+// bin. The ak4PF TDirectory always exists, even if sliceIndices is empty.
 static TString MakeResiduals( const char* path, double corrValue, double corrErr,
-                              int nSlices = 5 ){
+                              const std::vector<int>& sliceIndices ){
     TFile* f = new TFile( path, "recreate" );
     BinningConfig bins;
-    const int nEta = ( int )kAbsEtaEdges.size() - 1;
-    for( int ip = 0; ip < nSlices; ip++ ){
-        TString name = L2Name::ObjectName( "ak4PF", "intercept",
-            { L2Name::EtaModeKey( false ), L2Name::PtKey( bins.ptavgSlices[ip] ) }, { "gauss" } );
-        TH1D* h = new TH1D( name, "", nEta, kAbsEtaEdges.data() );
-        for( int ieta = 1; ieta <= nEta; ieta++ ){
-            h->SetBinContent( ieta, corrValue );
-            h->SetBinError( ieta, corrErr );
+    TDirectory* coneDir = f->mkdir( "ak4PF" );
+    coneDir->cd();
+    for( int ip : sliceIndices ){
+        for( int em = 0; em < 2; em++ ){
+            const bool fullEta = ( em == 1 );
+            const std::vector<Double_t>& edges = fullEta ? kEtaEdges : kAbsEtaEdges;
+            const int nEta = ( int )edges.size() - 1;
+            TString name = L2Name::ObjectName( "ak4PF", "intercept",
+                { L2Name::EtaModeKey( fullEta ), L2Name::PtKey( bins.ptavgSlices[ip] ) }, { "gauss" } );
+            TH1D* h = new TH1D( name, "", nEta, edges.data() );
+            for( int ieta = 1; ieta <= nEta; ieta++ ){
+                h->SetBinContent( ieta, corrValue );
+                h->SetBinError( ieta, corrErr );
+            }
+            h->Write();
+            delete h;
         }
-        h->Write();
-        delete h;
     }
     f->Close();
     delete f;
     return TString( path );
+}
+
+// The real cfg.hltJ80Thresh (cfg/2024ppRef.toml) is 100.0: pT slices 0,1
+// (30-70, 70-100) fall below threshold -> ZB; slices 2-5 (100-175 ... 500-1000)
+// are at/above -> HP. Build both files with full slice coverage, possibly at
+// different values, so tests can check which source ends up in the merge.
+static void MakeHPZB( const char* hpPath, const char* zbPath,
+                      double hpValue, double zbValue, double err = 0.001 ){
+    MakeResiduals( hpPath, hpValue, err, {0, 1, 2, 3, 4, 5} );
+    MakeResiduals( zbPath, zbValue, err, {0, 1, 2, 3, 4, 5} );
+}
+
+static void CleanupFiles( const char* hpPath, const char* zbPath,
+                         const char* rootPath, const char* prefix ){
+    std::remove( hpPath );
+    std::remove( zbPath );
+    std::remove( rootPath );
+    std::remove( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() );
+    std::remove( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data() );
 }
 
 // Parse one data line from the JEC text file.
@@ -83,272 +110,273 @@ static std::vector<JECLine> ReadJECFile( const char* path, std::string& header )
 
 // ---- test cases ----
 
-// [1] Header line and overall structure
-// Input: 5 pT slices with correction=1.0 (unity everywhere — fit should converge)
+// [1] Both text files exist with correct header and line counts
 void TestFileStructure(){
     std::cout << "\n[1] File structure\n";
 
-    const char* rootPath = "/tmp/tw_test1.root";
-    const char* txtPath = "/tmp/tw_test1.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp1.root";
+    const char* zbPath = "/tmp/tw_zb1.root";
+    const char* rootPath = "/tmp/tw_out1.root";
+    const char* prefix = "/tmp/tw_out1";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    MakeResiduals( rootPath, 1.0, 0.001, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
-    std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    std::string header, headerEta;
+    auto absLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto etaLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), headerEta );
 
-    Check( header.rfind( "{1 JetEta", 0 ) == 0, "header starts with {1 JetEta" );
-    Check( header.find( "L2Residual" ) != std::string::npos, "header contains L2Residual" );
-    Check( header.find( "log10" ) != std::string::npos, "header contains log10 formula" );
-    Check( ( int )lines.size() == 36, "36 data lines total" );
+    Check( header.rfind( "{1 JetEta", 0 ) == 0, "abseta header starts with {1 JetEta" );
+    Check( header.find( "L2Residual" ) != std::string::npos, "abseta header contains L2Residual" );
+    Check( ( int )absLines.size() == 36, "abseta file has 36 data lines" );
+    Check( headerEta == header, "eta file header matches abseta header" );
+    Check( ( int )etaLines.size() == 36, "eta file has 36 data lines" );
 
-    if( !lines.empty() ){
-        Check( lines.front().npar == 5, "Npar = 5" );
-        Check( std::fabs( lines.front().ptLo - 40.0 ) < kEps, "pT_lo = 40" );
-        Check( std::fabs( lines.front().ptHi - 1000.0 ) < kEps, "pT_hi = 1000" );
+    if( !absLines.empty() ){
+        Check( absLines.front().npar == 5, "Npar = 5" );
+        Check( std::fabs( absLines.front().ptLo - 40.0 ) < kEps, "pT_lo = 40" );
+        Check( std::fabs( absLines.front().ptHi - 1000.0 ) < kEps, "pT_hi = 1000" );
     }
 
-    std::remove( rootPath );
-    std::remove( txtPath );
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
-// [2] Eta ordering: negative outer→inner, then positive inner→outer
+// [2] Merge source selection: HP and ZB carry different values; the merged
+// corrfinal grid must pull each pT slice from the correct source.
+void TestMergeSourceSelection(){
+    std::cout << "\n[2] Merge source selection\n";
+
+    const char* hpPath = "/tmp/tw_hp2.root";
+    const char* zbPath = "/tmp/tw_zb2.root";
+    const char* rootPath = "/tmp/tw_out2.root";
+    const char* prefix = "/tmp/tw_out2";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+
+    MakeHPZB( hpPath, zbPath, 5.0, 1.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+
+    TFile* fOut = TFile::Open( rootPath, "read" );
+    TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
+    Check( hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output" );
+    if( hGrid ){
+        // y-bin 1 = ptavg_30_70  (lo=30  < 100 threshold) -> ZB value
+        Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 1.0 ) < 1e-6, "ptavg_30_70 pulled from ZB" );
+        // y-bin 3 = ptavg_100_175 (lo=100 >= 100 threshold) -> HP value
+        Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 5.0 ) < 1e-6, "ptavg_100_175 pulled from HP" );
+    }
+    if( fOut ) fOut->Close();
+
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+}
+
+// [3] Eta ordering in the abseta (mirrored) text file
 void TestEtaOrdering(){
-    std::cout << "\n[2] Eta ordering\n";
+    std::cout << "\n[3] Eta ordering (abseta, mirrored)\n";
 
-    const char* rootPath = "/tmp/tw_test2.root";
-    const char* txtPath = "/tmp/tw_test2.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp3.root";
+    const char* zbPath = "/tmp/tw_zb3.root";
+    const char* rootPath = "/tmp/tw_out3.root";
+    const char* prefix = "/tmp/tw_out3";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    MakeResiduals( rootPath, 1.0, 0.001, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
-
-    std::string header;
-    auto lines = ReadJECFile( txtPath, header );
-    if( ( int )lines.size() != 36 ){
-        std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
-    }
-
-    // First line: most negative eta (outermost)
-    Check( lines[0].etaLo < -5.0, "first line etaLo < -5" );
-    Check( lines[0].etaHi < 0.0, "first line etaHi < 0" );
-
-    // Line 18 (index 17): innermost negative eta
-    Check( lines[17].etaLo < 0.0, "line 18 etaLo < 0 (inner negative)" );
-    Check( std::fabs( lines[17].etaHi ) < kEps, "line 18 etaHi = 0 (boundary)" );
-
-    // Line 19 (index 18): innermost positive eta
-    Check( std::fabs( lines[18].etaLo ) < kEps, "line 19 etaLo = 0 (boundary)" );
-    Check( lines[18].etaHi > 0.0, "line 19 etaHi > 0 (inner positive)" );
-
-    // Last line: outermost positive eta
-    Check( lines[35].etaLo > 0.0, "last line etaLo > 0" );
-    Check( lines[35].etaHi > 5.0, "last line etaHi > 5" );
-
-    // All negative-eta lines have etaLo < etaHi < 0 (or etaHi == 0 for innermost)
-    bool negOK = true;
-    for( int i = 0; i < 18; i++ )
-        if( !( lines[i].etaLo < lines[i].etaHi && lines[i].etaHi <= 0.0 )) negOK = false;
-    Check( negOK, "all negative-eta lines have etaLo < etaHi ≤ 0" );
-
-    // All positive-eta lines have 0 ≤ etaLo < etaHi
-    bool posOK = true;
-    for( int i = 18; i < 36; i++ )
-        if( !( lines[i].etaLo >= 0.0 && lines[i].etaLo < lines[i].etaHi )) posOK = false;
-    Check( posOK, "all positive-eta lines have 0 ≤ etaLo < etaHi" );
-
-    // Negative and positive halves are mirror images (|eta| bin boundaries match)
-    // line[17] = innermost negative, line[18] = innermost positive
-    // line[0] = outermost negative, line[35] = outermost positive
-    bool mirrorOK = true;
-    for( int i = 0; i < 18; i++ ){
-        double absLoNeg = -lines[17 - i].etaHi;  // |eta_lo| of negative bin i from center
-        double absHiNeg = -lines[17 - i].etaLo;
-        double absloPOS = lines[18 + i].etaLo;
-        double abshiPOS = lines[18 + i].etaHi;
-        if( std::fabs( absLoNeg - absloPOS ) > kEps || std::fabs( absHiNeg - abshiPOS ) > kEps )
-            mirrorOK = false;
-    }
-    Check( mirrorOK, "negative and positive eta bin edges are symmetric" );
-
-    std::remove( rootPath );
-    std::remove( txtPath );
-}
-
-// [3] Symmetric corrections: negative and positive halves get the same fit params
-void TestSymmetricCorrections(){
-    std::cout << "\n[3] Symmetric corrections\n";
-
-    const char* rootPath = "/tmp/tw_test3.root";
-    const char* txtPath = "/tmp/tw_test3.txt";
-    std::remove( txtPath );
-
-    MakeResiduals( rootPath, 1.0, 0.001, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
     std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
-    }
+    } else {
+        Check( lines[0].etaLo < -5.0, "first line etaLo < -5" );
+        Check( lines[0].etaHi < 0.0, "first line etaHi < 0" );
+        Check( lines[17].etaLo < 0.0, "line 18 etaLo < 0 (inner negative)" );
+        Check( std::fabs( lines[17].etaHi ) < kEps, "line 18 etaHi = 0 (boundary)" );
+        Check( std::fabs( lines[18].etaLo ) < kEps, "line 19 etaLo = 0 (boundary)" );
+        Check( lines[18].etaHi > 0.0, "line 19 etaHi > 0 (inner positive)" );
+        Check( lines[35].etaLo > 0.0, "last line etaLo > 0" );
+        Check( lines[35].etaHi > 5.0, "last line etaHi > 5" );
 
-    // Negative bin i (from center) = lines[17-i], positive bin i = lines[18+i]
-    // They correspond to the same |eta| correction → parameters must be identical.
-    bool paramsMatch = true;
-    for( int i = 0; i < 18; i++ ){
-        const JECLine& neg = lines[17 - i];
-        const JECLine& pos = lines[18 + i];
-        for( int p = 0; p < 3; p++ ){
-            if( std::fabs( neg.p[p] - pos.p[p] ) > 1e-12 ){ paramsMatch = false; break; }
+        bool negOK = true;
+        for( int i = 0; i < 18; i++ )
+            if( !( lines[i].etaLo < lines[i].etaHi && lines[i].etaHi <= 0.0 )) negOK = false;
+        Check( negOK, "all negative-eta lines have etaLo < etaHi <= 0" );
+
+        bool posOK = true;
+        for( int i = 18; i < 36; i++ )
+            if( !( lines[i].etaLo >= 0.0 && lines[i].etaLo < lines[i].etaHi )) posOK = false;
+        Check( posOK, "all positive-eta lines have 0 <= etaLo < etaHi" );
+
+        bool mirrorOK = true;
+        for( int i = 0; i < 18; i++ ){
+            double absLoNeg = -lines[17 - i].etaHi;
+            double absHiNeg = -lines[17 - i].etaLo;
+            double absloPOS = lines[18 + i].etaLo;
+            double abshiPOS = lines[18 + i].etaHi;
+            if( std::fabs( absLoNeg - absloPOS ) > kEps || std::fabs( absHiNeg - abshiPOS ) > kEps )
+                mirrorOK = false;
         }
-    }
-    Check( paramsMatch, "negative and positive sides have identical fit parameters" );
+        Check( mirrorOK, "negative and positive eta bin edges are symmetric" );
 
-    std::remove( rootPath );
-    std::remove( txtPath );
+        bool paramsMatch = true;
+        for( int i = 0; i < 18; i++ ){
+            const JECLine& neg = lines[17 - i];
+            const JECLine& pos = lines[18 + i];
+            for( int p = 0; p < 3; p++ )
+                if( std::fabs( neg.p[p] - pos.p[p] ) > 1e-12 ) paramsMatch = false;
+        }
+        Check( paramsMatch, "negative and positive sides have identical fit parameters (mirrored)" );
+    }
+
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
-// [4] Unity fallback when fewer than kMinSlices (3) pT slices are available
+// [4] Eta ordering in the eta (independent, unmirrored) text file
+void TestEtaFileOrdering(){
+    std::cout << "\n[4] Eta ordering (full eta, independent fits)\n";
+
+    const char* hpPath = "/tmp/tw_hp4.root";
+    const char* zbPath = "/tmp/tw_zb4.root";
+    const char* rootPath = "/tmp/tw_out4.root";
+    const char* prefix = "/tmp/tw_out4";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+
+    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+
+    std::string header;
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), header );
+    if( ( int )lines.size() != 36 ){
+        std::cout << "  SKIP  (line count wrong)\n";
+    } else {
+        Check( std::fabs( lines.front().etaLo - ( -5.191 )) < kEps, "first line etaLo = -5.191" );
+        Check( std::fabs( lines.back().etaHi - 5.191 ) < kEps, "last line etaHi = 5.191" );
+
+        bool ascending = true;
+        for( int i = 0; i < 36; i++ )
+            if( !( lines[i].etaLo < lines[i].etaHi )) ascending = false;
+        for( int i = 1; i < 36; i++ )
+            if( !( std::fabs( lines[i].etaLo - lines[i - 1].etaHi ) < kEps )) ascending = false;
+        Check( ascending, "36 lines are contiguous and ascending in eta, no mirroring" );
+    }
+
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+}
+
+// [5] Unity fallback: fewer than kMinSlices (3) valid pT slices across the merge
 void TestUnityFallback_TooFewSlices(){
-    std::cout << "\n[4] Unity fallback — fewer than kMinSlices pT slices\n";
+    std::cout << "\n[5] Unity fallback — fewer than kMinSlices pT slices\n";
 
-    const char* rootPath = "/tmp/tw_test4.root";
-    const char* txtPath = "/tmp/tw_test4.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp5.root";
+    const char* zbPath = "/tmp/tw_zb5.root";
+    const char* rootPath = "/tmp/tw_out5.root";
+    const char* prefix = "/tmp/tw_out5";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    // Only 2 pT slices — not enough to fit 3 parameters
-    MakeResiduals( rootPath, 1.0, 0.001, 2 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    // Only 2 valid slices total: HP supplies 100-175 and 175-250, ZB supplies none.
+    MakeResiduals( hpPath, 1.0, 0.001, {2, 3} );
+    MakeResiduals( zbPath, 1.0, 0.001, {} );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
     std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
+    } else {
+        bool allUnity = true;
+        for( const auto& l : lines )
+            if( std::fabs( l.p[0] - 1.0 ) > kEps || std::fabs( l.p[1] ) > kEps || std::fabs( l.p[2] ) > kEps )
+                allUnity = false;
+        Check( allUnity, "all bins fall back to unity (p0=1, p1=0, p2=0)" );
     }
 
-    bool allUnity = true;
-    for( const auto& l : lines ){
-        if( std::fabs( l.p[0] - 1.0 ) > kEps ||
-            std::fabs( l.p[1] - 0.0 ) > kEps ||
-            std::fabs( l.p[2] - 0.0 ) > kEps ){
-            allUnity = false;
-            break;
-        }
-    }
-    Check( allUnity, "all bins fall back to unity (p0=1, p1=0, p2=0)" );
-
-    std::remove( rootPath );
-    std::remove( txtPath );
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
-// [5] Unity fallback for empty histograms (all bins zero)
+// [6] Unity fallback for empty histograms (all bins zero)
 void TestUnityFallback_EmptyBins(){
-    std::cout << "\n[5] Unity fallback — empty histograms\n";
+    std::cout << "\n[6] Unity fallback — empty histograms\n";
 
-    const char* rootPath = "/tmp/tw_test5.root";
-    const char* txtPath = "/tmp/tw_test5.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp6.root";
+    const char* zbPath = "/tmp/tw_zb6.root";
+    const char* rootPath = "/tmp/tw_out6.root";
+    const char* prefix = "/tmp/tw_out6";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    // corrValue=0, corrErr=0 → all bins empty → no valid pT slices → unity
-    MakeResiduals( rootPath, 0.0, 0.0, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    MakeHPZB( hpPath, zbPath, 0.0, 0.0, 0.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
     std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
+    } else {
+        bool allUnity = true;
+        for( const auto& l : lines )
+            if( std::fabs( l.p[0] - 1.0 ) > kEps || std::fabs( l.p[1] ) > kEps || std::fabs( l.p[2] ) > kEps )
+                allUnity = false;
+        Check( allUnity, "empty bins produce unity correction (p0=1, p1=0, p2=0)" );
     }
 
-    bool allUnity = true;
-    for( const auto& l : lines ){
-        if( std::fabs( l.p[0] - 1.0 ) > kEps ||
-            std::fabs( l.p[1] - 0.0 ) > kEps ||
-            std::fabs( l.p[2] - 0.0 ) > kEps ){
-            allUnity = false;
-            break;
-        }
-    }
-    Check( allUnity, "empty bins produce unity correction (p0=1, p1=0, p2=0)" );
-
-    std::remove( rootPath );
-    std::remove( txtPath );
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
-// [6] Fit round-trip: set corrections from known params, check fit recovers them
-// Uses params (p0=1.0, p1=0.0, p2=0.0) → constant correction=1.0 everywhere.
-// The fit should converge to a solution very close to (1,0,0).
+// [7] Fit round-trip: unit input recovers f≈1.0 at all pT centers
 void TestFitRoundTrip(){
-    std::cout << "\n[6] Fit round-trip\n";
+    std::cout << "\n[7] Fit round-trip\n";
 
-    const char* rootPath = "/tmp/tw_test6.root";
-    const char* txtPath = "/tmp/tw_test6.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp7.root";
+    const char* zbPath = "/tmp/tw_zb7.root";
+    const char* rootPath = "/tmp/tw_out7.root";
+    const char* prefix = "/tmp/tw_out7";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    // Evaluate 1/(p0+p1*log10(0.01*pT)+p2*10/pT) at each pT center.
-    // With p0=1, p1=0, p2=0 → correction=1.0 everywhere.
-    // The fit should recover params that give f≈1.0 at all pT centers.
-    MakeResiduals( rootPath, 1.0, 1e-5, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    MakeHPZB( hpPath, zbPath, 1.0, 1.0, 1e-5 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
     std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
+    } else {
+        // slice midpoints: 30-70, 70-100, 100-175, 175-250, 250-500, 500-1000
+        const double ptCenters[] = { 50.0, 85.0, 137.5, 212.5, 375.0, 750.0 };
+        const JECLine& barrel = lines[18];  // innermost positive eta
+        bool fitsClose = true;
+        for( double pT : ptCenters ){
+            double denom = barrel.p[0] + barrel.p[1] * std::log10( 0.01 * pT ) + barrel.p[2] / ( pT / 10.0 );
+            double corr = ( denom != 0.0 ) ? 1.0 / denom : 0.0;
+            if( std::fabs( corr - 1.0 ) > 0.01 ){ fitsClose = false; break; }
+        }
+        Check( fitsClose, "fit recovers f≈1.0 at all pT centers for unit input" );
     }
 
-    // Evaluate the fit at each of the 5 pT centers for the innermost barrel bin.
-    // The output correction should be close to 1.0 if the fit converged.
-    const double ptCenters[] = { 65.0, 105.0, 155.0, 225.0, 630.0 };
-    const JECLine& barrel = lines[18];  // innermost positive eta
-    bool fitsClose = true;
-    for( double pT : ptCenters ){
-        double denom = barrel.p[0]
-                     + barrel.p[1] * std::log10( 0.01 * pT )
-                     + barrel.p[2] / ( pT / 10.0 );
-        double corr = ( denom != 0.0 ) ? 1.0 / denom : 0.0;
-        if( std::fabs( corr - 1.0 ) > 0.01 ){ fitsClose = false; break; }
-    }
-    Check( fitsClose, "fit recovers f≈1.0 at all pT centers for unit input" );
-
-    std::remove( rootPath );
-    std::remove( txtPath );
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
-// [7] CMS JEC edge value: outermost eta bin ends at 5.191
+// [8] CMS JEC edge value: outermost eta bin ends at 5.191
 void TestEtaExtent(){
-    std::cout << "\n[7] CMS eta extent\n";
+    std::cout << "\n[8] CMS eta extent\n";
 
-    const char* rootPath = "/tmp/tw_test7.root";
-    const char* txtPath = "/tmp/tw_test7.txt";
-    std::remove( txtPath );
+    const char* hpPath = "/tmp/tw_hp8.root";
+    const char* zbPath = "/tmp/tw_zb8.root";
+    const char* rootPath = "/tmp/tw_out8.root";
+    const char* prefix = "/tmp/tw_out8";
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
-    MakeResiduals( rootPath, 1.0, 0.001, 5 );
-    runTextFile( rootPath, txtPath, "gauss", "ak4PF" );
+    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
 
     std::string header;
-    auto lines = ReadJECFile( txtPath, header );
+    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
-        std::remove( rootPath ); std::remove( txtPath );
-        return;
+    } else {
+        Check( std::fabs( lines[0].etaLo - ( -5.191 )) < kEps, "negative outer edge = -5.191" );
+        Check( std::fabs( lines[35].etaHi - 5.191 ) < kEps, "positive outer edge =  5.191" );
     }
 
-    Check( std::fabs( lines[0].etaLo - ( -5.191 )) < kEps, "negative outer edge = -5.191" );
-    Check( std::fabs( lines[35].etaHi - 5.191 ) < kEps, "positive outer edge =  5.191" );
-
-    std::remove( rootPath );
-    std::remove( txtPath );
+    CleanupFiles( hpPath, zbPath, rootPath, prefix );
 }
 
 // ---- main ----
@@ -359,8 +387,9 @@ int main(){
     std::cout << "=== TestTextFileWriter ===\n";
 
     TestFileStructure();
+    TestMergeSourceSelection();
     TestEtaOrdering();
-    TestSymmetricCorrections();
+    TestEtaFileOrdering();
     TestUnityFallback_TooFewSlices();
     TestUnityFallback_EmptyBins();
     TestFitRoundTrip();

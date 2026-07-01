@@ -1,10 +1,14 @@
 #include "TextFileWriter.h"
 
 #include "TFile.h"
+#include "TDirectory.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TF1.h"
 #include "TFitResult.h"
 #include "TGraphErrors.h"
+#include "TString.h"
+#include "TSystem.h"
 #include "TMath.h"
 
 #include "Binning.h"
@@ -40,11 +44,36 @@ struct FitResult {
     bool   valid    = false;
 };
 
+// Arithmetic midpoint of a pT slice — used as the fit x-value for that slice.
+static double SliceCenter( const RangeBin& sl ){
+    return 0.5 * ( sl.lo + sl.hi );
+}
+
+// Fetch an intercept histogram, preferring the cone/name path, then a flat
+// name at file root, then the legacy pre-cone-TDirectory flat naming scheme.
+static TH1D* FetchIntercept( TFile* f, const TString& cone, const TString& name,
+                             const RangeBin& ptSlice, const TString& method ){
+    TDirectory* coneDir = ( TDirectory* )f->Get( cone );
+    TH1D* h = coneDir ? ( TH1D* )coneDir->Get( name ) : nullptr;
+    if( !h ) h = ( TH1D* )f->Get( name );
+    if( !h ){
+        TString oldName = Form( "%s_intercept_%s%s",
+            cone.Data(), method.Data(), ptSlice.shortName.Data() );
+        h = ( TH1D* )f->Get( oldName );
+    }
+    return h;
+}
+
+// Fit corr(pT_avg) at one eta bin, write the TGraphErrors — with the TF1
+// embedded so it draws later — into dGraphs, and return the fit parameters.
+// The graph and the text-file output are always derived from this single
+// fit; never re-fit the same points twice elsewhere.
 static FitResult FitPtSlices(
     const std::vector<double>& ptCenters,
     const std::vector<double>& corr,
     const std::vector<double>& corrErr,
-    int iEta ){
+    const TString& graphName,
+    TDirectory* dGraphs ){
     FitResult r;
     int n = ( int )ptCenters.size();
     if( n < kMinSlices ) return r;
@@ -52,135 +81,190 @@ static FitResult FitPtSlices(
     std::vector<double> ex( n, 0.0 );
     TGraphErrors* gr = new TGraphErrors( n,
         ptCenters.data(), corr.data(), ex.data(), corrErr.data() );
+    gr->SetName( graphName );
+    gr->SetTitle( ";p_{T,avg} [GeV];Correction factor" );
 
-    TF1* f = new TF1( Form( "_ptfit_%d", iEta ), FitFunc, kPtLo, kPtHi, kNPar );
+    TF1* f = new TF1( graphName + "_fit", FitFunc, kPtLo, kPtHi, kNPar );
     // Start at the unity correction (1/(1+0+0)=1) — physically close for all eta.
     // Starting at (1.5,1.5,1.5) gives a negative denominator at low pT.
     f->SetParameter( 0, 1.0 );
     f->SetParameter( 1, 0.0 );
     f->SetParameter( 2, 0.0 );
 
-    TFitResultPtr res = gr->Fit( f, "NQSR" );
+    // No "N": the fit function is embedded in the graph so plotResiduals can draw it later.
+    TFitResultPtr res = gr->Fit( f, "QSR" );
     if( res.Get() && res->IsValid() ){
         for( int p = 0; p < kNPar; p++ ) r.p[p] = res->Parameter( p );
         r.valid = true;
     }
 
-    delete f;
+    if( dGraphs ){ dGraphs->cd(); gr->Write(); }
+    delete f;    // clone embedded in gr's function list is separately owned
     delete gr;
     return r;
 }
 
-// Arithmetic midpoint of a pT slice — used as the fit x-value for that slice.
-static double SliceCenter( const RangeBin& sl ){
-    return 0.5 * ( sl.lo + sl.hi );
+// Write one CMS L2Residual JEC data line for the [etaLo, etaHi] range.
+static void WriteJECLine( std::ofstream& out, double etaLo, double etaHi, const FitResult& fit ){
+    out << etaLo << "\t" << etaHi << "\t" << ( kNPar + 2 )
+        << "\t" << kPtLo << "\t" << kPtHi;
+    if( fit.valid ){
+        out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
+    } else {
+        out << "\t" << 1 << "\t" << 0 << "\t" << 0;
+    }
+    out << "\n";
 }
 
-void runTextFile( TString residualsFile, TString outputFile,
-                 TString method, TString cone ){
+// Mirrored |eta| text file: negative half outermost→innermost, then positive
+// half innermost→outermost, both halves reusing the same |eta| fit results.
+static bool WriteAbsEtaTextFile( const TString& path, const std::vector<FitResult>& fits ){
+    std::ofstream out( path.Data() );
+    if( !out.is_open() ) return false;
+    out << kJECHeader << "\n";
+    const int nEta = ( int )fits.size();
+    for( int ieta = nEta - 1; ieta >= 0; ieta-- )
+        WriteJECLine( out, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta], fits[ieta] );
+    for( int ieta = 0; ieta < nEta; ieta++ )
+        WriteJECLine( out, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1], fits[ieta] );
+    out.close();
+    return true;
+}
 
-    std::cout << "Residuals: " << residualsFile << "\n"
-              << "Output:    " << outputFile    << "\n"
-              << "Cone:      " << cone          << "\n"
-              << "Method:    " << method        << "\n";
+// Independent full-eta text file: kEtaEdges is already ascending -5.191→5.191,
+// so this is a single direct pass — no mirroring, each bin has its own fit.
+static bool WriteFullEtaTextFile( const TString& path, const std::vector<FitResult>& fits ){
+    std::ofstream out( path.Data() );
+    if( !out.is_open() ) return false;
+    out << kJECHeader << "\n";
+    const int nEta = ( int )fits.size();
+    for( int ieta = 0; ieta < nEta; ieta++ )
+        WriteJECLine( out, kEtaEdges[ieta], kEtaEdges[ieta + 1], fits[ieta] );
+    out.close();
+    return true;
+}
 
-    TFile* fIn = TFile::Open( residualsFile, "read" );
-    if( !fIn || fIn->IsZombie() ){
-        std::cerr << "Cannot open " << residualsFile << "\n";
-        return;
-    }
+void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
+                 TString outputRootFile, TString outputTextPrefix,
+                 TString method ){
+
+    std::cout << "HP residuals: " << hpResidualsFile  << "\n"
+              << "ZB residuals: " << zbResidualsFile  << "\n"
+              << "Output ROOT:  " << outputRootFile   << "\n"
+              << "Text prefix:  " << outputTextPrefix << "\n"
+              << "Method:       " << method           << "\n";
+
+    const AnalysisConfig& cfg = Config();
+
+    TFile* fHP = TFile::Open( hpResidualsFile, "read" );
+    TFile* fZB = TFile::Open( zbResidualsFile, "read" );
+    if( !fHP || fHP->IsZombie() ){ std::cerr << "Cannot open " << hpResidualsFile << "\n"; return; }
+    if( !fZB || fZB->IsZombie() ){ std::cerr << "Cannot open " << zbResidualsFile << "\n"; return; }
+
+    { Ssiz_t sl = outputRootFile.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputRootFile( 0, sl ) ), kTRUE ); } }
+    { Ssiz_t sl = outputTextPrefix.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputTextPrefix( 0, sl ) ), kTRUE ); } }
+
+    TFile* fOut = new TFile( outputRootFile, "recreate" );
 
     BinningConfig bins;
-    const int nPt  = ( int )bins.ptavgSlices.size();
-    const int nEta = ( int )kAbsEtaEdges.size() - 1;  // 18
+    const int nPt = ( int )bins.ptavgSlices.size();
 
-    std::vector<double> ptCenters( nPt );
-    for( int ip = 0; ip < nPt; ip++ ){
-        ptCenters[ip] = SliceCenter( bins.ptavgSlices[ip] );
-    }
+    // pT_avg bin edges for the corrfinal grid — bins.ptavgSlices are contiguous.
+    std::vector<Double_t> ptEdges( nPt + 1 );
+    ptEdges[0] = bins.ptavgSlices[0].lo;
+    for( int ip = 0; ip < nPt; ip++ ) ptEdges[ip + 1] = bins.ptavgSlices[ip].hi;
 
-    // Load one intercept TH1D per pT slice. Prefer the canonical global order:
-    // {cone}_intercept_abseta_{ptSlice}_{method}
-    // and keep the older {cone}_intercept_{method}{ptSlice} form readable.
-    TDirectory* coneDir = ( TDirectory* )fIn->Get( cone.Data() );
-    std::vector<TH1D*> hSlice( nPt, nullptr );
-    for( int ip = 0; ip < nPt; ip++ ){
-        TString name = L2Name::ObjectName( cone, "intercept",
-            {L2Name::EtaModeKey( false ), L2Name::PtKey( bins.ptavgSlices[ip] )}, {method} );
-        if( coneDir ) hSlice[ip] = ( TH1D* )coneDir->Get( name );
-        if( !hSlice[ip] ) hSlice[ip] = ( TH1D* )fIn->Get( name );
-        if( !hSlice[ip] ){
-            TString oldName = Form( "%s_intercept_%s%s",
-                cone.Data(), method.Data(), bins.ptavgSlices[ip].shortName.Data() );
-            hSlice[ip] = ( TH1D* )fIn->Get( oldName );
-            if( !hSlice[ip] ){
-                std::cerr << "WARNING: " << name << " not found\n";
+    for( const TString& cone : cfg.coneLabels ){
+
+        TDirectory* hpConeDir = ( TDirectory* )fHP->Get( cone );
+        TDirectory* zbConeDir = ( TDirectory* )fZB->Get( cone );
+        if( !hpConeDir || !zbConeDir ){
+            std::cerr << "Missing " << cone << " directory in HP or ZB residuals file, skipping\n";
+            continue;
+        }
+
+        fOut->cd();
+        TDirectory* coneDirOut = fOut->mkdir( cone.Data() );
+        TDirectory* dGraphs = coneDirOut->mkdir( "graphs" );
+
+        // filled below for abseta then fulleta, used to write the two text files afterward
+        std::vector<FitResult> fitsAbsEta, fitsFullEta;
+
+        for( int em = 0; em < 2; em++ ){
+            const bool fullEta = ( em == 1 );
+            const std::vector<Double_t>& etaEdges = fullEta ? kEtaEdges : kAbsEtaEdges;
+            const int nEta = ( int )etaEdges.size() - 1;
+            const TString etaMode = L2Name::EtaModeKey( fullEta );
+
+            // one intercept histogram per pT slice, chosen from HP or ZB by the trigger threshold
+            std::vector<TH1D*> hSlice( nPt, nullptr );
+            for( int ip = 0; ip < nPt; ip++ ){
+                const auto& ptSlice = bins.ptavgSlices[ip];
+                TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fHP : fZB;
+                TString name = L2Name::ObjectName( cone, "intercept",
+                    {etaMode, L2Name::PtKey( ptSlice )}, {method} );
+                hSlice[ip] = FetchIntercept( src, cone, name, ptSlice, method );
+                if( !hSlice[ip] ){
+                    std::cerr << "WARNING: " << name << " not found in "
+                              << ( src == fHP ? "HP" : "ZB" ) << " residuals file\n";
+                }
+            }
+
+            // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
+            TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {method} );
+            TH2D* hGrid = new TH2D( gridName, "", nEta, etaEdges.data(), nPt, ptEdges.data() );
+            hGrid->GetXaxis()->SetTitle( fullEta ? "#eta_{probe}" : "|#eta_{probe}|" );
+            hGrid->GetYaxis()->SetTitle( "p_{T,avg} [GeV]" );
+            hGrid->GetZaxis()->SetTitle( "Correction factor" );
+            hGrid->Sumw2();
+            for( int ip = 0; ip < nPt; ip++ ){
+                if( !hSlice[ip] ) continue;
+                for( int ieta = 0; ieta < nEta; ieta++ ){
+                    hGrid->SetBinContent( ieta + 1, ip + 1, hSlice[ip]->GetBinContent( ieta + 1 ) );
+                    hGrid->SetBinError( ieta + 1, ip + 1, hSlice[ip]->GetBinError( ieta + 1 ) );
+                }
+            }
+            coneDirOut->cd();
+            hGrid->Write();
+            delete hGrid;
+
+            // pT-dependence fit, one per eta bin
+            std::vector<FitResult>& fits = fullEta ? fitsFullEta : fitsAbsEta;
+            fits.assign( nEta, FitResult{} );
+            for( int ieta = 0; ieta < nEta; ieta++ ){
+                std::vector<double> ptX, corr, corrErr;
+                for( int ip = 0; ip < nPt; ip++ ){
+                    if( !hSlice[ip] ) continue;
+                    double v = hSlice[ip]->GetBinContent( ieta + 1 );
+                    double e = hSlice[ip]->GetBinError( ieta + 1 );
+                    if( v == 0.0 && e == 0.0 ) continue;
+                    ptX.push_back( SliceCenter( bins.ptavgSlices[ip] ) );
+                    corr.push_back( v );
+                    corrErr.push_back( e > 0.0 ? e : 1e-4 );
+                }
+                TString graphName = L2Name::ObjectName( cone, "ptcorr",
+                    {etaMode, L2Name::EtaKey( ieta )}, {method} );
+                fits[ieta] = FitPtSlices( ptX, corr, corrErr, graphName, dGraphs );
+                if( !fits[ieta].valid ){
+                    std::cerr << "WARNING: pT fit failed for " << cone << " " << etaMode
+                              << " eta bin " << ieta + 1
+                              << " (" << ( int )ptX.size() << " pT slices available)\n";
+                }
             }
         }
+
+        TString absEtaTxt = outputTextPrefix + "_" + cone + "_abseta.txt";
+        TString etaTxt    = outputTextPrefix + "_" + cone + "_eta.txt";
+        if( !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
+            std::cerr << "Cannot open output file " << absEtaTxt << "\n";
+        if( !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )
+            std::cerr << "Cannot open output file " << etaTxt << "\n";
+
+        std::cout << "Done. " << cone << ": " << 2 * ( int )fitsAbsEta.size() << " eta bins -> " << absEtaTxt
+                  << ", " << ( int )fitsFullEta.size() << " eta bins -> " << etaTxt << "\n";
     }
 
-    // For each |eta| bin, gather valid (pT, correction, error) points and fit.
-    std::vector<FitResult> fits( nEta );
-    for( int ieta = 0; ieta < nEta; ieta++ ){
-        std::vector<double> ptX, corr, corrErr;
-        for( int ip = 0; ip < nPt; ip++ ){
-            if( !hSlice[ip] ) continue;
-            double v = hSlice[ip]->GetBinContent( ieta + 1 );
-            double e = hSlice[ip]->GetBinError( ieta + 1 );
-            if( v == 0.0 && e == 0.0 ) continue;
-            ptX.push_back( ptCenters[ip] );
-            corr.push_back( v );
-            corrErr.push_back( e > 0.0 ? e : 1e-4 );
-        }
-        fits[ieta] = FitPtSlices( ptX, corr, corrErr, ieta );
-        if( !fits[ieta].valid ){
-            std::cerr << "WARNING: fit failed for |eta| bin " << ieta + 1
-                      << " [" << kAbsEtaEdges[ieta] << ", " << kAbsEtaEdges[ieta + 1] << "]"
-                      << " (" << ( int )ptX.size() << " pT slices available)\n";
-        }
-    }
-
-    fIn->Close();
-
-    std::ofstream out( outputFile.Data() );
-    if( !out.is_open() ){
-        std::cerr << "Cannot open output file " << outputFile << "\n";
-        return;
-    }
-
-    out << kJECHeader << "\n";
-
-    // Write negative eta half: |eta| bins from outermost (index 17) to innermost (index 0).
-    // For |eta| bin i: eta range is [-kAbsEtaEdges[i+1], -kAbsEtaEdges[i]].
-    for( int ieta = nEta - 1; ieta >= 0; ieta-- ){
-        const FitResult& fit = fits[ieta];
-        double etaLo = -kAbsEtaEdges[ieta + 1];
-        double etaHi = -kAbsEtaEdges[ieta];
-        out << etaLo << "\t" << etaHi << "\t" << ( kNPar + 2 )
-            << "\t" << kPtLo << "\t" << kPtHi;
-        if( fit.valid ){
-            out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
-        } else {
-            out << "\t" << 1 << "\t" << 0 << "\t" << 0;
-        }
-        out << "\n";
-    }
-
-    // Write positive eta half: |eta| bins from innermost (index 0) to outermost (index 17).
-    for( int ieta = 0; ieta < nEta; ieta++ ){
-        const FitResult& fit = fits[ieta];
-        double etaLo = kAbsEtaEdges[ieta];
-        double etaHi = kAbsEtaEdges[ieta + 1];
-        out << etaLo << "\t" << etaHi << "\t" << ( kNPar + 2 )
-            << "\t" << kPtLo << "\t" << kPtHi;
-        if( fit.valid ){
-            out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
-        } else {
-            out << "\t" << 1 << "\t" << 0 << "\t" << 0;
-        }
-        out << "\n";
-    }
-
-    out.close();
-    std::cout << "Done. " << 2 * nEta << " eta bins written to " << outputFile << "\n";
+    fOut->Close();
+    fHP->Close();
+    fZB->Close();
 }

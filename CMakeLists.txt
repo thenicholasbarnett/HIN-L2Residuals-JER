@@ -112,6 +112,11 @@ foreach(test ${TESTS})
     add_test(NAME ${name} COMMAND ${name})
 endforeach()
 
+# TestTextFileWriter calls runTextFile, which loads cfg.coneLabels/cfg.hltJ80Thresh
+# via Config() — DefaultConfigPath()'s relative lookup ("cfg/2024ppRef.toml")
+# needs CWD = repo root, not ctest's default of the build directory.
+set_tests_properties(TestTextFileWriter PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
 add_test(NAME TestBuild
     COMMAND bash ${PROJECT_SOURCE_DIR}/tests/TestBuild.sh
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
