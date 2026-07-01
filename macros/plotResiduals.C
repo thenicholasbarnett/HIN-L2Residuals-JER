@@ -148,10 +148,6 @@ static TH2D* GetH2Any( TFile* f, const std::vector<TString>& names ){
     return nullptr;
 }
 
-static TString OldEtaSuffix( bool fullEta ){
-    return fullEta ? "_fulleta" : "";
-}
-
 // Mirror an |eta| TH1D (kAbsEtaEdges, 18 bins) onto a full-eta TH1D (kEtaEdges, 36 bins).
 // Full-eta bin i (1-indexed): i <= 18 → |eta| bin (18-i+1),  i > 18 → |eta| bin (i-18).
 static TH1D* Reflect( TH1D* hAbs, const TString& name ){
@@ -402,9 +398,7 @@ static void PlotAsymDist( TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb ){
     TDirectory* dData = ( TDirectory* )fIn->Get( cone + "/QA_data" );
-    if( !dData ) dData = ( TDirectory* )fIn->Get( cone + "_QA_data" );
     TDirectory* dMC   = ( TDirectory* )fIn->Get( cone + "/QA_mc" );
-    if( !dMC )   dMC   = ( TDirectory* )fIn->Get( cone + "_QA_mc" );
 
     const int nPt    = ( int )bins.ptavgSlices.size();
     const int nAlpha = ( int )bins.alphaSlices.size();
@@ -415,18 +409,16 @@ static void PlotAsymDist( TFile* fIn, const TString& outDir,
         for( int ia = 0; ia < nAlpha; ia++ ){
             const auto& aSl = bins.alphaSlices[ia];
             for( int ie = 0; ie < nEta; ie++ ){
-                TString etaKey = L2Name::EtaKey( ie );
+                TString etaKey = L2Name::EtaKey( ie, false );
                 TString ptKey = L2Name::PtKey( ptSl );
                 TString alphaKey = L2Name::AlphaKey( aSl );
-                TString oldSfx = Form( "%s%s_eta%02d",
-                    ptSl.shortName.Data(), aSl.shortName.Data(), ie );
                 TString dname = L2Name::ObjectName( cone, "A_data",
                     {L2Name::EtaModeKey( false ), etaKey, ptKey, alphaKey} );
                 TString mname = L2Name::ObjectName( cone, "A_mc",
                     {L2Name::EtaModeKey( false ), etaKey, ptKey, alphaKey} );
 
-                TH1D* hd = GetHAny( dData, {dname, cone + "_A_data_" + oldSfx} );
-                TH1D* hm = GetHAny( dMC,   {mname, cone + "_A_mc_"   + oldSfx} );
+                TH1D* hd = GetHAny( dData, {dname} );
+                TH1D* hm = GetHAny( dMC,   {mname} );
 
                 if( !hd || !hm || hd->GetEntries() < kMinEntriesPlot ){
                     if( hd ) delete hd;
@@ -557,7 +549,6 @@ static void PlotROverlay( TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb ){
     TDirectory* dRvals = ( TDirectory* )fIn->Get( cone + "/Rvals" );
-    if( !dRvals ) dRvals = ( TDirectory* )fIn->Get( cone + "_Rvals" );
 
     const int nPt    = ( int )bins.ptavgSlices.size();
     const int nAlpha = ( int )bins.alphaSlices.size();
@@ -574,13 +565,9 @@ static void PlotROverlay( TFile* fIn, const TString& outDir,
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
                 TString rmName = L2Name::ObjectName( cone, "R_mc",
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
-                TString oldRdName = Form( "%s_R_data_%s%s%s",
-                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), aSl.shortName.Data() );
-                TString oldRmName = Form( "%s_R_mc_%s%s%s",
-                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), aSl.shortName.Data() );
 
-                TH1D* hRd = GetHAny( dRvals, {rdName, oldRdName} );
-                TH1D* hRm = GetHAny( dRvals, {rmName, oldRmName} );
+                TH1D* hRd = GetHAny( dRvals, {rdName} );
+                TH1D* hRm = GetHAny( dRvals, {rmName} );
 
                 if( !hRd || !hRm ){
                     if( hRd ) delete hRd;
@@ -661,7 +648,6 @@ static void PlotAlphaFit( TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
                          ProgressBar& pb ){
     TDirectory* dGraphs = ( TDirectory* )fIn->Get( cone + "/graphs" );
-    if( !dGraphs ) dGraphs = ( TDirectory* )fIn->Get( cone + "_graphs" );
 
     const int nPt  = ( int )bins.ptavgSlices.size();
     const int nEta = ( int )kAbsEtaEdges.size() - 1;
@@ -670,15 +656,13 @@ static void PlotAlphaFit( TFile* fIn, const TString& outDir,
         for( int ip = 0; ip < nPt; ip++ ){
             const auto& ptSl = bins.ptavgSlices[ip];
             for( int ie = 0; ie < nEta; ie++ ){
-                TString etaKey = L2Name::EtaKey( ie );
+                TString etaKey = L2Name::EtaKey( ie, false );
                 TString ptKey = L2Name::PtKey( ptSl );
                 TString gname = L2Name::ObjectName( cone, "R",
                     {L2Name::EtaModeKey( false ), etaKey, ptKey}, {kMethodKeys[m]} );
                 TString gnorm = gname + "_norm";
-                TString oldGName = Form( "%s_R_%s%s_eta%02d",
-                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), ie );
 
-                TGraphErrors* gr = GetGraphAny( dGraphs, {gnorm, gname, oldGName} );
+                TGraphErrors* gr = GetGraphAny( dGraphs, {gnorm, gname} );
 
                 if( !gr || gr->GetN() < 2 ){
                     pb.Update();
@@ -754,7 +738,7 @@ static void PlotPtFit( TFile* fIn, const TString& outDir,
             const TString etaMode = L2Name::EtaModeKey( fullEta );
 
             for( int ie = 0; ie < nEta; ie++ ){
-                TString etaKey = L2Name::EtaKey( ie );
+                TString etaKey = L2Name::EtaKey( ie, fullEta );
                 TString gname = L2Name::ObjectName( cone, "ptcorr", {etaMode, etaKey}, {kMethodKeys[m]} );
                 TString gnorm = gname + "_norm";
 
@@ -827,12 +811,8 @@ static void PlotEtaSym( TFile* fIn, const TString& outDir,
                 {L2Name::EtaModeKey( false ), ptKey}, {kMethodKeys[m]} );
             const TString nameFull = L2Name::ObjectName( cone, "intercept",
                 {L2Name::EtaModeKey( true ), ptKey}, {kMethodKeys[m]} );
-            const TString oldNameAbs = Form( "%s_intercept_%s%s",
-                cone.Data(), kMethodKeys[m], sl.shortName.Data() );
-            const TString oldNameFull = oldNameAbs + "_fulleta";
-
-            TH1D* hAbs  = GetHAny( fIn, {cone + "/" + nameAbs,  nameAbs,  oldNameAbs} );
-            TH1D* hFull = GetHAny( fIn, {cone + "/" + nameFull, nameFull, oldNameFull} );
+            TH1D* hAbs  = GetHAny( fIn, {cone + "/" + nameAbs} );
+            TH1D* hFull = GetHAny( fIn, {cone + "/" + nameFull} );
 
             if( !hAbs || !hFull ){
                 delete hAbs; delete hFull;
@@ -919,7 +899,6 @@ static void PlotEtaSym( TFile* fIn, const TString& outDir,
 static void PlotMethodComp( TFile* fIn, const TString& outDir,
                            const TString& cone, const BinningConfig& bins,
                            bool fullEta, ProgressBar& pb ){
-    const TString suffix   = fullEta ? "_fulleta" : "";
     const TString etaMode  = L2Name::EtaModeKey( fullEta );
     const TString etaLabel = fullEta ? "Full #eta" : "|#eta|";
     const double  xMin     = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
@@ -933,9 +912,7 @@ static void PlotMethodComp( TFile* fIn, const TString& outDir,
         for( int m = 0; m < kNMethods; m++ ){
             TString name = L2Name::ObjectName( cone, "intercept",
                 {etaMode, L2Name::PtKey( sl )}, {kMethodKeys[m]} );
-            TString oldName = Form( "%s_intercept_%s%s%s",
-                cone.Data(), kMethodKeys[m], sl.shortName.Data(), suffix.Data() );
-            hists[m] = GetHAny( fIn, {cone + "/" + name, name, oldName} );
+            hists[m] = GetHAny( fIn, {cone + "/" + name} );
         }
 
         if( !hists[0] ){
@@ -950,7 +927,7 @@ static void PlotMethodComp( TFile* fIn, const TString& outDir,
         for( int m = 1; m < kNMethods; m++ ){
             if( !hists[m] ) continue;
             TString rname = Form( "%s_mcomp%s%s_r%d",
-                cone.Data(), sl.shortName.Data(), suffix.Data(), m );
+                cone.Data(), sl.shortName.Data(), etaMode.Data(), m );
             ratios.push_back( RatioH( hists[m], hists[0], rname ) );
             ratioIdx.push_back( m );
         }
@@ -1048,7 +1025,6 @@ static void PlotFinals( TFile* fIn, const TString& outDir,
     for( int m = 0; m < kNMethods; m++ ){
         for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
             const bool   fullEta  = ( ieta == 1 );
-            const TString suffix  = fullEta ? "_fulleta" : "";
             const TString xTitle  = fullEta ? "#eta" : "|#eta|";
             const double  xMin    = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
             const double  xMax    = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
@@ -1058,9 +1034,7 @@ static void PlotFinals( TFile* fIn, const TString& outDir,
             for( const auto& ptSl : bins.ptavgSlices ){
                 TString name = L2Name::ObjectName( cone, "intercept",
                     {etaMode, L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
-                TString oldName = Form( "%s_intercept_%s%s%s",
-                    cone.Data(), kMethodKeys[m], ptSl.shortName.Data(), suffix.Data() );
-                hists.push_back( GetHAny( fIn, {cone + "/" + name, name, oldName} ) );
+                hists.push_back( GetHAny( fIn, {cone + "/" + name} ) );
             }
 
             bool anyValid = false;
@@ -1231,7 +1205,6 @@ static void PlotKinematics( TFile* fIn, const TString& outDir,
     const int plotsPerCollection = 3 + kNKinematicsPtMins;
     {
         TH3D* hTest = ( TH3D* )fIn->Get( cone + "/" + cone + "_incl" );
-        if( !hTest ) hTest = ( TH3D* )fIn->Get( cone + "_incl" );
         if( !hTest ){
             for( int i = 0; i < kNKinematicsCollections * plotsPerCollection + 3; i++ ) pb.Update();
             return;
@@ -1252,7 +1225,6 @@ static void PlotKinematics( TFile* fIn, const TString& outDir,
         const TString coll = kKinematicsCollections[ic].inputKey;
         const TString collPlot = kKinematicsCollections[ic].plotKey;
         TH3D* h3 = ( TH3D* )fIn->Get( cone + "/" + cone + "_" + coll );
-        if( !h3 ) h3 = ( TH3D* )fIn->Get( cone + "_" + coll );
 
         if( !h3 ){
             for( int i = 0; i < plotsPerCollection; i++ ) pb.Update();
@@ -1563,8 +1535,6 @@ static void PlotNormComp( TFile* fIn, const TString& outDir,
     const double  xMin    = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
     const double  xMax    = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
     const int nPt = ( int )bins.ptavgSlices.size();
-    const TString sfx = fullEta ? "_fulleta" : "";
-
     for( int m = 0; m < kNMethods; m++ ){
         std::vector<TH1D*> hDirect( nPt, nullptr );
         std::vector<TH1D*> hNorm( nPt, nullptr );
@@ -1575,10 +1545,8 @@ static void PlotNormComp( TFile* fIn, const TString& outDir,
             TString nameDirect = L2Name::ObjectName( cone, "intercept",
                 {etaMode, ptKey}, {kMethodKeys[m]} );
             TString nameNorm   = nameDirect + "_norm";
-            TString oldDirect  = Form( "%s_intercept_%s%s%s",
-                cone.Data(), kMethodKeys[m], sl.shortName.Data(), sfx.Data() );
-            hDirect[ip] = GetHAny( fIn, {cone + "/" + nameDirect, nameDirect, oldDirect} );
-            hNorm[ip]   = GetHAny( fIn, {cone + "/" + nameNorm,   nameNorm,   oldDirect + "_norm"} );
+            hDirect[ip] = GetHAny( fIn, {cone + "/" + nameDirect} );
+            hNorm[ip]   = GetHAny( fIn, {cone + "/" + nameNorm} );
         }
 
         bool anyValid = false;

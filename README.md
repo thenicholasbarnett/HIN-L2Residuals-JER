@@ -120,6 +120,41 @@ export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml  # point to a specific file
 export L2RESIDUALS_HOME=/path/to/repo               # looks in $L2RESIDUALS_HOME/cfg/
 ```
 
+<h3> Naming Convention </h3>
+
+ROOT object names and plot paths are generated through `include/Naming.h`. Treat this header as the naming policy: when a histogram, graph, canvas, or directory needs a name, the code asks `L2Name` what the canonical name should be and writes that name. Later plotting and text-file steps ask the same question again to retrieve the object. If an object does not fit this nomenclature, it is considered outside the current workflow and should be regenerated.
+
+Names are built from ordered keys:
+
+```
+cone_object_etaMode_etaBin_ptavg_alpha_methodOrDetail
+```
+
+Only keys that apply are included. Examples:
+
+```
+ak4PF_A_data_abseta_eta_0p0_0p261_ptavg_30_70_alpha_0p05
+ak4PF_R_abseta_eta_0p261_0p522_ptavg_100_175_gauss
+ak4PF_intercept_fulleta_ptavg_250_500_trunc90_norm
+ak4PF_corrfinal_abseta_gauss_norm
+```
+
+The main helper functions are:
+
+| Helper | Purpose |
+| :- | :- |
+| `L2Name::ObjectName(cone, kind, orderedKeys, detailKeys)` | Assembles the full ROOT object name |
+| `L2Name::EtaModeKey(fullEta)` | Returns `abseta` or `fulleta` |
+| `L2Name::EtaKey(ieta, fullEta)` | Converts the configured eta-bin edges into keys such as `eta_0p0_0p261` or `eta_m0p261_0p0` |
+| `L2Name::PtKey(ptSlice)` | Converts configured p<sub>T</sub><sup>avg</sup> slices into keys such as `ptavg_30_70` |
+| `L2Name::AlphaKey(alphaSlice)` | Converts alpha thresholds into keys such as `alpha_0p05` |
+
+Plot directories use the same keys, but joined as path components instead of one long object name. For example:
+
+```
+plots/ak4PF/adist/eta_0p0_0p261/ptavg_30_70/alpha_0p05/
+```
+
 <h3> <b> Step 1 </b> — Fill Asymmetry Histograms </h3>
 
 Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `-mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
@@ -236,7 +271,7 @@ Example of multiple flags being passed space-separated as a single quoted argume
 
 ```bash
 # all filelists in data/txt/
-bash condor/make_condor.sh /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals [--all]
+bash condor/make_condor.sh /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals --all-txt
 
 # specific filelist
 bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt
@@ -250,12 +285,12 @@ bash condor/make_condor.sh /eos/.../l2residuals \
 bash condor/make_condor.sh /eos/.../l2residuals -n
 
 # tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt TAG=abs_eta
+bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt TAG=clos_abseta
 
 # submit with a specific TOML (default: cfg/2024ppRef.toml) — independent of TAG,
 # mix and match freely; useful for closure passes or a different run period/system
 bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
-    TAG=abs_eta CONFIG=cfg/2024ppRef_abs_eta.toml
+    TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
 ```
 
 Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.

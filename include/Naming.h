@@ -4,6 +4,7 @@
 #include "TString.h"
 #include "Binning.h"
 
+#include <cmath>
 #include <vector>
 
 namespace L2Name {
@@ -12,8 +13,19 @@ inline TString CleanKey( const TString& s ){
     return s.BeginsWith( "_" ) ? s( 1, s.Length() - 1 ) : s;
 }
 
-inline TString EtaKey( int ieta ){
-    return Form( "eta%02d", ieta );
+inline TString EdgeKey( double x ){
+    const double ax = std::abs( x );
+    TString s = Form( "%.3f", ax );
+    while( s.EndsWith( "0" ) ) s.Chop();
+    if( s.EndsWith( "." ) ) s += "0";
+    s.ReplaceAll( ".", "p" );
+    return x < 0.0 ? "m" + s : s;
+}
+
+inline TString EtaKey( int ieta, bool fullEta ){
+    const auto& edges = fullEta ? kEtaEdges : kAbsEtaEdges;
+    if( ieta < 0 || ieta + 1 >= ( int )edges.size() ) return Form( "eta_invalid_%d", ieta );
+    return Form( "eta_%s_%s", EdgeKey( edges[ieta] ).Data(), EdgeKey( edges[ieta + 1] ).Data() );
 }
 
 inline TString PtKey( const RangeBin& ptSlice ){

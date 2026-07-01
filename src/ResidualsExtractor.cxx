@@ -263,7 +263,7 @@ static void ExtractAndFit(
             }
 
             for( int ieta = 0; ieta < nEta; ieta++ ){
-                TString etaKey = L2Name::EtaKey( ieta );
+                TString etaKey = L2Name::EtaKey( ieta, fullEta );
                 TString ptKey = L2Name::PtKey( ptSlice );
                 TString alphaKey = L2Name::AlphaKey( aSlice );
 
@@ -381,7 +381,7 @@ static void ExtractAndFit(
                 }
 
                 TString gname = L2Name::ObjectName( cone, "R",
-                    { etaMode, L2Name::EtaKey( ieta ), ptKey }, { kMethodNames[method] } );
+                    { etaMode, L2Name::EtaKey( ieta, fullEta ), ptKey }, { kMethodNames[method] } );
 
                 TGraphErrors* gr = new TGraphErrors( n,
                     x.data(), y.data(), ex.data(), ey.data() );

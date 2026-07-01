@@ -49,16 +49,10 @@ static double SliceCenter( const RangeBin& sl ){
     return 0.5 * ( sl.lo + sl.hi );
 }
 
-// Fetch an intercept histogram, preferring the cone/name path, then a flat
-// name at file root, then a flat legacy name (pre-cone-TDirectory naming).
-// name and oldName must already carry any "_norm" suffix the caller wants.
-static TH1D* FetchIntercept( TFile* f, const TString& cone, const TString& name,
-                             const TString& oldName ){
+// Fetch an intercept histogram from the current cone TDirectory layout.
+static TH1D* FetchIntercept( TFile* f, const TString& cone, const TString& name ){
     TDirectory* coneDir = ( TDirectory* )f->Get( cone );
-    TH1D* h = coneDir ? ( TH1D* )coneDir->Get( name ) : nullptr;
-    if( !h ) h = ( TH1D* )f->Get( name );
-    if( !h ) h = ( TH1D* )f->Get( oldName );
-    return h;
+    return coneDir ? ( TH1D* )coneDir->Get( name ) : nullptr;
 }
 
 // Fit corr(pT_avg) at one eta bin, write the TGraphErrors — with the TF1
@@ -204,9 +198,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                 TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fHP : fZB;
                 TString name = L2Name::ObjectName( cone, "intercept",
                     {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
-                TString oldName = Form( "%s_intercept_%s%s",
-                    cone.Data(), method.Data(), ptSlice.shortName.Data() ) + suffix;
-                hSlice[ip] = FetchIntercept( src, cone, name, oldName );
+                hSlice[ip] = FetchIntercept( src, cone, name );
                 if( !hSlice[ip] ){ nMissingSlices++; }
             }
             if( nMissingSlices > 0 ){
@@ -248,7 +240,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                     corrErr.push_back( e > 0.0 ? e : 1e-4 );
                 }
                 TString graphName = L2Name::ObjectName( cone, "ptcorr",
-                    {etaMode, L2Name::EtaKey( ieta )}, {method} ) + suffix;
+                    {etaMode, L2Name::EtaKey( ieta, fullEta )}, {method} ) + suffix;
                 fits[ieta] = FitPtSlices( ptX, corr, corrErr, graphName, dGraphs );
                 if( !fits[ieta].valid ){ nUnityFallback++; }
             }
