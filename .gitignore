@@ -8,7 +8,7 @@ lib/
 *.png
 *.pdf
 
-# local closure/reprocessing inputs
+# closure/reprocessing inputs
 cfg/*clos*.toml
 data/jec/preliminary/
 
