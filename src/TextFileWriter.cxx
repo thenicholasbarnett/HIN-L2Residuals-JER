@@ -198,6 +198,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
 
             // one intercept histogram per pT slice, chosen from HP or ZB by the trigger threshold
             std::vector<TH1D*> hSlice( nPt, nullptr );
+            int nMissingSlices = 0;
             for( int ip = 0; ip < nPt; ip++ ){
                 const auto& ptSlice = bins.ptavgSlices[ip];
                 TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fHP : fZB;
@@ -206,10 +207,11 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                 TString oldName = Form( "%s_intercept_%s%s",
                     cone.Data(), method.Data(), ptSlice.shortName.Data() ) + suffix;
                 hSlice[ip] = FetchIntercept( src, cone, name, oldName );
-                if( !hSlice[ip] ){
-                    std::cerr << "WARNING: " << name << " not found in "
-                              << ( src == fHP ? "HP" : "ZB" ) << " residuals file\n";
-                }
+                if( !hSlice[ip] ){ nMissingSlices++; }
+            }
+            if( nMissingSlices > 0 ){
+                std::cerr << cone << " " << etaMode << ": " << nMissingSlices << "/" << nPt
+                          << " pT slices missing (intercept histogram not found)\n";
             }
 
             // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
@@ -233,6 +235,7 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
             // pT-dependence fit, one per eta bin
             std::vector<FitResult>& fits = fullEta ? fitsFullEta : fitsAbsEta;
             fits.assign( nEta, FitResult{} );
+            int nUnityFallback = 0;
             for( int ieta = 0; ieta < nEta; ieta++ ){
                 std::vector<double> ptX, corr, corrErr;
                 for( int ip = 0; ip < nPt; ip++ ){
@@ -247,11 +250,11 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                 TString graphName = L2Name::ObjectName( cone, "ptcorr",
                     {etaMode, L2Name::EtaKey( ieta )}, {method} ) + suffix;
                 fits[ieta] = FitPtSlices( ptX, corr, corrErr, graphName, dGraphs );
-                if( !fits[ieta].valid ){
-                    std::cerr << "WARNING: pT fit failed for " << cone << " " << etaMode
-                              << " eta bin " << ieta + 1
-                              << " (" << ( int )ptX.size() << " pT slices available)\n";
-                }
+                if( !fits[ieta].valid ){ nUnityFallback++; }
+            }
+            if( nUnityFallback > 0 ){
+                std::cerr << cone << " " << etaMode << ": " << nUnityFallback << "/" << nEta
+                          << " eta bins fell back to unity (fewer than " << kMinSlices << " pT slices had data)\n";
             }
         }
 
