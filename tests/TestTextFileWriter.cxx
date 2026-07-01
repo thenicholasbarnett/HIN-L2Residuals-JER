@@ -128,7 +128,7 @@ void TestFileStructure(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header, headerEta;
     auto absLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -161,7 +161,7 @@ void TestMergeSourceSelection(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 5.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     TFile* fOut = TFile::Open( rootPath, "read" );
     TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
@@ -224,7 +224,7 @@ void TestEtaOrdering(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -285,7 +285,7 @@ void TestEtaFileOrdering(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), header );
@@ -319,7 +319,7 @@ void TestUnityFallback_TooFewSlices(){
     // Only 2 valid slices total: HP supplies 100-175 and 175-250, ZB supplies none.
     MakeResiduals( hpPath, 1.0, 0.001, {2, 3} );
     MakeResiduals( zbPath, 1.0, 0.001, {} );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -347,7 +347,7 @@ void TestUnityFallback_EmptyBins(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 0.0, 0.0, 0.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -375,7 +375,7 @@ void TestFitRoundTrip(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 1.0, 1.0, 1e-5 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -408,7 +408,7 @@ void TestEtaExtent(){
     CleanupFiles( hpPath, zbPath, rootPath, prefix );
 
     MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss" );
+    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );

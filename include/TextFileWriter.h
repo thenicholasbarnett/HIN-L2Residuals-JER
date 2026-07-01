@@ -17,11 +17,12 @@
 //                    full-eta fit, no mirroring) per cone. When useNorm is
 //                    true, both get a "_norm" suffix before ".txt".
 // method:           "gauss" | "doubleGauss" | "trunc90" | "trunc95"  (default: "gauss")
-// useNorm:          use the kFSR-normalized intercepts instead of the direct
-//                    ones (default: false). Affects the corrfinal grid and
-//                    ptcorr graph names too (both get a "_norm" suffix).
+// useNorm:          use the kFSR-normalized intercepts (default: true — this
+//                    is the standard method). Pass false for the direct,
+//                    non-normalized variant. Affects the corrfinal grid and
+//                    ptcorr graph names too (both get a "_norm" suffix when true).
 void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
                   TString outputRootFile, TString outputTextPrefix,
-                  TString method = "gauss", bool useNorm = false );
+                  TString method = "gauss", bool useNorm = true );
 
 #endif

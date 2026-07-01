@@ -159,13 +159,14 @@ ak4PF/
 Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<sub>T</sub><sup>avg</sup> slice, uses HP if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and ZB otherwise — HP is trigger-biased below its efficiency plateau, ZB fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [norm]
+./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct]
 
-# methods: gauss (default) | doubleGauss | trunc90 | trunc95
-# norm:    direct (default) | norm  — use the kFSR-normalized intercepts instead of the direct ones
+# methods:  gauss (default) | doubleGauss | trunc90 | trunc95
+# [direct]: kFSR-normalized intercepts are used by default (the standard method);
+#           pass the literal word "direct" for the non-normalized variant instead
 ```
 
-For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. When `norm` is used, both filenames get a `_norm` suffix:
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `direct` is passed:
 
 ```
 <output_text-prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
