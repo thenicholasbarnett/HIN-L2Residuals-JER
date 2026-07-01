@@ -1,13 +1,8 @@
 # Template for a new collision system / dataset.
 #
 # This is a scaffold, not a runnable config — copy it to a new file
-# (e.g. cfg/PbPb.toml) and fill in every REQUIRED_* placeholder before
-# pointing L2RESIDUALS_CONFIG at it. The loader (src/AnalysisConfig.cxx)
-# will happily parse the placeholders below without error — the failures
-# show up later, when Step 1 tries to actually open a file that doesn't
-# exist. Values with no REQUIRED_* marker are reasonable starting points
-# carried over from cfg/2024ppRef.toml, not universal constants — verify
-# or retune them for the new system before trusting the output.
+# (e.g. cfg/2025OO.toml) and fill in every REQUIRED_* placeholder before
+# pointing L2RESIDUALS_CONFIG at it. 
 
 [paths]
 # Jet veto map and golden JSON are entirely per-run-period. No default exists.
@@ -15,16 +10,9 @@ veto_map = "REQUIRED_SET_ME/path/to/veto_map.root"
 golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 
 [trees]
-# Common CMS heavy-ion-forest tree paths — likely reusable, but verify against
-# the actual HiForest producer version for the new dataset. In particular,
-# jets[] assumes plain (non-background-subtracted) PF jets; a system that
-# needs CS/PU subtraction would use akCs4PFJetAnalyzer-style names instead.
 hi = "hiEvtAnalyzer/HiTree"
 skim = "skimanalysis/HltTree"
 trigger = "hltanalysis/HltTree"
-# Primary vertex filter branch, read from the skim tree (data only). A system
-# with multiple event filters ANDed together would need FiltersStruct in
-# include/EventStructs.h extended to a list — today it's exactly one branch.
 filter = "pprimaryVertexFilter"
 jets = [
     "ak2PFJetAnalyzer/t",
@@ -35,37 +23,17 @@ jets = [
 ]
 
 [trigger]
-# No universal default — the HLT path name and its efficiency-plateau
-# threshold are specific to this dataset's trigger menu and run period.
-# cone must match one of cones.labels below; it's the collection whose
-# corrected pT the efficiency cut is evaluated against in Step 1 HP mode,
-# and it's also the cutover point Step 3 uses to decide HP vs ZB per
-# pT_avg slice (see [binning] below).
-#
-# If this system has no HP/ZB split (only one dataset), branch/threshold
-# are effectively unused: run Step 1 in whichever mode applies and feed
-# Step 3 that one residuals file via `runTextFile --single`. cone still
-# must be non-null (the loader requires it) — set it to any entry in
-# cones.labels below even if the HP-efficiency-cut concept doesn't apply.
 branch = "REQUIRED_SET_ME"
 threshold = 0.0
 cone = "REQUIRED_SET_ME"
 
 [jet_id]
-# Which histogram to read from [paths].veto_map — CMS veto map files often
-# ship several (jetvetomap, jetvetomap_hot, jetvetomap_cold, jetvetomap_all).
-# Likely reusable, but verify the new system's veto map actually has this
-# histogram under this name.
 veto_map_histogram = "jetvetomap_all"
 
 [cones]
-# Standard CMS anti-kt PF clustering radii (R=0.2..0.6) — likely reusable,
-# but must match the actual jet collections present in the new forest.
 labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
 
 [jec]
-# No default — L2Relative JEC text files are specific to this dataset's
-# JEC campaign. One list per entry in cones.labels, same order.
 files = [
     [ "REQUIRED_SET_ME/AK2PF.txt" ],
     [ "REQUIRED_SET_ME/AK3PF.txt" ],
@@ -73,39 +41,12 @@ files = [
     [ "REQUIRED_SET_ME/AK5PF.txt" ],
     [ "REQUIRED_SET_ME/AK6PF.txt" ],
 ]
-# L2Residual text files from Step 3, chained onto the JEC above — applied
-# only when runAsymmetry's mode != MC (both -hp and -zb data get them; -mc
-# never does, regardless of what's listed here). Optional: leave empty ([])
-# until this system's L2Residual text file has been derived and validated —
-# that's the state during the first derivation pass, before any closure check.
-residual_files = [ [], [], [], [], [] ]
 
 [cuts]
-# Global minimum corrected jet pT (GeV) floor — used both for Step 1's
-# inclusive jet TH3D and as the dijet subleading-jet validity cut. 10 GeV is
-# a reasonable starting point, not a physical constant — a system with more
-# underlying-event background may want a higher floor. The third jet's pT
-# (used for alpha) is deliberately NOT subject to this.
 min_jet_pt = 10.0
-# Dijet back-to-back requirement (radians). Likely reusable as-is.
 dphi = 2.7
-# Dijet-level |A| acceptance cut, applied in Step 1. Likely reusable as-is;
-# distinct from Step 2's internal fit-outlier-rejection threshold, which
-# isn't exposed here (it's an implementation detail of the fit, not an
-# analysis-level cut).
 max_abs_a = 0.7
-# Minimum entries in a projected A-distribution before Step 2 attempts any
-# fit on it. Likely reusable as-is, but a system with less statistics per
-# bin may need to lower this (fewer bins will have valid fits either way).
 min_entries_per_bin = 100
 
 [binning]
-# pT_avg slice edges (GeV) for Step 2/3 and plotResiduals — must be strictly
-# ascending. Carried over from cfg/2024ppRef.toml as a starting point; the
-# right slicing depends on how much statistics/reach the new system has.
-# Step 3 assigns each whole slice to HP or ZB based on whether slice.lo is
-# at/above [trigger].threshold, so once that's set, keep an edge exactly at
-# it (or only add edges strictly above/below it) — a slice straddling the
-# threshold gets assigned to ZB in full, since any part of it below the
-# threshold could be trigger-biased in HP.
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
