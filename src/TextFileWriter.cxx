@@ -82,7 +82,7 @@ static FitResult FitPtSlices(
     f->SetParameter( 1, 0.0 );
     f->SetParameter( 2, 0.0 );
 
-    // No "N": the fit function is embedded in the graph so plotResiduals can draw it later.
+    // No "N": the fit function is embedded in the graph so runPlotting can draw it later.
     TFitResultPtr res = gr->Fit( f, "QSR" );
     if( res.Get() && res->IsValid() ){
         for( int p = 0; p < kNPar; p++ ) r.p[p] = res->Parameter( p );

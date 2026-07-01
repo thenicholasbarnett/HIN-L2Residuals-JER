@@ -64,15 +64,15 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 <strong> Plot </strong>
 
 ```
-./bin/plotResiduals <input_asymmetry-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_asymmetry-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
-./bin/plotResiduals <input_residuals-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_residuals-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
-./bin/plotResiduals <input_corrections-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_corrections-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 <h1> Usage </h1> 
@@ -105,7 +105,7 @@ Analysis parameters — file paths, tree names, cone labels, JEC files, trigger 
 
 The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched and must stay in the same order. The loader validates lengths before running.
 
-`[binning] ptavg_edges` sets the p<sub>T</sub><sup>avg</sup> slice boundaries used by Steps 2/3 and `plotResiduals` (strictly ascending, at least 2 entries). Rebinning only needs a TOML edit and a Step 2/3 rerun — no recompile — but it's still a full rerun, not just a replot: Step 2 already collapses the fine-grained pT axis into per-slice fitted means, so the plotting macro only ever sees whatever slicing Step 2 committed to disk. Keep an edge exactly at (or only add edges strictly above/below) `trigger.threshold`, since Step 3 assigns each whole slice to HP or ZB based on its lower edge — a slice straddling the threshold goes entirely to ZB.
+`[binning] ptavg_edges` sets the p<sub>T</sub><sup>avg</sup> slice boundaries used by Steps 2/3 and `runPlotting` (strictly ascending, at least 2 entries). Rebinning only needs a TOML edit and a Step 2/3 rerun — no recompile — but it's still a full rerun, not just a replot: Step 2 already collapses the fine-grained pT axis into per-slice fitted means, so the plotting macro only ever sees whatever slicing Step 2 committed to disk. Keep an edge exactly at (or only add edges strictly above/below) `trigger.threshold`, since Step 3 assigns each whole slice to HP or ZB based on its lower edge — a slice straddling the threshold goes entirely to ZB.
 
 `[cuts]` holds `min_jet_pt` (global floor — inclusive jets and the dijet subleading-jet cut; the third jet used for α is exempt), `dphi` (back-to-back requirement), `max_abs_a` (Step 1 dijet acceptance), and `min_entries_per_bin` (Step 2 fit-attempt floor). `[trees] filter` and `[jet_id] veto_map_histogram` name the event-filter branch and which histogram to read from the veto map file.
 
@@ -230,12 +230,12 @@ ak4PF/
 
 <h2> Plotting </h2>
 
-`plotResiduals` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently, and all plots are made if no flags are given.
+`runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently, and all plots are made if no flags are given.
 
 ```
-./bin/plotResiduals <input_asymmetries-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
-./bin/plotResiduals <input_residuals-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
-./bin/plotResiduals <input_corrections-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_asymmetries-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_residuals-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting <input_corrections-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
 ```
 
 | Flag | Input | Description |
@@ -256,7 +256,7 @@ ak4PF/
 
 Example of multiple flags being passed space-separated as a single quoted argument:
 ```bash
-./bin/plotResiduals residuals.root plots/ "finals etasym methods" CONFIG=cfg/2024ppRef.toml
+./bin/runPlotting residuals.root plots/ "finals etasym methods" CONFIG=cfg/2024ppRef.toml
 ```
 
 <h2> Condor Submission </h2>

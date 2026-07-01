@@ -37,7 +37,7 @@ check "prints usage with no args"    "{ bin/runAsymmetry 2>&1 || true; } | grep 
 check "exits non-zero with no args"  "! bin/runAsymmetry"
 check "runTextFile exists"           "test -f bin/runTextFile"
 check "runResiduals exists"          "test -f bin/runResiduals"
-check "plotResiduals exists"         "test -f bin/plotResiduals"
+check "runPlotting exists"           "test -f bin/runPlotting"
 
 echo ""
 echo "[interpreted]"
