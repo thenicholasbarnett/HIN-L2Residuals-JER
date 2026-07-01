@@ -45,6 +45,9 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
         cfg.jecFilesPerCone.push_back( std::move( files ) );
     }
 
+    for( const auto& v : *doc["binning"]["ptavg_edges"].as_array() )
+        cfg.ptavgEdges.push_back( v.value_or( 0.0f ) );
+
     if( cfg.jecFilesPerCone.empty() ) throw std::runtime_error( "jec.files is empty" );
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );
     if( cfg.jecFilesPerCone.size() != cfg.coneLabels.size() )
@@ -52,6 +55,10 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     if( cfg.jetTreePaths.size() != cfg.coneLabels.size() )
         throw std::runtime_error( "trees.jets and cones.labels have different lengths" );
     if( cfg.trigCone.IsNull() ) throw std::runtime_error( "trigger.cone is missing" );
+    if( cfg.ptavgEdges.size() < 2 ) throw std::runtime_error( "binning.ptavg_edges needs at least 2 edges" );
+    for( size_t i = 1; i < cfg.ptavgEdges.size(); i++ )
+        if( cfg.ptavgEdges[i] <= cfg.ptavgEdges[i - 1] )
+            throw std::runtime_error( "binning.ptavg_edges must be strictly ascending" );
 
     return cfg;
 }

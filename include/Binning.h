@@ -7,6 +7,7 @@
 #include "Rtypes.h"
 
 #include "Colors.h"
+#include "AnalysisConfig.h"
 
 #include <vector>
 
@@ -50,6 +51,33 @@ inline void SetEtaBins( THnSparse* h, Int_t axis ){
     h->GetAxis( axis )->Set( ( Int_t )kEtaEdges.size() - 1, kEtaEdges.data() );
 }
 
+// Build pT_avg RangeBins from cfg.ptavgEdges (cfg/2024ppRef.toml, [binning] ptavg_edges).
+// title/shortName are derived from the edges so they can't drift out of sync
+// with a TOML edit; shortName matches the pre-TOML hardcoded format exactly
+// ("_ptavg_<lo>_<hi>") so existing Step 2 output object names stay readable.
+// Colors cycle through the Hiroshige palette by slice index — plot styling
+// is deliberately kept out of the physics-binning config.
+inline std::vector<RangeBin> BuildPtAvgSlices( const std::vector<float>& edges ){
+    static Color_t( * const kColorCycle[] )() = {
+        HiroshigeYellow, HiroshigeIceBlue, HiroshigeLightBlue,
+        HiroshigeBlue, HiroshigeGrayBlue, HiroshigeNightBlue
+    };
+    static constexpr int kNColors = sizeof( kColorCycle ) / sizeof( kColorCycle[0] );
+
+    std::vector<RangeBin> slices;
+    const int n = ( int )edges.size() - 1;
+    for( int i = 0; i < n; i++ ){
+        RangeBin sl;
+        sl.lo = edges[i];
+        sl.hi = edges[i + 1];
+        sl.title = Form( "%g < p_{T,avg} < %g GeV", sl.lo, sl.hi );
+        sl.shortName = Form( "_ptavg_%d_%d", ( int )sl.lo, ( int )sl.hi );
+        sl.color = kColorCycle[i % kNColors]();
+        slices.push_back( sl );
+    }
+    return slices;
+}
+
 struct BinningConfig {
 
     // 4D THnSparse axes
@@ -67,15 +95,9 @@ struct BinningConfig {
     AxisBins phi = { 64, -3.2, 3.2, "#phi (rad)" };
     AxisBins trig = { 2, 0, 2, "trigger decision" };
 
-    // pT_avg slicing
-    std::vector<RangeBin> ptavgSlices = {
-        { 30, 70, "30 < p_{T,avg} < 70 GeV", "_ptavg_30_70", HiroshigeYellow() },
-        { 70, 100, "70 < p_{T,avg} < 100 GeV", "_ptavg_70_100", HiroshigeIceBlue() },
-        { 100, 175, "100 < p_{T,avg} < 175 GeV", "_ptavg_100_175", HiroshigeLightBlue() },
-        { 175, 250, "175 < p_{T,avg} < 250 GeV", "_ptavg_175_250", HiroshigeBlue() },
-        { 250, 500, "250 < p_{T,avg} < 500 GeV", "_ptavg_250_500", HiroshigeGrayBlue() },
-        { 500, 1000, "500 < p_{T,avg} < 1000 GeV", "_ptavg_500_1000", HiroshigeNightBlue() },
-    };
+    // pT_avg slicing — edges come from cfg/2024ppRef.toml ([binning] ptavg_edges),
+    // so rebinning Step 2/3's pT slices needs only a TOML edit + rerun, no recompile.
+    std::vector<RangeBin> ptavgSlices = BuildPtAvgSlices( Config().ptavgEdges );
 
     // cumulative alpha ranges
     std::vector<RangeBin> alphaSlices = {

@@ -21,6 +21,8 @@ struct AnalysisConfig {
 
     std::vector<TString> coneLabels;
     TString trigCone;
+
+    std::vector<float> ptavgEdges;
 };
 
 std::string DefaultConfigPath();

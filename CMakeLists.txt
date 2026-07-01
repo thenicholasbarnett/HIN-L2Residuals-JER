@@ -110,12 +110,12 @@ foreach(test ${TESTS})
         target_link_libraries(${name} ${ROOT_LIBRARIES})
     endif()
     add_test(NAME ${name} COMMAND ${name})
+    # Any test that constructs a BinningConfig (even just for kEtaEdges) now
+    # calls Config() via BuildPtAvgSlices — DefaultConfigPath()'s relative
+    # lookup ("cfg/2024ppRef.toml") needs CWD = repo root, not ctest's default
+    # of the build directory.
+    set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endforeach()
-
-# TestTextFileWriter calls runTextFile, which loads cfg.coneLabels/cfg.hltJ80Thresh
-# via Config() — DefaultConfigPath()'s relative lookup ("cfg/2024ppRef.toml")
-# needs CWD = repo root, not ctest's default of the build directory.
-set_tests_properties(TestTextFileWriter PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 add_test(NAME TestBuild
     COMMAND bash ${PROJECT_SOURCE_DIR}/tests/TestBuild.sh

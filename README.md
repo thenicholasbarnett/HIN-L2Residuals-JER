@@ -101,9 +101,11 @@ Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
 
 <h3> Configuration </h3>
 
-Analysis parameters — file paths, tree names, cone labels, JEC files, and trigger settings — live in `cfg/2024ppRef.toml`. Edit this file and rerun; no recompile needed.
+Analysis parameters — file paths, tree names, cone labels, JEC files, trigger settings, and the p<sub>T</sub><sup>avg</sup> slice binning — live in `cfg/2024ppRef.toml`. Edit this file and rerun; no recompile needed.
 
 The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched and must stay in the same order. The loader validates lengths before running.
+
+`[binning] ptavg_edges` sets the p<sub>T</sub><sup>avg</sup> slice boundaries used by Steps 2/3 and `plotResiduals` (strictly ascending, at least 2 entries). Rebinning only needs a TOML edit and a Step 2/3 rerun — no recompile — but it's still a full rerun, not just a replot: Step 2 already collapses the fine-grained pT axis into per-slice fitted means, so the plotting macro only ever sees whatever slicing Step 2 committed to disk. Keep an edge exactly at (or only add edges strictly above/below) `trigger.threshold`, since Step 3 assigns each whole slice to HP or ZB based on its lower edge — a slice straddling the threshold goes entirely to ZB.
 
 To add a new config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`.
 
