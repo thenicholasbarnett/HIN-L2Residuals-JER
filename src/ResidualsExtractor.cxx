@@ -22,16 +22,14 @@
 #include <cmath>
 #include <algorithm>
 
-// global constants
-// kMinEntries is set from cfg.minEntriesPerBin at the top of runResiduals(),
-// before any fit helper below is invoked — not constexpr since Nicky wants
-// it configurable via TOML without recompiling. 100 is just the fallback
-// used if runResiduals() is never called (e.g. unit-testing a helper directly).
+// Global fit controls are set from the TOML config at the top of runResiduals(),
+// before any fit helper below is invoked. Fallbacks keep direct helper tests sane.
 static int kMinEntries = 100;
-static constexpr int kNAlphaFit = 6;  // alpha thresholds 0.05–0.30 used for linear fit
-static constexpr double kGausFitHW = 0.5;
-static constexpr double kMaxAbsA_fit = 0.9;
-static constexpr double kAlphaFitHi = 0.31;  // alpha fitting max > 0.30
+static double kGausFitHW = 0.5;
+static double kMaxAbsA_fit = 0.7;
+static double kAlphaFitHi = 0.31;
+static int kOutOfRangeMeanWarnings = 0;
+static constexpr int kMaxOutOfRangeMeanWarnings = 20;
 
 // axes
 static constexpr int kEtaAxis = 0;
@@ -173,6 +171,29 @@ static double ToRErr( double A, double dA ){ return dA * 2.0 / ( ( 1.0 - A ) * (
 
 static void ResetRange( THnSparse* h, int axis ){ h->GetAxis( axis )->SetRange( 0, 0 ); }
 
+static void WarnOutOfRangeMean(
+    const TString& cone,
+    const TString& etaMode,
+    const TString& etaKey,
+    const TString& ptKey,
+    const TString& alphaKey,
+    const char* method,
+    const char* sample,
+    double mean ){
+    if( kOutOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings ){
+        std::cerr << "WARNING: residual " << method << " " << sample
+                  << " mean A=" << mean
+                  << " exceeds configured max_abs_a=" << kMaxAbsA_fit
+                  << " for " << cone << " " << etaMode << " " << etaKey
+                  << " " << ptKey << " " << alphaKey
+                  << "; dropping this point before R conversion\n";
+    } else if( kOutOfRangeMeanWarnings == kMaxOutOfRangeMeanWarnings ){
+        std::cerr << "WARNING: more residual mean A values exceed configured max_abs_a="
+                  << kMaxAbsA_fit << "; suppressing further detailed warnings\n";
+    }
+    kOutOfRangeMeanWarnings++;
+}
+
 // ============================================================
 // ExtractAndFit — runs the full extraction loop for one set of sparses.
 //
@@ -192,7 +213,7 @@ static void ResetRange( THnSparse* h, int axis ){ h->GetAxis( axis )->SetRange( 
 //   {cone}_R_mc_{etaMode}_{ptSlice}_{alphaSlice}_{method}
 //
 // Outputs in dGraphs per (method, ptSlice, etaBin):
-//   TGraphErrors of R_MC/R_data vs alpha (all 9 bins), with fit function [0,0.31] embedded
+//   TGraphErrors of R_MC/R_data vs alpha (all bins), with the configured fit range embedded
 // ============================================================
 
 static void ExtractAndFit(
@@ -213,7 +234,7 @@ static void ExtractAndFit(
     const TString etaMode = L2Name::EtaModeKey( fullEta );
 
     struct RPoint { double alpha, val, err; };
-    // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within [0, kAlphaFitHi]
+    // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within the configured fit range.
     std::vector<std::vector<std::vector<std::vector<RPoint>>>>
         rpts( kNMethods,
             std::vector<std::vector<std::vector<RPoint>>>( nPt,
@@ -297,11 +318,22 @@ static void ExtractAndFit(
 
                 double alphaX = aSlice.hi;
 
-                // acrunningulate all 9 alpha bins; "QR" fit later selects only those within [0, kAlphaFitHi]
+                // Accumulate all alpha bins; "QR" fit later selects only those within the configured fit range.
                 auto acrunning = [&]( int method, double Ad, double eAd,
                                              double Am, double eAm, bool ok ){
                     if( !ok ) return;
-                    if( std::abs( Ad ) > kMaxAbsA_fit || std::abs( Am ) > kMaxAbsA_fit ) return;
+                    bool outsideConfiguredRange = false;
+                    if( std::abs( Ad ) > kMaxAbsA_fit ){
+                        WarnOutOfRangeMean( cone, etaMode, etaKey, ptKey, alphaKey,
+                            kMethodNames[method], "data", Ad );
+                        outsideConfiguredRange = true;
+                    }
+                    if( std::abs( Am ) > kMaxAbsA_fit ){
+                        WarnOutOfRangeMean( cone, etaMode, etaKey, ptKey, alphaKey,
+                            kMethodNames[method], "MC", Am );
+                        outsideConfiguredRange = true;
+                    }
+                    if( outsideConfiguredRange ) return;
                     double Rd = ToR( Ad ), Rm = ToR( Am );
                     double eRd = ToRErr( Ad, eAd ), eRm = ToRErr( Am, eAm );
                     if( std::abs( Rd ) < 1e-6 ) return;
@@ -368,7 +400,7 @@ static void ExtractAndFit(
             TH1D* hCorrNorm = new TH1D( corrName + "_norm", "",
                 ( int )etaEdges.size() - 1, etaEdges.data() );
             hCorrNorm->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
-            hCorrNorm->GetYaxis()->SetTitle( "k_{FSR} #cdot R_{MC}/R_{data}|_{#alpha=0.30}" );
+            hCorrNorm->GetYaxis()->SetTitle( "k_{FSR} #cdot R_{MC}/R_{data}|_{fit range high edge}" );
 
             for( int ieta = 0; ieta < nEta; ieta++ ){
                 const auto& pts = rpts[method][ipt][ieta];
@@ -393,8 +425,8 @@ static void ExtractAndFit(
 
                 if( !CanFit( gr, { 0.0, kAlphaFitHi }, 2 ) ){ delete gr; continue; }
 
-                // "R" option: only points within [0, kAlphaFitHi] enter the chi2 — those above
-                // 0.30 are displayed in the graph but excluded from the fit
+                // "R" option: only points within the configured fit range enter the chi2.
+                // Points above the range are displayed in the graph but excluded from the fit.
                 TF1* fitFn = new TF1( gname + "_fit", "[0]+[1]*x", 0.0, kAlphaFitHi );
                 fitFn->SetParameter( 0, 1.0 );
                 fitFn->SetParameter( 1, 0.0 );
@@ -404,18 +436,18 @@ static void ExtractAndFit(
                 hCorr->SetBinContent( ieta + 1, fitFn->GetParameter( 0 ) );
                 hCorr->SetBinError( ieta + 1, fitFn->GetParError( 0 ) );
 
-                // ---- normalized variant: divide each point by the value at alpha=0.30,
+                // ---- normalized variant: divide each point by the value at the high end of the fit range,
                 //      fit, then multiply the intercept back. Errors differ from direct
                 //      method because the normalization changes the fit input distribution. ----
-                double val030 = 0, err030 = 0;
+                double normVal = 0, normErr = 0;
                 for( int k = n - 1; k >= 0; k-- ){
                     if( pts[k].alpha <= kAlphaFitHi + 1e-4 && pts[k].val > 1e-6 ){
-                        val030 = pts[k].val;
-                        err030 = pts[k].err;
+                        normVal = pts[k].val;
+                        normErr = pts[k].err;
                         break;
                     }
                 }
-                if( val030 > 1e-6 ){
+                if( normVal > 1e-6 ){
                     // count points within fit range
                     int nfit = 0;
                     for( int k = 0; k < n && pts[k].alpha <= kAlphaFitHi + 1e-4; k++ ) nfit++;
@@ -425,10 +457,10 @@ static void ExtractAndFit(
                     for( int k = 0; k < nfit; k++ ){
                         if( std::abs( pts[k].val ) < 1e-6 ){ bad = true; break; }
                         xn[k] = pts[k].alpha;
-                        yn[k] = pts[k].val / val030;
+                        yn[k] = pts[k].val / normVal;
                         eyn[k] = yn[k] * TMath::Sqrt(
                             TMath::Power( pts[k].err / pts[k].val, 2.0 ) +
-                            TMath::Power( err030 / val030, 2.0 ) );
+                            TMath::Power( normErr / normVal, 2.0 ) );
                     }
                     if( !bad && nfit >= 2 ){
                         TString gnorm = gname + "_norm";
@@ -447,12 +479,12 @@ static void ExtractAndFit(
 
                         double c0n = fn->GetParameter( 0 );
                         double ec0n = fn->GetParError( 0 );
-                        double c0 = c0n * val030;
+                        double c0 = c0n * normVal;
                         double ec0 = ( std::abs( c0n ) > 1e-9 )
                             ? c0 * TMath::Sqrt(
                                 TMath::Power( ec0n / c0n, 2.0 ) +
-                                TMath::Power( err030 / val030, 2.0 ) )
-                            : ec0n * val030;
+                                TMath::Power( normErr / normVal, 2.0 ) )
+                            : ec0n * normVal;
 
                         hCorrNorm->SetBinContent( ieta + 1, c0 );
                         hCorrNorm->SetBinError( ieta + 1, ec0 );
@@ -486,6 +518,10 @@ void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
     if( cfg.minEntriesPerBin > 0 ) kMinEntries = cfg.minEntriesPerBin;
+    kGausFitHW = cfg.residualGausFitHalfWidth;
+    if( cfg.maxAbsA > 0 ) kMaxAbsA_fit = cfg.maxAbsA;
+    kAlphaFitHi = cfg.residualAlphaFitHi;
+    kOutOfRangeMeanWarnings = 0;
 
     TFile* fData = TFile::Open( dataFile, "read" );
     TFile* fMC = TFile::Open( mcFile, "read" );

@@ -52,6 +52,8 @@ min_jet_pt = 10.0
 dphi = 2.7
 max_abs_a = 0.7
 min_entries_per_bin = 100
+residual_gaus_fit_half_width = 0.5
+residual_alpha_fit_hi = 0.31
 
 [binning]
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]

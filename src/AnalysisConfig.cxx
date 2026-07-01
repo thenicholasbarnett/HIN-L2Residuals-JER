@@ -124,6 +124,8 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     cfg.dphiCut         = doc["cuts"]["dphi"].value_or( 0.0f );
     cfg.maxAbsA         = doc["cuts"]["max_abs_a"].value_or( 0.0f );
     cfg.minEntriesPerBin = doc["cuts"]["min_entries_per_bin"].value_or( 0 );
+    cfg.residualGausFitHalfWidth = doc["cuts"]["residual_gaus_fit_half_width"].value_or( 0.5 );
+    cfg.residualAlphaFitHi = doc["cuts"]["residual_alpha_fit_hi"].value_or( 0.31 );
 
     if( cfg.jecFilesPerCone.empty() ) throw std::runtime_error( "jec.files is empty" );
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );

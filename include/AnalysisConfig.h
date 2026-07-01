@@ -35,6 +35,8 @@ struct AnalysisConfig {
     float dphiCut = 0.0f;
     float maxAbsA = 0.0f;
     int minEntriesPerBin = 0;
+    double residualGausFitHalfWidth = 0.5;
+    double residualAlphaFitHi = 0.31;
 };
 
 std::string DefaultConfigPath();
