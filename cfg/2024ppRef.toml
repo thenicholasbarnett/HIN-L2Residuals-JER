@@ -51,3 +51,9 @@ residual_alpha_fit_hi = 0.31
 
 [binning]
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
+
+[step3]
+default_method = "gauss"
+# other options currently available: doubleGauss | trunc90 | trunc95
+eta_mode = "both"
+# other options currently available: abseta | eta

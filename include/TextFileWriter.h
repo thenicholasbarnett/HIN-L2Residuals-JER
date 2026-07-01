@@ -13,10 +13,14 @@
 //                    TH2D (eta/|eta| vs pT_avg, z = final correction) and a
 //                    graphs/ dir of per-eta-bin pT-dependence fit TGraphErrors.
 // outputTextPrefix: base path; writes "<prefix>_<cone>_abseta.txt" (mirrored
-//                    |eta| fit) and "<prefix>_<cone>_eta.txt" (independent
-//                    full-eta fit, no mirroring) per cone. When useNorm is
-//                    true, both get a "_norm" suffix before ".txt".
-// method:           "gauss" | "doubleGauss" | "trunc90" | "trunc95"  (default: "gauss")
+//                    |eta| fit) and/or "<prefix>_<cone>_eta.txt" (independent
+//                    full-eta fit, no mirroring) per cone, depending on
+//                    [step3] eta_mode in the TOML ("both" | "abseta" | "eta";
+//                    default "both"). When useNorm is true, both get a
+//                    "_norm" suffix before ".txt".
+// method:           "gauss" | "doubleGauss" | "trunc90" | "trunc95"  (default
+//                    parameter here is "gauss"; macros/runTextFile.C instead
+//                    falls back to [step3] default_method from the TOML)
 // useNorm:          use the kFSR-normalized intercepts (default: true — this
 //                    is the standard method). Pass false for the direct,
 //                    non-normalized variant. Affects the corrfinal grid and

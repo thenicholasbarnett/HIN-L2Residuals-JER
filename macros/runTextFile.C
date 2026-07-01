@@ -10,9 +10,11 @@
 //
 // --single: for a dataset with no HP/ZB split (e.g. one min-bias or
 //           single-trigger sample) — every pT slice reads from <residuals.root>.
-// method: gauss (default) | doubleGauss | trunc90 | trunc95
+// method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
 // [direct]: pass the literal word "direct" to use the non-normalized intercepts
 //           instead of the kFSR-normalized ones (the standard/default method).
+// [step3] eta_mode in the TOML ("both" | "abseta" | "eta") controls which of
+// the two text files (per cone) actually get written; see TextFileWriter.cxx.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -26,6 +28,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 #include "TextFileWriter.h"
 #include "ConfigCli.h"
+#include "AnalysisConfig.h"
 
 #ifndef __CLING__
 #include <iostream>
@@ -39,14 +42,14 @@ int main( int argc, char* argv[] ){
 
     if( !args.empty() && TString( args[0] ) == "--single" ){
         if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
-        TString method = ( args.size() > 4 ) ? args[4] : "gauss";
+        TString method = ( args.size() > 4 ) ? args[4] : Config().defaultMethod;
         bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
         runTextFile( args[1], args[2], args[3], method, useNorm );
         return 0;
     }
 
     if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
-    TString method = ( args.size() > 4 ) ? args[4] : "gauss";
+    TString method = ( args.size() > 4 ) ? args[4] : Config().defaultMethod;
     bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
     runTextFile( args[0], args[1], args[2], args[3], method, useNorm );
     return 0;

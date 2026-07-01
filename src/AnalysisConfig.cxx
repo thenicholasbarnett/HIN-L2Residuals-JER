@@ -127,6 +127,12 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     cfg.residualGausFitHalfWidth = doc["cuts"]["residual_gaus_fit_half_width"].value_or( 0.5 );
     cfg.residualAlphaFitHi = doc["cuts"]["residual_alpha_fit_hi"].value_or( 0.31 );
 
+    // Step 3 output selection only — Step 2 always computes and stores every
+    // method (gauss/doubleGauss/trunc90/trunc95) and both eta modes regardless
+    // of these values; they just pick what runTextFile turns into JEC text files.
+    cfg.defaultMethod = TString( doc["step3"]["default_method"].value_or( std::string( "gauss" ) ).c_str() );
+    cfg.etaModeOutput = TString( doc["step3"]["eta_mode"].value_or( std::string( "both" ) ).c_str() );
+
     if( cfg.jecFilesPerCone.empty() ) throw std::runtime_error( "jec.files is empty" );
     if( cfg.coneLabels.empty() )      throw std::runtime_error( "cones.labels is empty" );
     if( cfg.jecFilesPerCone.size() != cfg.coneLabels.size() )
@@ -140,6 +146,8 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     for( size_t i = 1; i < cfg.ptavgEdges.size(); i++ )
         if( cfg.ptavgEdges[i] <= cfg.ptavgEdges[i - 1] )
             throw std::runtime_error( "binning.ptavg_edges must be strictly ascending" );
+    if( cfg.etaModeOutput != "both" && cfg.etaModeOutput != "abseta" && cfg.etaModeOutput != "eta" )
+        throw std::runtime_error( "step3.eta_mode must be \"both\", \"abseta\", or \"eta\"" );
 
     return cfg;
 }

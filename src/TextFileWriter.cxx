@@ -161,6 +161,11 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
 
     TFile* fOut = new TFile( outputRootFile, "recreate" );
 
+    // [step3] eta_mode selects which of the two text files actually get
+    // written; "both" (default) writes both, matching prior behavior.
+    const bool wantAbsEta  = ( cfg.etaModeOutput != "eta" );
+    const bool wantFullEta = ( cfg.etaModeOutput != "abseta" );
+
     BinningConfig bins;
     const int nPt = ( int )bins.ptavgSlices.size();
 
@@ -187,6 +192,8 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
 
         for( int em = 0; em < 2; em++ ){
             const bool fullEta = ( em == 1 );
+            if( fullEta && !wantFullEta ) continue;
+            if( !fullEta && !wantAbsEta ) continue;
             const std::vector<Double_t>& etaEdges = fullEta ? kEtaEdges : kAbsEtaEdges;
             const int nEta = ( int )etaEdges.size() - 1;
             const TString etaMode = L2Name::EtaModeKey( fullEta );
@@ -253,13 +260,16 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
 
         TString absEtaTxt = outputTextPrefix + "_" + cone + "_abseta" + suffix + ".txt";
         TString etaTxt    = outputTextPrefix + "_" + cone + "_eta" + suffix + ".txt";
-        if( !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
+        if( wantAbsEta && !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
             std::cerr << "Cannot open output file " << absEtaTxt << "\n";
-        if( !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )
+        if( wantFullEta && !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )
             std::cerr << "Cannot open output file " << etaTxt << "\n";
 
-        std::cout << "Done. " << cone << ": " << 2 * ( int )fitsAbsEta.size() << " eta bins -> " << absEtaTxt
-                  << ", " << ( int )fitsFullEta.size() << " eta bins -> " << etaTxt << "\n";
+        std::cout << "Done. " << cone << ": ";
+        if( wantAbsEta )  std::cout << 2 * ( int )fitsAbsEta.size() << " eta bins -> " << absEtaTxt;
+        if( wantAbsEta && wantFullEta ) std::cout << ", ";
+        if( wantFullEta ) std::cout << ( int )fitsFullEta.size() << " eta bins -> " << etaTxt;
+        std::cout << "\n";
     }
 
     fOut->Close();
