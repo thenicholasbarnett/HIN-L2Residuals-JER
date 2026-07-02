@@ -30,7 +30,7 @@
 
 inline void PlotFinals( TFile* fIn, const TString& outDir,
                        const TString& cone, const BinningConfig& bins,
-                       ProgressBar& pb ){
+                       ProgressBar& pb, bool isClosure = false ){
     for( int m = 0; m < kNMethods; m++ ){
         for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
             const bool   fullEta  = ( ieta == 1 );
@@ -89,6 +89,11 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             c->SetGridy();
 
             auto [ylo, yhi] = YRange( hists );
+            // Closure passes are checking R_MC/R_data ~= 1 to a tight tolerance --
+            // fixed 0.95-1.05 range with 0.99/1.01 guide lines reads that much
+            // more clearly than the auto-scaled range used for the correction
+            // derivation itself.
+            if( isClosure ){ ylo = 0.95; yhi = 1.05; }
 
             TLegend* leg = new TLegend( 0.60, 0.68, 0.93, 0.88 );
             leg->SetBorderSize( 0 );
@@ -122,6 +127,24 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             rl->SetLineWidth( 1 );
             rl->Draw();
 
+            if( isClosure ){
+                // Distinct accent color + heavier weight than the plain gray
+                // dotted gridlines (gStyle's own grid is also style 3 at every
+                // 0.01 here) -- same gray would make these guide lines
+                // indistinguishable from the automatic grid.
+                TLine* rl99 = new TLine( xMin, 0.99, xMax, 0.99 );
+                rl99->SetLineStyle( 3 );
+                rl99->SetLineColor( HiroshigeLightRed() );
+                rl99->SetLineWidth( 2 );
+                rl99->Draw();
+
+                TLine* rl101 = new TLine( xMin, 1.01, xMax, 1.01 );
+                rl101->SetLineStyle( 3 );
+                rl101->SetLineColor( HiroshigeLightRed() );
+                rl101->SetLineWidth( 2 );
+                rl101->Draw();
+            }
+
             leg->Draw();
 
             TLatex* tex = new TLatex();
@@ -134,7 +157,7 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             SavePlot( c, outDir, cone, "finals", {etaMode}, cvName );
             pb.Update();
 
-            delete c;   // cascade-deletes hists, leg, tex, rl
+            delete c;   // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)
         }
     }
 }

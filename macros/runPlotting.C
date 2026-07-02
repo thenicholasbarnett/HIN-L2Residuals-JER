@@ -1,4 +1,4 @@
-// CMake:       ./build/bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] CONFIG=path
+// CMake:       ./build/bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] [CLOSURE=true] CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runPlotting.C("residuals.root")'
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
@@ -68,7 +68,9 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 //   "etasym"    — full-eta vs |eta| reflected symmetry check (PlotEtaSym)
 //   "methods"   — method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
 //   "finals"    — final R_MC/R_data at alpha→0, all pT slices overlaid (PlotFinals)
-//                 also reads Step 3's corrfinal TH2D grid as a fallback
+//                 also reads Step 3's corrfinal TH2D grid as a fallback.
+//                 CLOSURE=true fixes its y-range to 0.95-1.05 with 0.99/1.01
+//                 guide lines, for checking a closure pass's R_MC/R_data ~= 1.
 //   "normcomp"  — direct vs kFSR-norm correction factor overlay with ratio panel (PlotNormComp)
 //   "adist"     — asymmetry distributions per bin with log-y and truncation lines
 //   "roverlay"  — R_data and R_MC overlay with ratio panel per alpha/pT
@@ -96,7 +98,7 @@ bool WantsFinalsByDefault( TFile* fIn, const TString& cone, const BinningConfig&
                            cone + "/" + gridName, gridName } );
 }
 
-void runPlotting( TString residualsFile, TString outDir = "", TString flags = "" ){
+void runPlotting( TString residualsFile, TString outDir = "", TString flags = "", bool isClosure = false ){
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
 
@@ -167,7 +169,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
         if( doEtaSym )   PlotEtaSym( fIn, outDir, cone, bins,        pb );
         if( doMethods )  PlotMethodComp( fIn, outDir, cone, bins, false, pb );
         if( doMethods )  PlotMethodComp( fIn, outDir, cone, bins, true,  pb );
-        if( doFinals )   PlotFinals( fIn, outDir, cone, bins,        pb );
+        if( doFinals )   PlotFinals( fIn, outDir, cone, bins,        pb, isClosure );
         if( doNormComp ) PlotNormComp( fIn, outDir, cone, bins, false, pb );
         if( doNormComp ) PlotNormComp( fIn, outDir, cone, bins, true,  pb );
         if( doAdist )    PlotAsymDist( fIn, outDir, cone, bins,        pb );
@@ -186,12 +188,15 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
 #include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runPlotting INPUT=file.root [OUTDIR=dir] [FLAGS=\"...\"] CONFIG=path\n"
+        "Usage: runPlotting INPUT=file.root [OUTDIR=dir] [FLAGS=\"...\"] [CLOSURE=true] CONFIG=path\n"
         "  FLAGS: omit for the curated smart default, \"all\" for every plot\n"
         "         unconditionally, or a space-separated list of:\n"
-        "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n";
+        "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n"
+        "  CLOSURE=true: \"finals\" plots use a fixed 0.95-1.05 y-range with 0.99/1.01\n"
+        "         guide lines instead of the auto-scaled range, for checking a\n"
+        "         closure pass's R_MC/R_data ~= 1. No effect on any other flag.\n";
 
-    const std::set<std::string> kKnownKeys = { "INPUT", "OUTDIR", "FLAGS", "CONFIG" };
+    const std::set<std::string> kKnownKeys = { "INPUT", "OUTDIR", "FLAGS", "CLOSURE", "CONFIG" };
     L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
 
     setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
@@ -199,8 +204,9 @@ int main( int argc, char* argv[] ){
     TString input  = t.Require( "INPUT", kUsage );
     TString outDir = t.Get( "OUTDIR", "" );
     TString flags  = t.Get( "FLAGS", "" );
+    bool isClosure = t.Get( "CLOSURE", "false" ) == "true";
 
-    runPlotting( input, outDir, flags );
+    runPlotting( input, outDir, flags, isClosure );
     return 0;
 }
 #endif
