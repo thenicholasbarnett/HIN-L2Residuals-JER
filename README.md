@@ -97,7 +97,7 @@ cmake -B build
 cmake --build build
 ```
 
-For CMSSW/SCRAM builds on lxplus, place the checkout anywhere under a CMSSW `src/` area and build from `src`:
+For CMSSW/SCRAM builds on lxplus, place the checkout at `$CMSSW_BASE/src/L2Residuals` and build from `src`:
 
 ```bash
 source /cvmfs/cms.cern.ch/cmsset_default.sh
@@ -107,7 +107,7 @@ git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git L2Residual
 scram b -j4
 ```
 
-SCRAM builds the same library code from `src/*.cxx` and the executable wrappers in `bin/*.cc`; the BuildFile uses package-local include paths, so the checkout directory can be renamed or nested under a local subsystem if you prefer. The CMake workflow remains the preferred standalone/laptop build; SCRAM is the CMSSW/lxplus build front door.
+SCRAM builds the same library code from `src/*.cxx` and the executable wrappers in `bin/*.cc`. The SCRAM package name is `L2Residuals`, so keep the checkout at `$CMSSW_BASE/src/L2Residuals` unless you also update `bin/BuildFile.xml`. The CMake workflow remains the preferred standalone/laptop build; SCRAM is the CMSSW/lxplus build front door.
 
 CMake binaries are written to `build/bin/`, the shared library to `build/lib/`, and all generated build files stay under `build/`. The source `bin/` directory is reserved for SCRAM executable wrappers.
 

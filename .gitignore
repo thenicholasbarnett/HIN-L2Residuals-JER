@@ -4,6 +4,7 @@ lib/
 
 # bin/ is SCRAM source; ignore only accidental local executables there.
 bin/*
+!bin/BuildFile.xml
 !bin/*.cc
 
 # analysis outputs
