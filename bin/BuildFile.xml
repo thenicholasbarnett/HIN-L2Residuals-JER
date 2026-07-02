@@ -1,4 +1,4 @@
-<use name="L2Residuals"/>
+<use name="Analysis/L2Residuals"/>
 <use name="root"/>
 <use name="rootmath"/>
 <use name="rootgraphics"/>
