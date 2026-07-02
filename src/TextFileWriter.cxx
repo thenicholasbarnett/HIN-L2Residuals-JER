@@ -24,6 +24,10 @@
 // Minimum valid pT slices needed to attempt a 3-parameter fit.
 static constexpr int kMinSlices = 3;
 
+// outputTextPrefix default and fixed output location — see TextFileWriter.h.
+static const char* const kDefaultTextPrefix = "L2Residual";
+static const char* const kTextOutputSubdir = "data/jec/preliminary";
+
 static constexpr double kPtLo = 40.0;
 static constexpr double kPtHi = 1000.0;
 static constexpr int    kNPar = 3;
@@ -139,17 +143,33 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
                  TString outputRootFile, TString outputTextPrefix,
                  TString method, bool useNorm ){
 
+    if( outputTextPrefix.IsNull() ) outputTextPrefix = kDefaultTextPrefix;
+    if( outputTextPrefix.Contains( "/" ) ){
+        std::cerr << "ERROR: PREFIX must be a plain name, not a path (it contains '/'): "
+                  << outputTextPrefix << "\n";
+        return;
+    }
+
     const TString suffix = useNorm ? "_norm" : "";
+
+    const AnalysisConfig& cfg = Config();
+    PrintConfigSummary( cfg );
+
+    // Correction text files always land here, not wherever the caller points
+    // OUTPUT= — see TextFileWriter.h. Gitignored; created if missing.
+    const TString textDir = TString( cfg.repoRoot.c_str() ) + "/" + kTextOutputSubdir;
+    if( gSystem->mkdir( textDir, kTRUE ) < 0 && gSystem->AccessPathName( textDir ) ){
+        std::cerr << "ERROR: cannot create text output directory: " << textDir << "\n";
+        return;
+    }
 
     std::cout << "Triggered residuals:     " << triggeredResidualsFile    << "\n"
               << "Non-triggered residuals: " << nonTriggeredResidualsFile << "\n"
               << "Output ROOT:  " << outputRootFile   << "\n"
+              << "Text output dir: " << textDir        << "\n"
               << "Text prefix:  " << outputTextPrefix << "\n"
               << "Method:       " << method           << "\n"
               << "Normalized:   " << ( useNorm ? "yes (kFSR-norm)" : "no (direct)" ) << "\n";
-
-    const AnalysisConfig& cfg = Config();
-    PrintConfigSummary( cfg );
 
     TFile* fTrig = TFile::Open( triggeredResidualsFile, "read" );
     TFile* fNoTrig = TFile::Open( nonTriggeredResidualsFile, "read" );
@@ -157,7 +177,6 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
     if( !fNoTrig || fNoTrig->IsZombie() ){ std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n"; return; }
 
     { Ssiz_t sl = outputRootFile.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputRootFile( 0, sl ) ), kTRUE ); } }
-    { Ssiz_t sl = outputTextPrefix.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputTextPrefix( 0, sl ) ), kTRUE ); } }
 
     TFile* fOut = new TFile( outputRootFile, "recreate" );
 
@@ -259,8 +278,8 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
             }
         }
 
-        TString absEtaTxt = outputTextPrefix + "_" + cone + "_abseta" + suffix + ".txt";
-        TString etaTxt    = outputTextPrefix + "_" + cone + "_eta" + suffix + ".txt";
+        TString absEtaTxt = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta" + suffix + ".txt";
+        TString etaTxt    = textDir + "/" + outputTextPrefix + "_" + cone + "_eta" + suffix + ".txt";
         if( wantAbsEta && !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
             std::cerr << "Cannot open output file " << absEtaTxt << "\n";
         if( wantFullEta && !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )

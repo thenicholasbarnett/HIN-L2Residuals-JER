@@ -72,10 +72,10 @@ runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=tri
 ./build/bin/runResiduals DATA=<data_asymmetry.root> MC=<mc_asymmetry.root> OUTPUT=<residuals.root> CONFIG=cfg/2024ppRef.toml
 
 # Step 3, split triggered/non-triggered residuals
-./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> PREFIX=<output_text_prefix> CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
 
 # Step 3, one residual file for every pT slice
-./build/bin/runTextFile SINGLE=<residuals.root> OUTPUT=<corrections.root> PREFIX=<output_text_prefix> CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile SINGLE=<residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
 
 # Plot any workflow output
 ./build/bin/runPlotting INPUT=<input.root> OUTDIR=<output_plots_dir> CONFIG=cfg/2024ppRef.toml
@@ -165,11 +165,11 @@ Every compiled binary's arguments are `KEY=value` tokens — there are no positi
 | :- | :- | :- |
 | `runAsymmetry` | `INPUT=`, `OUTPUT=`, `MODE=`, `CONFIG=` | `MAXEVENTS=` |
 | `runResiduals` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
-| `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `PREFIX=`, `CONFIG=` | `METHOD=`, `NORM=` |
-| `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `PREFIX=`, `CONFIG=` | `METHOD=`, `NORM=` |
+| `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
+| `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
 | `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=` |
 
-`MODE=` must be `triggered`, `non-triggered`, or `mc`. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`.
+`MODE=` must be `triggered`, `non-triggered`, or `mc`. `PREFIX=` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`.
 
 <h3> Naming Convention </h3>
 
@@ -251,7 +251,7 @@ ak4PF/
 Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes and ZeroBias/MinBias): for each p<sub>T</sub><sup>avg</sup> slice, uses the triggered file if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and the non-triggered file otherwise — the triggered dataset is trigger-biased below its efficiency plateau, the non-triggered dataset fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./build/bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> [PREFIX=<name>] [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 
 # METHOD: gauss (default) | doubleGauss | trunc90 | trunc95
 # NORM:   true (default) uses the kFSR-normalized intercepts (the standard method);
@@ -261,14 +261,14 @@ Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes an
 For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold), pass `SINGLE=` instead of `TRIGGERED=`/`NONTRIGGERED=` (mutually exclusive with them):
 
 ```
-./build/bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> [PREFIX=<name>] [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 ```
 
-For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `NORM=false` is passed:
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files per cone that can be parsed with a header. These always go to `data/jec/preliminary/` (relative to the repo root, created automatically if missing) — a gitignored directory reserved for locally-generated/preliminary corrections, not a caller-chosen path. `PREFIX=` is a plain filename prefix, not a path (it must not contain `/`); it defaults to `L2Residual` when omitted. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `NORM=false` is passed:
 
 ```
-<output_text-prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
-<output_text-prefix>_<cone>_eta[_norm].txt      ← independent fit per full-η bin, no mirroring
+data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
+data/jec/preliminary/<prefix>_<cone>_eta[_norm].txt      ← independent fit per full-η bin, no mirroring
 ```
 
 <u> Output ROOT Structure: </u>
@@ -386,6 +386,7 @@ bash condor/batch_hadd.sh \
 | Path | Contents |
 | :-: | - |
 | `data/jec/` | L2Relative JEC text files (one for each clustering algorithm, all 5 cones) |
+| `data/jec/preliminary/` | Step 3 output — locally-generated L2Residual correction text files (gitignored; created automatically by `runTextFile`) |
 | `data/json/` | Golden JSON |
 | `data/veto/` | Jet veto map |
 | `data/txt/` | filelists of HiForest files — triggered (e.g. HardProbes), non-triggered (e.g. ZeroBias/MinBias), and MC datasets |

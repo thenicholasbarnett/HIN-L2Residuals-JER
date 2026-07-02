@@ -73,15 +73,23 @@ static void MakeTrigNoTrig( const char* trigPath, const char* notrigPath,
     MakeResiduals( notrigPath, notrigValue, err, {0, 1, 2, 3, 4, 5} );
 }
 
+// runTextFile now writes correction text files to a fixed location
+// (data/jec/preliminary/, relative to the repo root) regardless of PREFIX --
+// PREFIX is just a plain filename prefix now, not a path. Tests still use
+// distinct prefixes per case so cleanup doesn't collide across cases.
+static TString TxtPath( const TString& prefix, const char* mode, bool norm ){
+    return TString( "data/jec/preliminary/" ) + prefix + "_ak4PF_" + mode + ( norm ? "_norm" : "" ) + ".txt";
+}
+
 static void CleanupFiles( const char* trigPath, const char* notrigPath,
-                         const char* rootPath, const char* prefix ){
+                         const char* rootPath, const TString& prefix ){
     std::remove( trigPath );
     std::remove( notrigPath );
     std::remove( rootPath );
-    std::remove( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() );
-    std::remove( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data() );
-    std::remove( ( TString( prefix ) + "_ak4PF_abseta_norm.txt" ).Data() );
-    std::remove( ( TString( prefix ) + "_ak4PF_eta_norm.txt" ).Data() );
+    std::remove( TxtPath( prefix, "abseta", false ).Data() );
+    std::remove( TxtPath( prefix, "eta", false ).Data() );
+    std::remove( TxtPath( prefix, "abseta", true ).Data() );
+    std::remove( TxtPath( prefix, "eta", true ).Data() );
 }
 
 // Parse one data line from the JEC text file.
@@ -124,15 +132,15 @@ void TestFileStructure(){
     const char* trigPath = "/tmp/tw_trig1.root";
     const char* notrigPath = "/tmp/tw_notrig1.root";
     const char* rootPath = "/tmp/tw_out1.root";
-    const char* prefix = "/tmp/tw_out1";
+    const char* prefix = "test_tw1";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header, headerEta;
-    auto absLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
-    auto etaLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), headerEta );
+    auto absLines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
+    auto etaLines = ReadJECFile( TxtPath( prefix, "eta", false ).Data(), headerEta );
 
     Check( header.rfind( "{1 JetEta", 0 ) == 0, "abseta header starts with {1 JetEta" );
     Check( header.find( "L2Residual" ) != std::string::npos, "abseta header contains L2Residual" );
@@ -157,7 +165,7 @@ void TestMergeSourceSelection(){
     const char* trigPath = "/tmp/tw_trig2.root";
     const char* notrigPath = "/tmp/tw_notrig2.root";
     const char* rootPath = "/tmp/tw_out2.root";
-    const char* prefix = "/tmp/tw_out2";
+    const char* prefix = "test_tw2";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 5.0, 1.0 );
@@ -185,7 +193,7 @@ void TestNormSelection(){
     const char* trigPath = "/tmp/tw_trig2b.root";
     const char* notrigPath = "/tmp/tw_notrig2b.root";
     const char* rootPath = "/tmp/tw_out2b.root";
-    const char* prefix = "/tmp/tw_out2b";
+    const char* prefix = "test_tw2b";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     // direct variant = 1.0, norm variant = 9.0, both present in the same file
@@ -196,11 +204,11 @@ void TestNormSelection(){
 
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", true );
 
-    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_abseta_norm.txt" ).Data() ).good(),
+    Check( std::ifstream( TxtPath( prefix, "abseta", true ).Data() ).good(),
         "norm run writes a _norm-suffixed abseta text file" );
-    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_eta_norm.txt" ).Data() ).good(),
+    Check( std::ifstream( TxtPath( prefix, "eta", true ).Data() ).good(),
         "norm run writes a _norm-suffixed eta text file" );
-    Check( !std::ifstream( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() ).good(),
+    Check( !std::ifstream( TxtPath( prefix, "abseta", false ).Data() ).good(),
         "norm run does not also write the direct-variant filename" );
 
     TFile* fOut = TFile::Open( rootPath, "read" );
@@ -220,13 +228,13 @@ void TestSingleFileMode(){
 
     const char* resPath = "/tmp/tw_single.root";
     const char* rootPath = "/tmp/tw_out_single.root";
-    const char* prefix = "/tmp/tw_out_single";
+    const char* prefix = "test_tw_single";
     CleanupFiles( resPath, resPath, rootPath, prefix );
 
     MakeResiduals( resPath, 3.0, 0.001, {0, 1, 2, 3, 4, 5} );
     runTextFile( resPath, rootPath, prefix, "gauss", false );
 
-    Check( std::ifstream( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() ).good(),
+    Check( std::ifstream( TxtPath( prefix, "abseta", false ).Data() ).good(),
         "single-file run writes the abseta text file" );
 
     TFile* fOut = TFile::Open( rootPath, "read" );
@@ -253,14 +261,14 @@ void TestEtaOrdering(){
     const char* trigPath = "/tmp/tw_trig3.root";
     const char* notrigPath = "/tmp/tw_notrig3.root";
     const char* rootPath = "/tmp/tw_out3.root";
-    const char* prefix = "/tmp/tw_out3";
+    const char* prefix = "test_tw3";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
@@ -314,14 +322,14 @@ void TestEtaFileOrdering(){
     const char* trigPath = "/tmp/tw_trig4.root";
     const char* notrigPath = "/tmp/tw_notrig4.root";
     const char* rootPath = "/tmp/tw_out4.root";
-    const char* prefix = "/tmp/tw_out4";
+    const char* prefix = "test_tw4";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "eta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
@@ -346,7 +354,7 @@ void TestUnityFallback_TooFewSlices(){
     const char* trigPath = "/tmp/tw_trig5.root";
     const char* notrigPath = "/tmp/tw_notrig5.root";
     const char* rootPath = "/tmp/tw_out5.root";
-    const char* prefix = "/tmp/tw_out5";
+    const char* prefix = "test_tw5";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     // Only 2 valid slices total: Triggered supplies 100-175 and 175-250, NonTriggered supplies none.
@@ -355,7 +363,7 @@ void TestUnityFallback_TooFewSlices(){
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
@@ -376,14 +384,14 @@ void TestUnityFallback_EmptyBins(){
     const char* trigPath = "/tmp/tw_trig6.root";
     const char* notrigPath = "/tmp/tw_notrig6.root";
     const char* rootPath = "/tmp/tw_out6.root";
-    const char* prefix = "/tmp/tw_out6";
+    const char* prefix = "test_tw6";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 0.0, 0.0, 0.0 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
@@ -404,14 +412,14 @@ void TestFitRoundTrip(){
     const char* trigPath = "/tmp/tw_trig7.root";
     const char* notrigPath = "/tmp/tw_notrig7.root";
     const char* rootPath = "/tmp/tw_out7.root";
-    const char* prefix = "/tmp/tw_out7";
+    const char* prefix = "test_tw7";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0, 1e-5 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
@@ -437,14 +445,14 @@ void TestEtaExtent(){
     const char* trigPath = "/tmp/tw_trig8.root";
     const char* notrigPath = "/tmp/tw_notrig8.root";
     const char* rootPath = "/tmp/tw_out8.root";
-    const char* prefix = "/tmp/tw_out8";
+    const char* prefix = "test_tw8";
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
     runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
-    auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
+    auto lines = ReadJECFile( TxtPath( prefix, "abseta", false ).Data(), header );
     if( ( int )lines.size() != 36 ){
         std::cout << "  SKIP  (line count wrong)\n";
     } else {
