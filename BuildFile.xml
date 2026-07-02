@@ -3,8 +3,19 @@
 <use name="rootgraphics"/>
 <use name="rootphysics"/>
 
-<flags CXXFLAGS="-std=c++17 -I$(LOCALTOP)/src/Analysis/L2Residuals/include -I$(LOCALTOP)/src/Analysis/L2Residuals/cfg -I$(LOCALTOP)/src/Analysis/L2Residuals/external -DL2RESIDUALS_SOURCE_DIR=\&quot;$(LOCALTOP)/src/Analysis/L2Residuals\&quot;"/>
+<include_path path="include"/>
+<include_path path="cfg"/>
+<include_path path="external"/>
+<flags CXXFLAGS="-std=c++17"/>
+
+<bin name="runAsymmetry" file="bin/runAsymmetry.cc"/>
+<bin name="runResiduals" file="bin/runResiduals.cc"/>
+<bin name="runTextFile" file="bin/runTextFile.cc"/>
+<bin name="runPlotting" file="bin/runPlotting.cc"/>
 
 <export>
   <lib name="1"/>
+  <include_path path="include"/>
+  <include_path path="cfg"/>
+  <include_path path="external"/>
 </export>
