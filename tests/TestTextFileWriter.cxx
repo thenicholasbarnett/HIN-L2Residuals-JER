@@ -64,19 +64,19 @@ static TString MakeResiduals( const char* path, double corrValue, double corrErr
 }
 
 // The real cfg.hltJ80Thresh (cfg/2024ppRef.toml) is 100.0: pT slices 0,1
-// (30-70, 70-100) fall below threshold -> ZB; slices 2-5 (100-175 ... 500-1000)
-// are at/above -> HP. Build both files with full slice coverage, possibly at
+// (30-70, 70-100) fall below threshold -> NonTriggered; slices 2-5 (100-175 ... 500-1000)
+// are at/above -> Triggered. Build both files with full slice coverage, possibly at
 // different values, so tests can check which source ends up in the merge.
-static void MakeHPZB( const char* hpPath, const char* zbPath,
-                      double hpValue, double zbValue, double err = 0.001 ){
-    MakeResiduals( hpPath, hpValue, err, {0, 1, 2, 3, 4, 5} );
-    MakeResiduals( zbPath, zbValue, err, {0, 1, 2, 3, 4, 5} );
+static void MakeTrigNoTrig( const char* trigPath, const char* notrigPath,
+                      double trigValue, double notrigValue, double err = 0.001 ){
+    MakeResiduals( trigPath, trigValue, err, {0, 1, 2, 3, 4, 5} );
+    MakeResiduals( notrigPath, notrigValue, err, {0, 1, 2, 3, 4, 5} );
 }
 
-static void CleanupFiles( const char* hpPath, const char* zbPath,
+static void CleanupFiles( const char* trigPath, const char* notrigPath,
                          const char* rootPath, const char* prefix ){
-    std::remove( hpPath );
-    std::remove( zbPath );
+    std::remove( trigPath );
+    std::remove( notrigPath );
     std::remove( rootPath );
     std::remove( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data() );
     std::remove( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data() );
@@ -121,14 +121,14 @@ static std::vector<JECLine> ReadJECFile( const char* path, std::string& header )
 void TestFileStructure(){
     std::cout << "\n[1] File structure\n";
 
-    const char* hpPath = "/tmp/tw_hp1.root";
-    const char* zbPath = "/tmp/tw_zb1.root";
+    const char* trigPath = "/tmp/tw_trig1.root";
+    const char* notrigPath = "/tmp/tw_notrig1.root";
     const char* rootPath = "/tmp/tw_out1.root";
     const char* prefix = "/tmp/tw_out1";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header, headerEta;
     auto absLines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -146,35 +146,35 @@ void TestFileStructure(){
         Check( std::fabs( absLines.front().ptHi - 1000.0 ) < kEps, "pT_hi = 1000" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
-// [2] Merge source selection: HP and ZB carry different values; the merged
+// [2] Merge source selection: Triggered and NonTriggered carry different values; the merged
 // corrfinal grid must pull each pT slice from the correct source.
 void TestMergeSourceSelection(){
     std::cout << "\n[2] Merge source selection\n";
 
-    const char* hpPath = "/tmp/tw_hp2.root";
-    const char* zbPath = "/tmp/tw_zb2.root";
+    const char* trigPath = "/tmp/tw_trig2.root";
+    const char* notrigPath = "/tmp/tw_notrig2.root";
     const char* rootPath = "/tmp/tw_out2.root";
     const char* prefix = "/tmp/tw_out2";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 5.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 5.0, 1.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     TFile* fOut = TFile::Open( rootPath, "read" );
     TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
     Check( hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output" );
     if( hGrid ){
-        // y-bin 1 = ptavg_30_70  (lo=30  < 100 threshold) -> ZB value
-        Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 1.0 ) < 1e-6, "ptavg_30_70 pulled from ZB" );
-        // y-bin 3 = ptavg_100_175 (lo=100 >= 100 threshold) -> HP value
-        Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 5.0 ) < 1e-6, "ptavg_100_175 pulled from HP" );
+        // y-bin 1 = ptavg_30_70  (lo=30  < 100 threshold) -> NonTriggered value
+        Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 1.0 ) < 1e-6, "ptavg_30_70 pulled from NonTriggered" );
+        // y-bin 3 = ptavg_100_175 (lo=100 >= 100 threshold) -> Triggered value
+        Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 5.0 ) < 1e-6, "ptavg_100_175 pulled from Triggered" );
     }
     if( fOut ) fOut->Close();
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [2b] useNorm selects the "_norm"-suffixed intercepts and suffixes the
@@ -182,19 +182,19 @@ void TestMergeSourceSelection(){
 void TestNormSelection(){
     std::cout << "\n[2b] Normalized variant selection\n";
 
-    const char* hpPath = "/tmp/tw_hp2b.root";
-    const char* zbPath = "/tmp/tw_zb2b.root";
+    const char* trigPath = "/tmp/tw_trig2b.root";
+    const char* notrigPath = "/tmp/tw_notrig2b.root";
     const char* rootPath = "/tmp/tw_out2b.root";
     const char* prefix = "/tmp/tw_out2b";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
     // direct variant = 1.0, norm variant = 9.0, both present in the same file
-    MakeResiduals( hpPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
-    MakeResiduals( hpPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
-    MakeResiduals( zbPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
-    MakeResiduals( zbPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
+    MakeResiduals( trigPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
+    MakeResiduals( trigPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
+    MakeResiduals( notrigPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true );
+    MakeResiduals( notrigPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false );
 
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", true );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", true );
 
     Check( std::ifstream( ( TString( prefix ) + "_ak4PF_abseta_norm.txt" ).Data() ).good(),
         "norm run writes a _norm-suffixed abseta text file" );
@@ -210,13 +210,13 @@ void TestNormSelection(){
         "grid picked up the norm value (9.0), not the direct value (1.0)" );
     if( fOut ) fOut->Close();
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
-// [2c] Single-file overload: no HP/ZB split, every pT slice reads from the
+// [2c] Single-file overload: no Triggered/NonTriggered split, every pT slice reads from the
 // one residuals file regardless of cfg.hltJ80Thresh.
 void TestSingleFileMode(){
-    std::cout << "\n[2c] Single-file mode (no HP/ZB split)\n";
+    std::cout << "\n[2c] Single-file mode (no Triggered/NonTriggered split)\n";
 
     const char* resPath = "/tmp/tw_single.root";
     const char* rootPath = "/tmp/tw_out_single.root";
@@ -233,8 +233,8 @@ void TestSingleFileMode(){
     TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
     Check( hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output" );
     if( hGrid ){
-        // y-bin 1 = ptavg_30_70 (below threshold, would be ZB in two-file mode);
-        // y-bin 3 = ptavg_100_175 (at/above threshold, would be HP) — both must
+        // y-bin 1 = ptavg_30_70 (below threshold, would be NonTriggered in two-file mode);
+        // y-bin 3 = ptavg_100_175 (at/above threshold, would be Triggered) — both must
         // come from the single file regardless, so both equal 3.0.
         Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 3.0 ) < 1e-6,
             "low-pT slice reads from the single file" );
@@ -250,14 +250,14 @@ void TestSingleFileMode(){
 void TestEtaOrdering(){
     std::cout << "\n[3] Eta ordering (abseta, mirrored)\n";
 
-    const char* hpPath = "/tmp/tw_hp3.root";
-    const char* zbPath = "/tmp/tw_zb3.root";
+    const char* trigPath = "/tmp/tw_trig3.root";
+    const char* notrigPath = "/tmp/tw_notrig3.root";
     const char* rootPath = "/tmp/tw_out3.root";
     const char* prefix = "/tmp/tw_out3";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -304,21 +304,21 @@ void TestEtaOrdering(){
         Check( paramsMatch, "negative and positive sides have identical fit parameters (mirrored)" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [4] Eta ordering in the eta (independent, unmirrored) text file
 void TestEtaFileOrdering(){
     std::cout << "\n[4] Eta ordering (full eta, independent fits)\n";
 
-    const char* hpPath = "/tmp/tw_hp4.root";
-    const char* zbPath = "/tmp/tw_zb4.root";
+    const char* trigPath = "/tmp/tw_trig4.root";
+    const char* notrigPath = "/tmp/tw_notrig4.root";
     const char* rootPath = "/tmp/tw_out4.root";
     const char* prefix = "/tmp/tw_out4";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_eta.txt" ).Data(), header );
@@ -336,23 +336,23 @@ void TestEtaFileOrdering(){
         Check( ascending, "36 lines are contiguous and ascending in eta, no mirroring" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [5] Unity fallback: fewer than kMinSlices (3) valid pT slices across the merge
 void TestUnityFallback_TooFewSlices(){
     std::cout << "\n[5] Unity fallback — fewer than kMinSlices pT slices\n";
 
-    const char* hpPath = "/tmp/tw_hp5.root";
-    const char* zbPath = "/tmp/tw_zb5.root";
+    const char* trigPath = "/tmp/tw_trig5.root";
+    const char* notrigPath = "/tmp/tw_notrig5.root";
     const char* rootPath = "/tmp/tw_out5.root";
     const char* prefix = "/tmp/tw_out5";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    // Only 2 valid slices total: HP supplies 100-175 and 175-250, ZB supplies none.
-    MakeResiduals( hpPath, 1.0, 0.001, {2, 3} );
-    MakeResiduals( zbPath, 1.0, 0.001, {} );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    // Only 2 valid slices total: Triggered supplies 100-175 and 175-250, NonTriggered supplies none.
+    MakeResiduals( trigPath, 1.0, 0.001, {2, 3} );
+    MakeResiduals( notrigPath, 1.0, 0.001, {} );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -366,21 +366,21 @@ void TestUnityFallback_TooFewSlices(){
         Check( allUnity, "all bins fall back to unity (p0=1, p1=0, p2=0)" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [6] Unity fallback for empty histograms (all bins zero)
 void TestUnityFallback_EmptyBins(){
     std::cout << "\n[6] Unity fallback — empty histograms\n";
 
-    const char* hpPath = "/tmp/tw_hp6.root";
-    const char* zbPath = "/tmp/tw_zb6.root";
+    const char* trigPath = "/tmp/tw_trig6.root";
+    const char* notrigPath = "/tmp/tw_notrig6.root";
     const char* rootPath = "/tmp/tw_out6.root";
     const char* prefix = "/tmp/tw_out6";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 0.0, 0.0, 0.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 0.0, 0.0, 0.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -394,21 +394,21 @@ void TestUnityFallback_EmptyBins(){
         Check( allUnity, "empty bins produce unity correction (p0=1, p1=0, p2=0)" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [7] Fit round-trip: unit input recovers f≈1.0 at all pT centers
 void TestFitRoundTrip(){
     std::cout << "\n[7] Fit round-trip\n";
 
-    const char* hpPath = "/tmp/tw_hp7.root";
-    const char* zbPath = "/tmp/tw_zb7.root";
+    const char* trigPath = "/tmp/tw_trig7.root";
+    const char* notrigPath = "/tmp/tw_notrig7.root";
     const char* rootPath = "/tmp/tw_out7.root";
     const char* prefix = "/tmp/tw_out7";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 1.0, 1.0, 1e-5 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0, 1e-5 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -427,21 +427,21 @@ void TestFitRoundTrip(){
         Check( fitsClose, "fit recovers f≈1.0 at all pT centers for unit input" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // [8] CMS JEC edge value: outermost eta bin ends at 5.191
 void TestEtaExtent(){
     std::cout << "\n[8] CMS eta extent\n";
 
-    const char* hpPath = "/tmp/tw_hp8.root";
-    const char* zbPath = "/tmp/tw_zb8.root";
+    const char* trigPath = "/tmp/tw_trig8.root";
+    const char* notrigPath = "/tmp/tw_notrig8.root";
     const char* rootPath = "/tmp/tw_out8.root";
     const char* prefix = "/tmp/tw_out8";
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 
-    MakeHPZB( hpPath, zbPath, 1.0, 1.0 );
-    runTextFile( hpPath, zbPath, rootPath, prefix, "gauss", false );
+    MakeTrigNoTrig( trigPath, notrigPath, 1.0, 1.0 );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
 
     std::string header;
     auto lines = ReadJECFile( ( TString( prefix ) + "_ak4PF_abseta.txt" ).Data(), header );
@@ -452,7 +452,7 @@ void TestEtaExtent(){
         Check( std::fabs( lines[35].etaHi - 5.191 ) < kEps, "positive outer edge =  5.191" );
     }
 
-    CleanupFiles( hpPath, zbPath, rootPath, prefix );
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
 // ---- main ----

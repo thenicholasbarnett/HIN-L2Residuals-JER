@@ -21,10 +21,17 @@
 #                 know the source filename — pointing this at a different run
 #                 period/collision system's TOML needs no other change here.
 #
-# Mode is auto-detected per filelist from the filename (case-insensitive):
-#   *hp* or *hardprobes*   → --hard-probes
-#   *zb* or *zerobias*     → --zero-bias
-#   *mc* or *montecarlo*   → --monte-carlo
+# Mode for each filelist is looked up from [condor.filelist_modes] in the
+# selected TOML, keyed by the filelist's basename (without .txt):
+#   [condor.filelist_modes]
+#   filelist_HiForest_2024ppref_DATA_HP0 = "triggered"
+#   filelist_HiForest_2024ppref_DATA_ZB0 = "non-triggered"
+#   filelist_HiForest_2024ppref_MC       = "mc"
+# Comment out (or simply omit) a filelist's entry to skip submitting jobs for
+# it without moving or renaming the file. Values: triggered | non-triggered | mc.
+# The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form —
+# only the mapped mode value matters; the key just has to match the filelist's
+# basename exactly.
 #
 # Prerequisites:
 #   - On lxplus, run cmsenv before configuring/building this repo:
@@ -87,6 +94,30 @@ if [[ ! -f "${CONFIG_PATH}" ]]; then
     exit 1
 fi
 CONFIG_PATH="$(cd "$(dirname "${CONFIG_PATH}")" && pwd)/$(basename "${CONFIG_PATH}")"
+
+# Look up the run mode for a filelist basename from [condor.filelist_modes] in
+# the selected TOML. Prints "triggered", "non-triggered", "mc", or nothing if
+# there's no active (uncommented) entry for that key.
+lookup_filelist_mode() {
+    local key="$1"
+    awk -v key="${key}" '
+        /^[[:space:]]*\[/ {
+            insec = ( $0 ~ /^[[:space:]]*\[condor\.filelist_modes\][[:space:]]*(#.*)?$/ )
+            next
+        }
+        insec {
+            line = $0
+            sub( /#.*/, "", line )
+            if ( line ~ ( "^[[:space:]]*" key "[[:space:]]*=" ) ) {
+                val = line
+                sub( /^[^=]*=[[:space:]]*"/, "", val )
+                sub( /".*/, "", val )
+                print val
+                exit
+            }
+        }
+    ' "${CONFIG_PATH}"
+}
 
 CMSSW_SRC_FROM_CONFIG="$(awk '
     /^[[:space:]]*\[/ {
@@ -197,18 +228,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
     for FILELIST_PATH in "${FILELISTS[@]}"; do
         BASENAME=$(basename "${FILELIST_PATH}" .txt)
 
-        # Auto-detect mode from filename (case-insensitive; matches hp/hardprobes, zb/zerobias, mc/montecarlo)
-        LOWER="${BASENAME,,}"
-        if [[ "${LOWER}" == *hp* || "${LOWER}" == *hardprobes* ]]; then
-            MODE="--hard-probes"
-        elif [[ "${LOWER}" == *zb* || "${LOWER}" == *zerobias* ]]; then
-            MODE="--zero-bias"
-        elif [[ "${LOWER}" == *mc* || "${LOWER}" == *montecarlo* ]]; then
-            MODE="--monte-carlo"
-        else
-            echo "  SKIP  ${BASENAME} — cannot infer mode from filename" >&2
-            continue
-        fi
+        FILELIST_MODE="$(lookup_filelist_mode "${BASENAME}")"
+        case "${FILELIST_MODE}" in
+            triggered)     MODE="--triggered" ;;
+            non-triggered) MODE="--non-triggered" ;;
+            mc)            MODE="--monte-carlo" ;;
+            "")
+                echo "  SKIP  ${BASENAME} — no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
+                continue
+                ;;
+            *)
+                echo "  SKIP  ${BASENAME} — unknown mode \"${FILELIST_MODE}\" in [condor.filelist_modes] (expected triggered|non-triggered|mc)" >&2
+                continue
+                ;;
+        esac
 
         # Label: last _-separated token (HP0, ZB3, MC, …)
         LABEL=$(echo "${BASENAME}" | rev | cut -d_ -f1 | rev)

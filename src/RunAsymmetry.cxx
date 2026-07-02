@@ -27,7 +27,7 @@
 #include <iostream>
 #include <stdexcept>
 
-enum class RunMode { MC, ZeroBias, HardProbes };
+enum class RunMode { MC, NonTriggered, Triggered };
 
 static constexpr Int_t kNRefMax = 200;
 static constexpr float kVzCut = 15.0f;
@@ -37,12 +37,12 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
 
-    RunMode mode = RunMode::HardProbes;
+    RunMode mode = RunMode::Triggered;
     if( modeFlag == "--monte-carlo" || modeFlag == "-mc" ) mode = RunMode::MC;
-    else if( modeFlag == "--zero-bias" || modeFlag == "-zb" ) mode = RunMode::ZeroBias;
-    else if( modeFlag == "--hard-probes" || modeFlag == "-hp" ) mode = RunMode::HardProbes;
+    else if( modeFlag == "--non-triggered" || modeFlag == "-nt" ) mode = RunMode::NonTriggered;
+    else if( modeFlag == "--triggered" || modeFlag == "-t" ) mode = RunMode::Triggered;
     else {
-        throw std::invalid_argument( Form( "ERROR: invalid runAsymmetry mode '%s'. Expected --monte-carlo/-mc, --zero-bias/-zb, or --hard-probes/-hp.", modeFlag.Data() ) );
+        throw std::invalid_argument( Form( "ERROR: invalid runAsymmetry mode '%s'. Expected --monte-carlo/-mc, --non-triggered/-nt, or --triggered/-t.", modeFlag.Data() ) );
     }
 
     // checking configuration
@@ -63,8 +63,9 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     }
 
     // JetCorrector — chain per-cone L2Residual files onto the base JEC, but
-    // only for data (HP/ZB); MC must never see residual corrections, so this
-    // check is the only thing that decides that, not what's in the TOML.
+    // only for data (Triggered/NonTriggered); MC must never see residual
+    // corrections, so this check is the only thing that decides that, not
+    // what's in the TOML.
     std::vector<JetCorrector> jecs;
     jecs.reserve( nCones );
     for( size_t c = 0; c < nCones; c++ ){
@@ -115,7 +116,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
             return;
         }
     }
-    if( mode == RunMode::HardProbes ){
+    if( mode == RunMode::Triggered ){
         trees[kTrigIdx] = ( TTree* )fi->Get( cfg.trigTreePath );
         if( !trees[kTrigIdx] ){
             std::cerr << "Missing HLT tree in " << input << "\n(check cfg/2024ppRef.toml)\n";
@@ -128,13 +129,13 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     SetBranches( trees[kEvtIdx], event.BranchMap( isMC ) );
     for( size_t c = 0; c < nCones; c++ ){ SetBranches( trees[c], jets[c].BranchMap( isMC ) ); }
     if( mode != RunMode::MC ){ SetBranches( trees[kSkimIdx], filters.BranchMap( cfg.filterBranch ) ); }
-    if( mode == RunMode::HardProbes ){ SetBranches( trees[kTrigIdx], {{cfg.hltJ80Branch, &hlt_j80}} ); }
+    if( mode == RunMode::Triggered ){ SetBranches( trees[kTrigIdx], {{cfg.hltJ80Branch, &hlt_j80}} ); }
 
     // event histograms
     TH1D* hvz_all = new TH1D( "hvz_all", "all events;v_{z} (cm);N", 40, -20, 20 );
     TH1D* hvz = new TH1D( "hvz", "after vz+filter;v_{z} (cm);N", 40, -20, 20 );
     TH1I* hfilt = ( mode != RunMode::MC ) ? new TH1I( "hfilt", "ppvF;filter;N", 2, 0, 2 ) : nullptr;
-    TH1I* h_j80 = ( mode == RunMode::HardProbes ) ? new TH1I( "h_hlt_j80", "HLT_AK4PFJet80;bit;N", 2, 0, 2 ) : nullptr;
+    TH1I* h_j80 = ( mode == RunMode::Triggered ) ? new TH1I( "h_hlt_j80", "HLT_AK4PFJet80;bit;N", 2, 0, 2 ) : nullptr;
 
     // histograms
     BinningConfig bins;
@@ -167,7 +168,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
         hvz->Fill( event.vz );
 
         // trig
-        if( mode == RunMode::HardProbes ){
+        if( mode == RunMode::Triggered ){
             trees[kTrigIdx]->GetEntry( i );
             h_j80->Fill( hlt_j80 );
         }
@@ -195,7 +196,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
         for( size_t c = 0; c < nCones; c++ ){ sorted[c] = FindLeadingJets( corrPt[c].data(), jets[c].reco.nref ); }
 
         // trigger efficiency cut
-        if( mode == RunMode::HardProbes ){
+        if( mode == RunMode::Triggered ){
             if( hlt_j80 == 0 ){ continue; }
             if( hlt_j80 == 1 && corrPt[trigConeIdx][sorted[trigConeIdx].lead] <= cfg.hltJ80Thresh ){ continue; }
         }

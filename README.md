@@ -163,7 +163,7 @@ Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if se
 ./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root> [mode] [maxEvents] [CONFIG=cfg/2024ppRef.toml]
 ```
 
-Flags for each type of dataset: `-hp`, `-zb`, `-mc`. 
+Flags for each type of dataset: `-t`/`--triggered` (e.g. HardProbes), `-nt`/`--non-triggered` (e.g. ZeroBias or MinBias), `-mc`/`--monte-carlo`. Triggered and non-triggered are both data — the only difference is whether an HLT decision and efficiency-plateau cut apply; which physical dataset plays which role is a per-run-period choice, not something the code hardcodes.
 An optional integer fourth argument limits the number of events processed.
 
 <u> Output Structure: </u>
@@ -197,17 +197,17 @@ ak4PF/
 
 <h3> <b> Step 3 </b> — Write Text Files </h3>
 
-Merges the HardProbes (HP) and ZeroBias (ZB) <b>Step 2</b> outputs: for each p<sub>T</sub><sup>avg</sup> slice, uses HP if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and ZB otherwise — HP is trigger-biased below its efficiency plateau, ZB fills in the rest. Processes every cone in `cones.labels` in one call.
+Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes and ZeroBias/MinBias): for each p<sub>T</sub><sup>avg</sup> slice, uses the triggered file if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and the non-triggered file otherwise — the triggered dataset is trigger-biased below its efficiency plateau, the non-triggered dataset fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
+./bin/runTextFile <triggered_residuals-file.root> <nontriggered_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
 
 # methods:  gauss (default) | doubleGauss | trunc90 | trunc95
 # [direct]: kFSR-normalized intercepts are used by default (the standard method);
 #           pass the literal word "direct" for the non-normalized variant instead
 ```
 
-For a dataset with no HP/ZB split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold):
+For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold):
 
 ```
 ./bin/runTextFile --single <residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
@@ -304,7 +304,7 @@ bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024p
     TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
 ```
 
-Mode is auto-detected from the filelist filename (`*HP*` → `--hard-probes`, `*ZB*` → `--zero-bias`, `*MC*` → `--monte-carlo`). Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
+Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
 `CONFIG=path` picks which TOML gets submitted with the jobs (default `cfg/2024ppRef.toml`), independent of `TAG` — mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), and its `[condor].cmssw_src` value is stamped into the worker `runtime_wrapper.sh`; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
@@ -326,7 +326,7 @@ bash condor/batch_hadd.sh \
 | `data/jec/` | L2Relative JEC text files (one for each clustering algorithm, all 5 cones) |
 | `data/json/` | Golden JSON |
 | `data/veto/` | Jet veto map |
-| `data/txt/` | filelists of HiForest files from HardProbes, ZeroBias, and MonteCarlo datasets |
+| `data/txt/` | filelists of HiForest files — triggered (e.g. HardProbes), non-triggered (e.g. ZeroBias/MinBias), and MC datasets |
 
 The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 
@@ -335,4 +335,4 @@ The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 ```
 ctest --test-dir build
 ```
-Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `runTextFile` HP/ZB merge selection and output format/η ordering for both text files, as well as build/library load checks.
+Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `runTextFile` triggered/non-triggered merge selection and output format/η ordering for both text files, as well as build/library load checks.

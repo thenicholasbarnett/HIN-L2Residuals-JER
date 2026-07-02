@@ -14,6 +14,17 @@ golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 # CMSSW release/environment used to configure and build the submitted binary.
 cmssw_src = "REQUIRED_SET_ME/path/to/CMSSW_RELEASE/src"
 
+# Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
+# triggered | non-triggered | mc. make_condor.sh looks up each filelist it
+# would submit here; comment out (or omit) an entry to skip submitting jobs
+# for that filelist without moving or renaming the file. The physical dataset
+# name is free-form (e.g. a triggered jet dataset, a MinBias/ZeroBias
+# non-triggered dataset) — only the mapped mode matters.
+[condor.filelist_modes]
+# REQUIRED_SET_ME_filelist_basename = "triggered"
+# REQUIRED_SET_ME_filelist_basename = "non-triggered"
+# REQUIRED_SET_ME_filelist_basename = "mc"
+
 [trees]
 hi = "hiEvtAnalyzer/HiTree"
 skim = "skimanalysis/HltTree"

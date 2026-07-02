@@ -1,15 +1,17 @@
-// Compiled:    ./bin/runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
+// Compiled:    ./bin/runTextFile <triggered_residuals.root> <nontriggered_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
 //              ./bin/runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
-// Interpreted: root -l -b -q 'macros/runTextFile.C("hp.root","zb.root","out.root","corrections/hp0_zb0")'
+// Interpreted: root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root","corrections/hp0_zb0")'
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses hp_residuals
-// if the slice starts at or above cfg.hltJ80Thresh, otherwise zb_residuals.
+// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the triggered
+// residuals if the slice starts at or above cfg.hltJ80Thresh, otherwise the
+// non-triggered residuals.
 // Writes "<output_text_prefix>_<cone>_abseta[_norm].txt" and "..._<cone>_eta[_norm].txt".
 //
-// --single: for a dataset with no HP/ZB split (e.g. one min-bias or
-//           single-trigger sample) — every pT slice reads from <residuals.root>.
+// --single: for a dataset with no triggered/non-triggered split (e.g. one
+//           min-bias or single-trigger sample) — every pT slice reads from
+//           <residuals.root>.
 // method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
 // [direct]: pass the literal word "direct" to use the non-normalized intercepts
 //           instead of the kFSR-normalized ones (the standard/default method).
@@ -34,7 +36,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #include <iostream>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runTextFile <hp_residuals.root> <zb_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n"
+        "Usage: runTextFile <triggered_residuals.root> <nontriggered_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n"
         "       runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n";
 
     L2ConfigCli::ApplyConfigArgument( argc, argv );

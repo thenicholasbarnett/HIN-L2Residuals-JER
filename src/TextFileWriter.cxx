@@ -135,14 +135,14 @@ static bool WriteFullEtaTextFile( const TString& path, const std::vector<FitResu
     return true;
 }
 
-void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
+void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
                  TString outputRootFile, TString outputTextPrefix,
                  TString method, bool useNorm ){
 
     const TString suffix = useNorm ? "_norm" : "";
 
-    std::cout << "HP residuals: " << hpResidualsFile  << "\n"
-              << "ZB residuals: " << zbResidualsFile  << "\n"
+    std::cout << "Triggered residuals:     " << triggeredResidualsFile    << "\n"
+              << "Non-triggered residuals: " << nonTriggeredResidualsFile << "\n"
               << "Output ROOT:  " << outputRootFile   << "\n"
               << "Text prefix:  " << outputTextPrefix << "\n"
               << "Method:       " << method           << "\n"
@@ -151,10 +151,10 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
 
-    TFile* fHP = TFile::Open( hpResidualsFile, "read" );
-    TFile* fZB = TFile::Open( zbResidualsFile, "read" );
-    if( !fHP || fHP->IsZombie() ){ std::cerr << "Cannot open " << hpResidualsFile << "\n"; return; }
-    if( !fZB || fZB->IsZombie() ){ std::cerr << "Cannot open " << zbResidualsFile << "\n"; return; }
+    TFile* fTrig = TFile::Open( triggeredResidualsFile, "read" );
+    TFile* fNoTrig = TFile::Open( nonTriggeredResidualsFile, "read" );
+    if( !fTrig || fTrig->IsZombie() ){ std::cerr << "Cannot open " << triggeredResidualsFile << "\n"; return; }
+    if( !fNoTrig || fNoTrig->IsZombie() ){ std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n"; return; }
 
     { Ssiz_t sl = outputRootFile.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputRootFile( 0, sl ) ), kTRUE ); } }
     { Ssiz_t sl = outputTextPrefix.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputTextPrefix( 0, sl ) ), kTRUE ); } }
@@ -176,10 +176,10 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
 
     for( const TString& cone : cfg.coneLabels ){
 
-        TDirectory* hpConeDir = ( TDirectory* )fHP->Get( cone );
-        TDirectory* zbConeDir = ( TDirectory* )fZB->Get( cone );
-        if( !hpConeDir || !zbConeDir ){
-            std::cerr << "Missing " << cone << " directory in HP or ZB residuals file, skipping\n";
+        TDirectory* trigConeDir = ( TDirectory* )fTrig->Get( cone );
+        TDirectory* notrigConeDir = ( TDirectory* )fNoTrig->Get( cone );
+        if( !trigConeDir || !notrigConeDir ){
+            std::cerr << "Missing " << cone << " directory in triggered or non-triggered residuals file, skipping\n";
             continue;
         }
 
@@ -198,12 +198,13 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
             const int nEta = ( int )etaEdges.size() - 1;
             const TString etaMode = L2Name::EtaModeKey( fullEta );
 
-            // one intercept histogram per pT slice, chosen from HP or ZB by the trigger threshold
+            // one intercept histogram per pT slice, chosen from the triggered or
+            // non-triggered file by the trigger threshold
             std::vector<TH1D*> hSlice( nPt, nullptr );
             int nMissingSlices = 0;
             for( int ip = 0; ip < nPt; ip++ ){
                 const auto& ptSlice = bins.ptavgSlices[ip];
-                TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fHP : fZB;
+                TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fTrig : fNoTrig;
                 TString name = L2Name::ObjectName( cone, "intercept",
                     {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
                 hSlice[ip] = FetchIntercept( src, cone, name );
@@ -273,14 +274,14 @@ void runTextFile( TString hpResidualsFile, TString zbResidualsFile,
     }
 
     fOut->Close();
-    fHP->Close();
-    fZB->Close();
+    fTrig->Close();
+    fNoTrig->Close();
 }
 
 void runTextFile( TString residualsFile, TString outputRootFile,
                  TString outputTextPrefix,
                  TString method, bool useNorm ){
-    std::cout << "Single dataset mode (no HP/ZB merge) — using " << residualsFile
+    std::cout << "Single dataset mode (no triggered/non-triggered merge) — using " << residualsFile
               << " for every pT_avg slice\n";
     runTextFile( residualsFile, residualsFile, outputRootFile, outputTextPrefix, method, useNorm );
 }
