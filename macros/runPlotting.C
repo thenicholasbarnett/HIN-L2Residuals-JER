@@ -1,4 +1,4 @@
-// Compiled:    ./bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] CONFIG=path
+// CMake:       ./build/bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runPlotting.C("residuals.root")'
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
@@ -12,9 +12,9 @@
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
 #if defined(__APPLE__)
-R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
-R__LOAD_LIBRARY(lib/libl2residuals.so)
+R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 

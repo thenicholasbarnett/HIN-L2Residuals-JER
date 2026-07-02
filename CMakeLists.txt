@@ -67,8 +67,8 @@ endif()
 project(L2Residuals)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Arch ROOT 6.40.02 declares a Vdt CMake dependency that isn't installed.
 # Prepend our cmake/ stub so it takes precedence over ROOT's FindVdt.cmake.
@@ -103,7 +103,7 @@ else()
     target_link_libraries(l2residuals INTERFACE ${ROOT_LIBRARIES})
 endif()
 
-# build each entry-point in macros/ as an executable, output to bin/
+# build each entry-point in macros/ as a standalone executable
 file(GLOB MACROS CONFIGURE_DEPENDS macros/*.C macros/*.cxx)
 foreach(macro ${MACROS})
     get_filename_component(name ${macro} NAME_WE)

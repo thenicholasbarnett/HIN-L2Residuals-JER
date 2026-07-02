@@ -38,7 +38,7 @@ cmake --build build
 <strong> Rebuild </strong>
 
 ```
-rm -rf build bin lib && cmake -B build && cmake --build build
+rm -rf build && cmake -B build && cmake --build build
 ```
 
 <strong> Batch Process Asymmetries </strong>
@@ -54,25 +54,25 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 <strong> Get Residual Corrections </strong>
 
 ```
-./bin/runResiduals DATA=<input_data-asymmetries-file.root> MC=<mc_asymmetries_file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runResiduals DATA=<input_data-asymmetries-file.root> MC=<mc_asymmetries_file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> CONFIG=cfg/2024ppRef.toml
 ```
 
 <strong> Plot </strong>
 
 ```
-./bin/runPlotting INPUT=<input_asymmetry-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_asymmetry-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runPlotting INPUT=<input_residuals-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_residuals-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runPlotting INPUT=<input_corrections-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_corrections-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 <h1> Usage </h1> 
@@ -97,7 +97,19 @@ cmake -B build
 cmake --build build
 ```
 
-Binaries found in `bin/`, shared library in `lib/`, build files in `build/`
+For CMSSW/SCRAM builds on lxplus, place the checkout under a CMSSW package path and build from `src`:
+
+```bash
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cd <CMSSW_RELEASE>/src
+cmsenv
+git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git Analysis/L2Residuals
+scram b -j4
+```
+
+SCRAM builds the same library code from `src/*.cxx` and the executable wrappers in `bin/*.cc`. The CMake workflow remains the preferred standalone/laptop build; SCRAM is the CMSSW/lxplus build front door.
+
+CMake binaries are written to `build/bin/`, the shared library to `build/lib/`, and all generated build files stay under `build/`. The source `bin/` directory is reserved for SCRAM executable wrappers.
 
 <h3> Configuration </h3>
 
@@ -166,7 +178,7 @@ plots/ak4PF/adist/eta_0p0_0p261/ptavg_30_70/alpha_0p05/
 Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `MODE=mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
 
 ```
-./bin/runAsymmetry INPUT=<input_HiForest-file.root> OUTPUT=<output_asymmetry-file.root> MODE=triggered|non-triggered|mc [MAXEVENTS=n] CONFIG=cfg/2024ppRef.toml
+./build/bin/runAsymmetry INPUT=<input_HiForest-file.root> OUTPUT=<output_asymmetry-file.root> MODE=triggered|non-triggered|mc [MAXEVENTS=n] CONFIG=cfg/2024ppRef.toml
 ```
 
 `MODE=triggered` (e.g. HardProbes), `MODE=non-triggered` (e.g. ZeroBias or MinBias), or `MODE=mc`. Triggered and non-triggered are both data — the only difference is whether an HLT decision and efficiency-plateau cut apply; which physical dataset plays which role is a per-run-period choice, not something the code hardcodes.
@@ -186,7 +198,7 @@ ak4PF/
 Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
 
 ```
-./bin/runResiduals DATA=<input_data-asymmetry-file.root> MC=<input_mc-asymmetry-file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runResiduals DATA=<input_data-asymmetry-file.root> MC=<input_mc-asymmetry-file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
 ```
 
 <u> Output Structure: </u>
@@ -206,7 +218,7 @@ ak4PF/
 Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes and ZeroBias/MinBias): for each p<sub>T</sub><sup>avg</sup> slice, uses the triggered file if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and the non-triggered file otherwise — the triggered dataset is trigger-biased below its efficiency plateau, the non-triggered dataset fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 
 # METHOD: gauss (default) | doubleGauss | trunc90 | trunc95
 # NORM:   true (default) uses the kFSR-normalized intercepts (the standard method);
@@ -216,7 +228,7 @@ Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes an
 For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold), pass `SINGLE=` instead of `TRIGGERED=`/`NONTRIGGERED=` (mutually exclusive with them):
 
 ```
-./bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 ```
 
 For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `NORM=false` is passed:
@@ -239,9 +251,9 @@ ak4PF/
 `runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `FLAGS=` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `FLAGS=all` runs every applicable flag unconditionally; a space-separated value runs exactly those flags.
 
 ```
-./bin/runPlotting INPUT=<input_asymmetries-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
-./bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
-./bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_asymmetries-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
 ```
 
 | Flag | Input | Description | In smart default? |
@@ -262,7 +274,7 @@ ak4PF/
 
 Example of multiple flags being passed space-separated as a single quoted `FLAGS=` value:
 ```bash
-./bin/runPlotting INPUT=residuals.root OUTDIR=plots/ FLAGS="finals etasym methods" CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=residuals.root OUTDIR=plots/ FLAGS="finals etasym methods" CONFIG=cfg/2024ppRef.toml
 ```
 
 <h2> Condor Submission </h2>

@@ -24,20 +24,20 @@ case "$(uname)" in
     Darwin) LIB_EXT="dylib" ;;
     *)      LIB_EXT="so"    ;;
 esac
-LIB="lib/libl2residuals.${LIB_EXT}"
+LIB="build/lib/libl2residuals.${LIB_EXT}"
 
 echo ""
 echo "=== TestBuild ==="
 
 echo ""
 echo "[compiled]"
-check "executable exists"            "test -f bin/runAsymmetry"
-check "executable is runnable"       "test -x bin/runAsymmetry"
-check "prints usage with no args"    "{ bin/runAsymmetry 2>&1 || true; } | grep -q 'Usage:'"
-check "exits non-zero with no args"  "! bin/runAsymmetry"
-check "runTextFile exists"           "test -f bin/runTextFile"
-check "runResiduals exists"          "test -f bin/runResiduals"
-check "runPlotting exists"           "test -f bin/runPlotting"
+check "executable exists"            "test -f build/bin/runAsymmetry"
+check "executable is runnable"       "test -x build/bin/runAsymmetry"
+check "prints usage with no args"    "{ build/bin/runAsymmetry 2>&1 || true; } | grep -q 'Usage:'"
+check "exits non-zero with no args"  "! build/bin/runAsymmetry"
+check "runTextFile exists"           "test -f build/bin/runTextFile"
+check "runResiduals exists"          "test -f build/bin/runResiduals"
+check "runPlotting exists"           "test -f build/bin/runPlotting"
 
 echo ""
 echo "[interpreted]"

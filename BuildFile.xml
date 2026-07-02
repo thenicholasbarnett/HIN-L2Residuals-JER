@@ -1,0 +1,10 @@
+<use name="root"/>
+<use name="rootmath"/>
+<use name="rootgraphics"/>
+<use name="rootphysics"/>
+
+<flags CXXFLAGS="-std=c++17 -I$(LOCALTOP)/src/Analysis/L2Residuals/include -I$(LOCALTOP)/src/Analysis/L2Residuals/cfg -I$(LOCALTOP)/src/Analysis/L2Residuals/external -DL2RESIDUALS_SOURCE_DIR=\&quot;$(LOCALTOP)/src/Analysis/L2Residuals\&quot;"/>
+
+<export>
+  <lib name="1"/>
+</export>

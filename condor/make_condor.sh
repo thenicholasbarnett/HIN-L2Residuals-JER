@@ -42,6 +42,8 @@
 #       source /cvmfs/cms.cern.ch/cmsset_default.sh
 #       cd <CMSSW_RELEASE>/src && cmsenv && cd /path/to/L2Residuals-2024ppref
 #       cmake -S . -B build && cmake --build build
+#     or, if the repo is checked out as $CMSSW_BASE/src/Analysis/L2Residuals:
+#       scram b -j4
 #   - All five cone JEC files must be present in data/jec/ before submitting
 #   - Set [condor].cmssw_src in the selected TOML
 
@@ -87,8 +89,16 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONDOR_DIR="${REPO_ROOT}/condor"
-BINARY="${REPO_ROOT}/bin/runAsymmetry"
-LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
+CMAKE_BINARY="${REPO_ROOT}/build/bin/runAsymmetry"
+CMAKE_LIBRARY="${REPO_ROOT}/build/lib/libl2residuals.so"
+SCRAM_BINARY=""
+BINARY="${CMAKE_BINARY}"
+LIBRARY="${CMAKE_LIBRARY}"
+if [[ -n "${CMSSW_BASE:-}" && -n "${SCRAM_ARCH:-}" && -x "${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry" ]]; then
+    SCRAM_BINARY="${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry"
+    BINARY="${SCRAM_BINARY}"
+    LIBRARY=""
+fi
 DATA_DIR="${REPO_ROOT}/data"
 FILELIST_DIR="${REPO_ROOT}/data/txt"
 
@@ -156,14 +166,17 @@ if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
     echo "       cd /path/to/L2Residuals-2024ppref" >&2
     echo "       cmake -S . -B build && cmake --build build" >&2
+    echo "       or build the SCRAM executable with: scram b -j4" >&2
     exit 1
 fi
 
 if [[ ! -f "${BINARY}" ]]; then
-    echo "ERROR: ${BINARY} not found — run: cmake --build build" >&2
+    echo "ERROR: no runAsymmetry executable found." >&2
+    echo "       For CMake, run: cmake --build build" >&2
+    echo "       For SCRAM, put the repo at $CMSSW_BASE/src/Analysis/L2Residuals and run: scram b -j4" >&2
     exit 1
 fi
-if [[ ! -f "${LIBRARY}" ]]; then
+if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
     echo "ERROR: ${LIBRARY} not found — run: cmake --build build" >&2
     exit 1
 fi
@@ -171,10 +184,11 @@ fi
 # Belt-and-suspenders: verify the binary's embedded RPATH points to cvmfs.
 # Catches the case where cmsenv was sourced after the binary was built without it.
 BINARY_RPATH="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
-if [[ -n "${BINARY_RPATH}" ]] && ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
+if [[ -z "${SCRAM_BINARY}" && -n "${BINARY_RPATH}" ]] && ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
     echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${BINARY_RPATH}" >&2
     echo "       Binary was built without cmsenv. Reconfigure and rebuild after cmsenv:" >&2
     echo "       cmake -S . -B build && cmake --build build" >&2
+    echo "       or build the SCRAM executable with: scram b -j4" >&2
     exit 1
 fi
 
@@ -224,7 +238,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
     CMSSW_SRC_ESCAPED="${CMSSW_SRC_ESCAPED//&/\\&}"
     sed "s|@CMSSW_SRC@|${CMSSW_SRC_ESCAPED}|g" "${CONDOR_DIR}/runtime_wrapper.sh" > runtime_wrapper.sh
     cp "${BINARY}"  runAsymmetry
-    cp "${LIBRARY}" libl2residuals.so
+    if [[ -n "${LIBRARY}" ]]; then cp "${LIBRARY}" libl2residuals.so; fi
     cp -r "${DATA_DIR}" data
     cp "${CONFIG_PATH}" analysis_config.toml
     chmod +x runtime_wrapper.sh runAsymmetry

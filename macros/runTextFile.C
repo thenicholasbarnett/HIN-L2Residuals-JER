@@ -1,5 +1,5 @@
-// Compiled:    ./bin/runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
-//              ./bin/runTextFile SINGLE=residuals.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
+// CMake:       ./build/bin/runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
+//              ./build/bin/runTextFile SINGLE=residuals.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root","corrections/hp0_zb0")'
 //              (build the library first: cmake --build build)
@@ -28,9 +28,9 @@
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
 #if defined(__APPLE__)
-R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
-R__LOAD_LIBRARY(lib/libl2residuals.so)
+R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 

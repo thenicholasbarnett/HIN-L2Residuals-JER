@@ -1,4 +1,4 @@
-// Compiled:    ./bin/runAsymmetry INPUT=in.root OUTPUT=out.root MODE=triggered|non-triggered|mc [MAXEVENTS=n] CONFIG=path
+// CMake:       ./build/bin/runAsymmetry INPUT=in.root OUTPUT=out.root MODE=triggered|non-triggered|mc [MAXEVENTS=n] CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runAsymmetry.C("in.root","out.root")'
 //              (build the library first: cmake --build build)
@@ -13,9 +13,9 @@
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
 #if defined(__APPLE__)
-R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
-R__LOAD_LIBRARY(lib/libl2residuals.so)
+R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 

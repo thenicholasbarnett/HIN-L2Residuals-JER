@@ -1,4 +1,4 @@
-// Compiled:    ./bin/runResiduals DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path
+// CMake:       ./build/bin/runResiduals DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runResiduals.C("data.root","mc.root","out.root")'
 //              (build the library first: cmake --build build)
@@ -13,9 +13,9 @@
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
 #if defined(__APPLE__)
-R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
-R__LOAD_LIBRARY(lib/libl2residuals.so)
+R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 
