@@ -26,53 +26,73 @@ Fill Dijet Asymmetry Histograms → Hadd Asymmetry Histograms → Extract Residu
 
 <h1> Quick Start </h1>
 
-<strong> Clone and Build </strong>
+<strong> Local CMake Build </strong>
 
-```
+Use this on a laptop or anywhere you want standalone binaries outside CMSSW:
+
+```bash
 git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git
 cd L2Residuals-2024ppref
 cmake -B build
 cmake --build build
 ```
 
-<strong> Rebuild </strong>
+CMake writes executables to `build/bin/` and the shared library to `build/lib/`. Rebuild from scratch with only:
 
+```bash
+rm -rf build
+cmake -B build
+cmake --build build
 ```
-rm -rf build && cmake -B build && cmake --build build
+
+<strong> LXPLUS SCRAM Build </strong>
+
+Use this when you want `scram b -j4` and CMSSW/Condor compatibility. The package path is currently fixed:
+
+```bash
+cd <CMSSW_RELEASE>/src
+cmsenv
+mkdir -p Analysis
+git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git Analysis/L2Residuals
+scram b -j4
+which runAsymmetry
+```
+
+SCRAM writes executables to `$CMSSW_BASE/bin/$SCRAM_ARCH/`, which `cmsenv` puts on `PATH`, so commands are called as `runAsymmetry`, `runResiduals`, etc. If `cmsenv` is not available in a fresh shell, first run `source /cvmfs/cms.cern.ch/cmsset_default.sh`.
+
+<strong> Command Tokens </strong>
+
+All compiled commands use `KEY=value` tokens. There are no positional arguments. `CONFIG=path` is required by every compiled entry point, and typos such as `OUTPT=...` are rejected immediately.
+
+```bash
+# Step 1, usually on lxplus/Condor or from a SCRAM shell
+runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=triggered|non-triggered|mc CONFIG=cfg/2024ppRef.toml
+
+# Step 2, often local CMake after hadd
+./build/bin/runResiduals DATA=<data_asymmetry.root> MC=<mc_asymmetry.root> OUTPUT=<residuals.root> CONFIG=cfg/2024ppRef.toml
+
+# Step 3, split triggered/non-triggered residuals
+./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> PREFIX=<output_text_prefix> CONFIG=cfg/2024ppRef.toml
+
+# Step 3, one residual file for every pT slice
+./build/bin/runTextFile SINGLE=<residuals.root> OUTPUT=<corrections.root> PREFIX=<output_text_prefix> CONFIG=cfg/2024ppRef.toml
+
+# Plot any workflow output
+./build/bin/runPlotting INPUT=<input.root> OUTDIR=<output_plots_dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 <strong> Batch Process Asymmetries </strong>
 
-```
-bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt> CONFIG=cfg/2024ppRef.toml
+Build with SCRAM or with CMake under `cmsenv`, set `[condor].cmssw_src` in the selected TOML, then submit Step 1 jobs:
+
+```bash
+bash ./condor/make_condor.sh <output_files_dir> <input_HiForest_filelist.txt> CONFIG=cfg/2024ppRef.toml
 ```
 
-```
-bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_size> <N_parallel>
-```
+Merge Step 1 outputs before Step 2:
 
-<strong> Get Residual Corrections </strong>
-
-```
-./build/bin/runResiduals DATA=<input_data-asymmetries-file.root> MC=<mc_asymmetries_file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
-```
-
-```
-./build/bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> CONFIG=cfg/2024ppRef.toml
-```
-
-<strong> Plot </strong>
-
-```
-./build/bin/runPlotting INPUT=<input_asymmetry-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
-```
-
-```
-./build/bin/runPlotting INPUT=<input_residuals-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
-```
-
-```
-./build/bin/runPlotting INPUT=<input_corrections-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
+```bash
+bash ./condor/batch_hadd.sh <output_asymmetry.root> <input_glob> <batch_size> <N_parallel>
 ```
 
 <h1> Usage </h1> 
@@ -140,6 +160,16 @@ export L2RESIDUALS_HOME=/path/to/repo                # relative-path resolution 
 <h3> Command-Line Convention </h3>
 
 Every compiled binary's arguments are `KEY=value` tokens — there are no positional arguments anywhere in this CLI, and argument order never matters. This removes an entire class of silent argument-order bugs (e.g. swapping `DATA=`/`MC=`, or `TRIGGERED=`/`NONTRIGGERED=`), since every value is self-identifying regardless of where it appears on the command line. Required tokens — `CONFIG=` on every binary, plus whichever input/output tokens that binary needs — are validated immediately: a missing required token, an unrecognized token (e.g. a typo like `OUTPT=`), or any bare argument that isn't a valid `KEY=value` token at all is an immediate usage error, never something silently ignored or defaulted. See `include/CliTokens.h` for the parser shared by every entry point.
+
+| Binary | Required tokens | Optional tokens |
+| :- | :- | :- |
+| `runAsymmetry` | `INPUT=`, `OUTPUT=`, `MODE=`, `CONFIG=` | `MAXEVENTS=` |
+| `runResiduals` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
+| `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `PREFIX=`, `CONFIG=` | `METHOD=`, `NORM=` |
+| `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `PREFIX=`, `CONFIG=` | `METHOD=`, `NORM=` |
+| `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=` |
+
+`MODE=` must be `triggered`, `non-triggered`, or `mc`. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`.
 
 <h3> Naming Convention </h3>
 
@@ -285,19 +315,28 @@ Example of multiple flags being passed space-separated as a single quoted `FLAGS
 <b>Step 1</b> runs on HTCondor — one job per HiForest input file. <b>Step 2</b> and <b>Step 3</b> run locally after using hadd on the output files from <b>Step 1</b>.
 
 <strong> Before First Submission: </strong>
-1. Set `[condor].cmssw_src` in the TOML you will pass with `CONFIG=...`
-2. On LXPLUS, activate CMSSW before configuring/building so the binary links against CMSSW ROOT:
+1. Set `[condor].cmssw_src` in the TOML you will pass with `CONFIG=...`; this should point to the CMSSW `src` directory used by worker jobs.
+2. Build `runAsymmetry` in a CMSSW environment. SCRAM is preferred on lxplus:
 
 ```bash
-source /cvmfs/cms.cern.ch/cmsset_default.sh
 cd <CMSSW_RELEASE>/src
 cmsenv
-cd /path/to/L2Residuals-2024ppref
+cd Analysis/L2Residuals
+scram b -j4
+which runAsymmetry
+```
+
+`make_condor.sh` first looks for the SCRAM-built executable at `$CMSSW_BASE/bin/$SCRAM_ARCH/runAsymmetry`. If it exists, that binary is copied into the Condor sandbox. If no SCRAM binary exists, the script falls back to the CMake binary at `build/bin/runAsymmetry` and copies `build/lib/libl2residuals.so` with it. For that fallback, configure/build under `cmsenv` so the binary links against CMSSW ROOT:
+
+```bash
+cd <CMSSW_RELEASE>/src
+cmsenv
+cd Analysis/L2Residuals
 cmake -S . -B build
 cmake --build build
 ```
 
-CMake refuses to configure on lxplus without `cmsenv`, and `make_condor.sh` checks both `[condor].cmssw_src` and the built binary's cvmfs ROOT RPATH before submitting. The runtime wrapper copied into each submission is stamped with the TOML's `cmssw_src` value.
+The runtime wrapper copied into each submission is stamped with the TOML's `cmssw_src` value and runs `scramv1 runtime -sh` on the worker before executing `./runAsymmetry`.
 
 <strong> Submitting HTCondor Jobs </strong>
 
