@@ -44,7 +44,7 @@ rm -rf build bin lib && cmake -B build && cmake --build build
 <strong> Batch Process Asymmetries </strong>
 
 ```
-bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt>
+bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 ```
@@ -58,7 +58,7 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 ```
 
 ```
-./bin/runTextFile <hp_residuals-file.root> <zb_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [CONFIG=cfg/2024ppRef.toml]
+./bin/runTextFile <triggered_residuals-file.root> <nontriggered_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [CONFIG=cfg/2024ppRef.toml]
 ```
 
 <strong> Plot </strong>
