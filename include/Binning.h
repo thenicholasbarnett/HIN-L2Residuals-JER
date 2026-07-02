@@ -95,6 +95,10 @@ struct BinningConfig {
     AxisBins phi = { 64, -3.2, 3.2, "#phi (rad)" };
     AxisBins trig = { 2, 0, 2, "trigger decision" };
 
+    // MC-only: p_{T}^{reco}/p_{T}^{gen} response axis, added to the incl/tag/probe
+    // kinematics THnSparses in MC mode (JES/JER inputs — see ConeHistograms).
+    AxisBins response = { 200, 0.0, 2.0, "p_{T}^{reco}/p_{T}^{gen}" };
+
     // pT_avg slicing — edges come from cfg/2024ppRef.toml ([binning] ptavg_edges),
     // so rebinning Step 2/3's pT slices needs only a TOML edit + rerun, no recompile.
     std::vector<RangeBin> ptavgSlices = BuildPtAvgSlices( Config().ptavgEdges );

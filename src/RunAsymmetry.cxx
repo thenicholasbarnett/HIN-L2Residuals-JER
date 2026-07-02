@@ -140,7 +140,7 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     // histograms
     BinningConfig bins;
     std::vector<ConeHistograms> cones( nCones );
-    for( size_t c = 0; c < nCones; c++ ){ cones[c].Init( cfg.coneLabels[c], bins ); }
+    for( size_t c = 0; c < nCones; c++ ){ cones[c].Init( cfg.coneLabels[c], bins, isMC ); }
 
     // corrected pT buffer: corrPt[cone][jet]
     std::vector<std::vector<float>> corrPt( nCones, std::vector<float>( kNRefMax, 0.0f ) );
@@ -206,7 +206,13 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
 
             // incl jets: all corrected jets in this cone passing cfg.minJetPt
             for( int j = 0; j < jets[c].reco.nref; j++ ){
-                if( corrPt[c][j] >= cfg.minJetPt ){ cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight ); }
+                if( corrPt[c][j] >= cfg.minJetPt ){
+                    cones[c].FillInclJet( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j], weight );
+                    if( isMC ){
+                        cones[c].FillInclJetResp( corrPt[c][j], jets[c].reco.eta[j], jets[c].reco.phi[j],
+                                                 jets[c].ref.pt[j], weight );
+                    }
+                }
             }
 
             if( sorted[c].sublead == -1 ){ continue; }
@@ -244,6 +250,10 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
 
             // fill histograms
             cones[c].Fill( dijet, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi, weight );
+            if( isMC ){
+                cones[c].FillResp( dijet, corrPt[c].data(), jets[c].reco.eta, jets[c].reco.phi,
+                                  jets[c].ref.pt, weight );
+            }
         }
     }
 
