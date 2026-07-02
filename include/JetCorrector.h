@@ -129,6 +129,7 @@ void SingleJetCorrector::Initialize(std::string FileName)
 
       bool IsDefinition = CheckDefinition(ch);
       std::vector<std::string> Parts = BreakIntoParts(StripBracket(ch));
+      int PartCount = static_cast<int>(Parts.size());
 
       if(Parts.size() == 0)
          continue;
@@ -138,10 +139,10 @@ void SingleJetCorrector::Initialize(std::string FileName)
          // Found a definition line - update current formula
 
          nvar = atoi(Parts[0].c_str());
-         if(Parts.size() <= nvar + 1)
+         if(PartCount <= nvar + 1)
             continue;
          npar = atoi(Parts[nvar+1].c_str());
-         if(Parts.size() <= nvar + 1 + npar + 1)
+         if(PartCount <= nvar + 1 + npar + 1)
             continue;
 
          CurrentFormula = Parts[nvar+1+npar+1];
@@ -158,7 +159,7 @@ void SingleJetCorrector::Initialize(std::string FileName)
       {
          // Otherwise it's a line with actual JECs, add it to the list
 
-         if(Parts.size() < nvar * 2 + npar * 2 + 1)
+         if(PartCount < nvar * 2 + npar * 2 + 1)
             continue;
 
          std::vector<double> Parameter;
@@ -291,7 +292,7 @@ double SingleJetCorrector::GetCorrection()
       double V[3] = {0, 0, 0};
       for(int i = 0; i < 3; i++)
       {
-         if(Dependencies[iE].size() <= i)
+         if(Dependencies[iE].size() <= static_cast<size_t>(i))
             continue;
          
          double Value = GetValue(Dependencies[iE][i]);

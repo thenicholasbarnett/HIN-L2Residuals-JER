@@ -4,7 +4,7 @@
 <use name="rootgraphics"/>
 <use name="rootphysics"/>
 
-<flags CXXFLAGS="-std=c++17 -Isrc/Analysis/L2Residuals/include -Isrc/Analysis/L2Residuals/external -Isrc/Analysis/L2Residuals/cfg"/>
+<flags CXXFLAGS="-Isrc/Analysis/L2Residuals/include -Isrc/Analysis/L2Residuals/external -Isrc/Analysis/L2Residuals/cfg"/>
 
 <bin name="runAsymmetry" file="runAsymmetry.cc"/>
 <bin name="runResiduals" file="runResiduals.cc"/>

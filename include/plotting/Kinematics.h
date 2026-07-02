@@ -97,7 +97,6 @@ inline void SaveKinematicsPlot( TCanvas* c, const TString& outDir,
 
 inline void PlotKinematics( TFile* fIn, const TString& outDir,
                            const TString& cone, bool includeIncl, ProgressBar& pb ){
-    const int plotsPerCollection = 3 + kNKinematicsPtMins;
     {
         // "_incl" is used purely as a marker that this is a Step-1 runAsymmetry
         // file, independent of whether inclusive-jet plots are actually drawn below.
