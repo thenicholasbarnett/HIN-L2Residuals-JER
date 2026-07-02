@@ -22,13 +22,6 @@
 #include <cmath>
 #include <algorithm>
 
-// Global fit controls are set from the TOML config at the top of runResiduals(),
-// before any fit helper below is invoked. Fallbacks keep direct helper tests sane.
-static int kMinEntries = 100;
-static double kGausFitHW = 0.5;
-static double kMaxAbsA_fit = 0.7;
-static double kAlphaFitHi = 0.31;
-static int kOutOfRangeMeanWarnings = 0;
 static constexpr int kMaxOutOfRangeMeanWarnings = 20;
 
 // axes
@@ -53,13 +46,22 @@ struct TruncResult {
     bool valid = false;
 };
 
-// ---- Gaussian fit in [-kGausFitHW, +kGausFitHW] ----
+struct ResidualFitControls {
+    int minEntries = 0;
+    double gausFitHalfWidth = 0.0;
+    double maxAbsA = 0.0;
+    double alphaFitHi = 0.0;
+    int outOfRangeMeanWarnings = 0;
+};
 
-static GaussResult FitGauss( TH1D* h ){
+// ---- Gaussian fit in [-controls.gausFitHalfWidth, +controls.gausFitHalfWidth] ----
+
+static GaussResult FitGauss( TH1D* h, const ResidualFitControls& controls ){
     GaussResult r;
-    if( !CanFit( h, kMinEntries ) ) return r;
+    if( !CanFit( h, controls.minEntries ) ) return r;
 
-    TF1* g = new TF1( Form( "_gf_%s", h->GetName() ), "gaus", -kGausFitHW, kGausFitHW );
+    TF1* g = new TF1( Form( "_gf_%s", h->GetName() ), "gaus",
+        -controls.gausFitHalfWidth, controls.gausFitHalfWidth );
     g->SetParameter( 0, h->GetMaximum() );
     g->SetParameter( 1, h->GetMean() );
     g->SetParameter( 2, std::max( h->GetRMS(), 1e-3 ) );
@@ -76,7 +78,7 @@ static GaussResult FitGauss( TH1D* h ){
     return r;
 }
 
-// ---- Double-Gaussian fit (narrow core + wide component) in [-kGausFitHW, +kGausFitHW] ----
+// ---- Double-Gaussian fit (narrow core + wide component) in the configured fit window ----
 //
 // Reports the amplitude*sigma-weighted mean of the two components — i.e. the
 // mean of the fitted mixture distribution (each component's contribution
@@ -84,11 +86,12 @@ static GaussResult FitGauss( TH1D* h ){
 // two component means as independent, which is an approximation but standard
 // for a quick per-bin estimate (see TruncMeanInRange for a similar tradeoff).
 
-static GaussResult FitDoubleGauss( TH1D* h ){
+static GaussResult FitDoubleGauss( TH1D* h, const ResidualFitControls& controls ){
     GaussResult r;
-    if( !CanFit( h, kMinEntries ) ) return r;
+    if( !CanFit( h, controls.minEntries ) ) return r;
 
-    TF1* g = new TF1( Form( "_dgf_%s", h->GetName() ), "gaus(0)+gaus(3)", -kGausFitHW, kGausFitHW );
+    TF1* g = new TF1( Form( "_dgf_%s", h->GetName() ), "gaus(0)+gaus(3)",
+        -controls.gausFitHalfWidth, controls.gausFitHalfWidth );
     const double rms = std::max( h->GetRMS(), 1e-3 );
     g->SetParameter( 0, h->GetMaximum() );        // core amplitude
     g->SetParameter( 1, h->GetMean() );           // core mean
@@ -121,9 +124,10 @@ static GaussResult FitDoubleGauss( TH1D* h ){
 // ---- truncated mean ----
 
 // Find the bin range that contains the central `fraction` of h's area.
-// Returns {1, 0} (lo > hi = invalid) if h has fewer than kMinEntries.
-static std::pair<int, int> FindTruncBins( TH1D* h, double fraction ){
-    if( !CanFit( h, kMinEntries ) ) return { 1, 0 };
+// Returns {1, 0} (lo > hi = invalid) if h has fewer than the configured minimum entries.
+static std::pair<int, int> FindTruncBins( TH1D* h, double fraction,
+                                         const ResidualFitControls& controls ){
+    if( !CanFit( h, controls.minEntries ) ) return { 1, 0 };
     double total = h->Integral();
     if( total <= 0 ) return { 1, 0 };
     double tailN = 0.5 * ( 1.0 - fraction ) * total;
@@ -172,6 +176,7 @@ static double ToRErr( double A, double dA ){ return dA * 2.0 / ( ( 1.0 - A ) * (
 static void ResetRange( THnSparse* h, int axis ){ h->GetAxis( axis )->SetRange( 0, 0 ); }
 
 static void WarnOutOfRangeMean(
+    ResidualFitControls& controls,
     const TString& cone,
     const TString& etaMode,
     const TString& etaKey,
@@ -180,18 +185,18 @@ static void WarnOutOfRangeMean(
     const char* method,
     const char* sample,
     double mean ){
-    if( kOutOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings ){
+    if( controls.outOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings ){
         std::cerr << "WARNING: residual " << method << " " << sample
                   << " mean A=" << mean
-                  << " exceeds configured max_abs_a=" << kMaxAbsA_fit
+                  << " exceeds configured max_abs_a=" << controls.maxAbsA
                   << " for " << cone << " " << etaMode << " " << etaKey
                   << " " << ptKey << " " << alphaKey
                   << "; dropping this point before R conversion\n";
-    } else if( kOutOfRangeMeanWarnings == kMaxOutOfRangeMeanWarnings ){
+    } else if( controls.outOfRangeMeanWarnings == kMaxOutOfRangeMeanWarnings ){
         std::cerr << "WARNING: more residual mean A values exceed configured max_abs_a="
-                  << kMaxAbsA_fit << "; suppressing further detailed warnings\n";
+                  << controls.maxAbsA << "; suppressing further detailed warnings\n";
     }
-    kOutOfRangeMeanWarnings++;
+    controls.outOfRangeMeanWarnings++;
 }
 
 // ============================================================
@@ -226,6 +231,7 @@ static void ExtractAndFit(
     TDirectory* dOut,
     const std::vector<Double_t>& etaEdges,
     const TString& nameSuffix,
+    ResidualFitControls& controls,
     ProgressBar& pb ){
     const int nPt = ( int )bins.ptavgSlices.size();
     const int nAlpha = ( int )bins.alphaSlices.size();
@@ -303,14 +309,14 @@ static void ExtractAndFit(
                 dQA_data->cd(); hAData->Write();
                 dQA_mc ->cd(); hAMC ->Write();
 
-                GaussResult gd = FitGauss( hAData );
-                GaussResult gm = FitGauss( hAMC );
-                GaussResult ddg = FitDoubleGauss( hAData );
-                GaussResult mdg = FitDoubleGauss( hAMC );
-                auto [dlo90, dhi90] = FindTruncBins( hAData, 0.90 );
-                auto [mlo90, mhi90] = FindTruncBins( hAMC, 0.90 );
-                auto [dlo95, dhi95] = FindTruncBins( hAData, 0.95 );
-                auto [mlo95, mhi95] = FindTruncBins( hAMC, 0.95 );
+                GaussResult gd = FitGauss( hAData, controls );
+                GaussResult gm = FitGauss( hAMC, controls );
+                GaussResult ddg = FitDoubleGauss( hAData, controls );
+                GaussResult mdg = FitDoubleGauss( hAMC, controls );
+                auto [dlo90, dhi90] = FindTruncBins( hAData, 0.90, controls );
+                auto [mlo90, mhi90] = FindTruncBins( hAMC, 0.90, controls );
+                auto [dlo95, dhi95] = FindTruncBins( hAData, 0.95, controls );
+                auto [mlo95, mhi95] = FindTruncBins( hAMC, 0.95, controls );
                 TruncResult td90 = TruncMeanInRange( hAData, dlo90, dhi90 );
                 TruncResult tm90 = TruncMeanInRange( hAMC, mlo90, mhi90 );
                 TruncResult td95 = TruncMeanInRange( hAData, dlo95, dhi95 );
@@ -323,13 +329,13 @@ static void ExtractAndFit(
                                              double Am, double eAm, bool ok ){
                     if( !ok ) return;
                     bool outsideConfiguredRange = false;
-                    if( std::abs( Ad ) > kMaxAbsA_fit ){
-                        WarnOutOfRangeMean( cone, etaMode, etaKey, ptKey, alphaKey,
+                    if( std::abs( Ad ) > controls.maxAbsA ){
+                        WarnOutOfRangeMean( controls, cone, etaMode, etaKey, ptKey, alphaKey,
                             kMethodNames[method], "data", Ad );
                         outsideConfiguredRange = true;
                     }
-                    if( std::abs( Am ) > kMaxAbsA_fit ){
-                        WarnOutOfRangeMean( cone, etaMode, etaKey, ptKey, alphaKey,
+                    if( std::abs( Am ) > controls.maxAbsA ){
+                        WarnOutOfRangeMean( controls, cone, etaMode, etaKey, ptKey, alphaKey,
                             kMethodNames[method], "MC", Am );
                         outsideConfiguredRange = true;
                     }
@@ -423,11 +429,11 @@ static void ExtractAndFit(
                 gr->SetMarkerColor( ptSlice.color );
                 gr->SetLineColor( ptSlice.color );
 
-                if( !CanFit( gr, { 0.0, kAlphaFitHi }, 2 ) ){ delete gr; continue; }
+                if( !CanFit( gr, { 0.0, controls.alphaFitHi }, 2 ) ){ delete gr; continue; }
 
                 // "R" option: only points within the configured fit range enter the chi2.
                 // Points above the range are displayed in the graph but excluded from the fit.
-                TF1* fitFn = new TF1( gname + "_fit", "[0]+[1]*x", 0.0, kAlphaFitHi );
+                TF1* fitFn = new TF1( gname + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
                 fitFn->SetParameter( 0, 1.0 );
                 fitFn->SetParameter( 1, 0.0 );
                 fitFn->SetLineColor( ptSlice.color );
@@ -441,7 +447,7 @@ static void ExtractAndFit(
                 //      method because the normalization changes the fit input distribution. ----
                 double normVal = 0, normErr = 0;
                 for( int k = n - 1; k >= 0; k-- ){
-                    if( pts[k].alpha <= kAlphaFitHi + 1e-4 && pts[k].val > 1e-6 ){
+                    if( pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6 ){
                         normVal = pts[k].val;
                         normErr = pts[k].err;
                         break;
@@ -450,7 +456,7 @@ static void ExtractAndFit(
                 if( normVal > 1e-6 ){
                     // count points within fit range
                     int nfit = 0;
-                    for( int k = 0; k < n && pts[k].alpha <= kAlphaFitHi + 1e-4; k++ ) nfit++;
+                    for( int k = 0; k < n && pts[k].alpha <= controls.alphaFitHi + 1e-4; k++ ) nfit++;
 
                     std::vector<double> xn( nfit ), yn( nfit ), exn( nfit, 0.0 ), eyn( nfit );
                     bool bad = false;
@@ -471,7 +477,7 @@ static void ExtractAndFit(
                         grn->SetMarkerStyle( 20 );
                         grn->SetMarkerColor( ptSlice.color );
                         grn->SetLineColor( ptSlice.color );
-                        TF1* fn = new TF1( gnorm + "_fit", "[0]+[1]*x", 0.0, kAlphaFitHi );
+                        TF1* fn = new TF1( gnorm + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
                         fn->SetParameter( 0, 1.0 );
                         fn->SetParameter( 1, 0.0 );
                         fn->SetLineColor( ptSlice.color );
@@ -517,11 +523,13 @@ void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
 
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
-    if( cfg.minEntriesPerBin > 0 ) kMinEntries = cfg.minEntriesPerBin;
-    kGausFitHW = cfg.residualGausFitHalfWidth;
-    if( cfg.maxAbsA > 0 ) kMaxAbsA_fit = cfg.maxAbsA;
-    kAlphaFitHi = cfg.residualAlphaFitHi;
-    kOutOfRangeMeanWarnings = 0;
+    ResidualFitControls controls = {
+        cfg.minEntriesPerBin,
+        cfg.residualGausFitHalfWidth,
+        cfg.maxAbsA,
+        cfg.residualAlphaFitHi,
+        0
+    };
 
     TFile* fData = TFile::Open( dataFile, "read" );
     TFile* fMC = TFile::Open( mcFile, "read" );
@@ -564,11 +572,11 @@ void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
 
         ExtractAndFit( hData, hMC, cone, bins,
                       dQA_data, dQA_mc, dGraphs, dRvals, coneDir,
-                      kAbsEtaEdges, "", pb );
+                      kAbsEtaEdges, "", controls, pb );
 
         ExtractAndFit( hRawData, hRawMC, cone, bins,
                       dQA_data_full, dQA_mc_full, dGraphs, dRvals_full, coneDir,
-                      kEtaEdges, "_fulleta", pb );
+                      kEtaEdges, "_fulleta", controls, pb );
 
         delete hData;
         delete hMC;
