@@ -229,12 +229,12 @@ ak4PF/
   ak4PF_asym                            # THnSparse Asymmetries
   ak4PF_incl, ak4PF_tag, ak4PF_probe    # TH3D Kinematics
   ak4PF_incl_resp, ak4PF_tag_resp,
-    ak4PF_probe_resp                    # THnSparse (η_reco, p_T^reco, η_gen, p_T^gen, response), MC mode only
+    ak4PF_probe_resp                    # THnSparse (η_reco, p_T^gen, p_T^corr/p_T^gen, p_T^reco/p_T^gen, p_T^raw/p_T^gen), MC mode only
 ```
 
 <h3> <b> JES/JER Extraction </b> — <code>runResponse</code> </h3>
 
-Reads a hadded Step 1 MC file (no data-mode equivalent — the response THnSparses above are MC-only) and, for each cone and each matched jet collection (incl/tag/probe), extracts JES (mean of a Gaussian fit to the p<sub>T</sub><sup>reco</sup>/p<sub>T</sub><sup>gen</sup> response) and JER (σ/mean of the same fit, the standard fractional-resolution convention) as a function of η<sub>gen</sub> and, separately, p<sub>T</sub><sup>gen</sup>. Binning is always on the gen quantity, never reco — conditioning on truth directly avoids the falling-spectrum migration bias that binning by a resolution-smeared reco quantity would introduce.
+Reads a hadded Step 1 MC file (no data-mode equivalent — the response THnSparses above are MC-only) and, for each cone and each matched jet collection (incl/tag/probe), extracts JES (mean of a Gaussian fit to the response) and JER (σ/mean of the same fit, the standard fractional-resolution convention) as a function of p<sub>T</sub><sup>gen</sup>, for three response variants: `corr` (this framework's L2Relative+L2Residual-corrected p<sub>T</sub>), `reco` (the ntuple's own baked-in `jtpt` correction), and `raw` (uncorrected). Binning is on p<sub>T</sub><sup>gen</sup>, never reco — conditioning on truth directly avoids the falling-spectrum migration bias that binning by a resolution-smeared reco quantity would introduce. η<sub>reco</sub> is carried on the response THnSparse (not η<sub>gen</sub> — the correction is applied to a jet by its reconstructed eta in data) but is not yet binned on by extraction.
 
 ```
 ./build/bin/runResponse INPUT=<input_mc-asymmetry-file.root> OUTPUT=<output_response-file.root> CONFIG=cfg/2024ppRef.toml
@@ -243,13 +243,13 @@ Reads a hadded Step 1 MC file (no data-mode equivalent — the response THnSpars
 <u> Output Structure: </u>
 ```
 ak4PF/
-  QA_response_abseta/, QA_response_fulleta/, QA_response_ptgen/  ← raw per-bin response distributions (no embedded fit)
-  ak4PF_JES_abseta_vs_etagen_incl, _tag, _probe    ← TH1D vs |η_gen|
-  ak4PF_JER_abseta_vs_etagen_incl, _tag, _probe
-  ak4PF_JES_fulleta_vs_etagen_incl, _tag, _probe   ← TH1D vs η_gen
-  ak4PF_JER_fulleta_vs_etagen_incl, _tag, _probe
-  ak4PF_JES_vs_ptgen_incl, _tag, _probe            ← TH1D vs p_T^gen
-  ak4PF_JER_vs_ptgen_incl, _tag, _probe
+  QA_response_ptgen/                                     ← raw per-bin response distributions (no embedded fit), per variant
+  ak4PF_JES_corr_vs_ptgen_incl, _tag, _probe              ← TH1D vs p_T^gen, this framework's correction
+  ak4PF_JER_corr_vs_ptgen_incl, _tag, _probe
+  ak4PF_JES_reco_vs_ptgen_incl, _tag, _probe              ← TH1D vs p_T^gen, ntuple's own "jtpt" correction
+  ak4PF_JER_reco_vs_ptgen_incl, _tag, _probe
+  ak4PF_JES_raw_vs_ptgen_incl, _tag, _probe               ← TH1D vs p_T^gen, uncorrected
+  ak4PF_JER_raw_vs_ptgen_incl, _tag, _probe
 ```
 
 <h3> <b> Step 2 </b> — Extract Residuals </h3>
@@ -328,7 +328,7 @@ ak4PF/
 | `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison | no — explicit only |
 | `finals` | Step 2 or 3 | α→0 intercepts (Step 2) or final merged corrections (Step 3), all p<sub>T</sub><sup>avg</sup> slices overlaid. `CLOSURE=true` fixes the y-range to 0.95–1.05 with 0.99/1.01 guide lines for closure checks | Step 3 only (via the corrfinal-grid path); suppressed by default on a Step 2 file even though the flag itself would find data there — pass it explicitly to get it from Step 2 |
 | `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn | yes |
-| `response` | `runResponse` | Per-bin p<sub>T</sub><sup>reco</sup>/p<sub>T</sub><sup>gen</sup> distributions with a Gaussian guide fit, plus JES/JER vs η<sub>gen</sub> and vs p<sub>T</sub><sup>gen</sup> summary overlays (incl/tag/probe) | yes |
+| `response` | `runResponse` | Per-bin response distributions (corr/reco/raw) with a Gaussian guide fit, plus JES/JER vs p<sub>T</sub><sup>gen</sup> summary overlays (incl/tag/probe per variant), and a corr-vs-reco-vs-raw comparison overlay per collection | yes |
 | `all` | any | Every applicable flag, unconditionally (including inclusive-jet kinematics and `finals` from either source) | n/a |
 
 <br>
@@ -426,4 +426,4 @@ The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 ```
 ctest --test-dir build
 ```
-Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `ConeHistograms`' MC response histogram plumbing/matching, `runTextFile` triggered/non-triggered merge selection and output format/η ordering for both text files, `runResponse`'s JES/JER extraction (Gaussian fit recovery, per-bin entry-count guard, vs-η<sub>gen</sub>/vs-p<sub>T</sub><sup>gen</sup> binning), as well as build/library load checks.
+Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `ConeHistograms`' MC response histogram plumbing/matching, `runTextFile` triggered/non-triggered merge selection and output format/η ordering for both text files, `runResponse`'s JES/JER extraction (Gaussian fit recovery, per-bin entry-count guard, corr/reco/raw variants vs-p<sub>T</sub><sup>gen</sup> binning), as well as build/library load checks.

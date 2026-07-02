@@ -24,14 +24,25 @@
 // not a DijetHistograms.h include, the same decoupling ResidualsExtractor.cxx
 // already uses for the main asymmetry sparse's axes).
 static constexpr int kRespEtaRecoAxis = 0;
-static constexpr int kRespPtRecoAxis = 1;
-static constexpr int kRespEtaGenAxis = 2;
-static constexpr int kRespPtGenAxis = 3;
-static constexpr int kRespRAxis = 4;
+static constexpr int kRespPtGenAxis = 1;
+static constexpr int kRespCorrRAxis = 2;
+static constexpr int kRespJtPtRAxis = 3;
+static constexpr int kRespRawRAxis = 4;
 
 static constexpr int kNCollections = 3;
 static const char* const kCollectionKeys[kNCollections] = { "incl", "tag", "probe" };
 static const char* const kCollectionSuffixes[kNCollections] = { "_incl_resp", "_tag_resp", "_probe_resp" };
+
+// The three response ratios riding in one sparse (see DijetHistograms.h) --
+// "reco" here means the ntuple's own baked-in "jtpt" correction (the
+// JetStruct field is literally named reco.pt), not this framework's corrPt.
+struct ResponseVariant { int axis; const char* tag; const char* label; };
+static constexpr int kNVariants = 3;
+static const ResponseVariant kVariants[kNVariants] = {
+    { kRespCorrRAxis, "corr", "p_{T}^{corr}/p_{T}^{gen}" },
+    { kRespJtPtRAxis, "reco", "p_{T}^{reco}/p_{T}^{gen}" },
+    { kRespRawRAxis,  "raw",  "p_{T}^{raw}/p_{T}^{gen}" },
+};
 
 // ---- Gaussian fit around 1.0 -> JES (mean) and JER (sigma/mean) ----
 //
@@ -72,90 +83,41 @@ static ResponseFitResult FitResponse( TH1D* h, double halfWidth, int minEntries 
     return r;
 }
 
-// ---- vs eta_gen: fullEta selects kEtaEdges (36 bins, raw sparse) vs
-// kAbsEtaEdges (18 bins, caller passes a sparse already folded on
-// kRespEtaGenAxis via FoldEtaAxis). eta_reco/pt_reco/pt_gen are left fully
-// unrestricted (marginal, not joint, extraction -- see ResponseExtractor.h).
-// Writes the raw per-bin response projection (no embedded fit -- refit at
-// plot time, mirroring Step 2's QA_data/QA_mc + PlotAsymDist's
-// FitGaussianGuide) to dQA, and the JES/JER TH1Ds to dOut. ----
-
-static void ExtractVsEtaGen(
-    THnSparse* h, const TString& cone, const TString& collection, bool fullEta,
-    TDirectory* dQA, TDirectory* dOut, double halfWidth, int minEntries ){
-
-    const TString etaMode = L2Name::EtaModeKey( fullEta );
-    const std::vector<Double_t>& edges = fullEta ? kEtaEdges : kAbsEtaEdges;
-    const int nEta = ( int )edges.size() - 1;
-
-    TString jesName = L2Name::ObjectName( cone, "JES", { etaMode, "vs_etagen" }, { collection } );
-    TString jerName = L2Name::ObjectName( cone, "JER", { etaMode, "vs_etagen" }, { collection } );
-    TH1D* hJES = new TH1D( jesName, "", nEta, edges.data() );
-    TH1D* hJER = new TH1D( jerName, "", nEta, edges.data() );
-    hJES->GetXaxis()->SetTitle( fullEta ? "#eta_{gen}" : "|#eta_{gen}|" );
-    hJES->GetYaxis()->SetTitle( "JES = #LT p_{T}^{reco}/p_{T}^{gen} #GT" );
-    hJER->GetXaxis()->SetTitle( hJES->GetXaxis()->GetTitle() );
-    hJER->GetYaxis()->SetTitle( "JER = #sigma / #LT p_{T}^{reco}/p_{T}^{gen} #GT" );
-
-    for( int ieta = 0; ieta < nEta; ieta++ ){
-        TString distName = L2Name::ObjectName( cone, "response",
-            { etaMode, L2Name::EtaKey( ieta, fullEta ) }, { collection } );
-
-        TH1D* hProj = ProjectTHnSparse1D( h, kRespRAxis,
-            { { kRespEtaGenAxis, edges[ieta], edges[ieta + 1] } } );
-        hProj->SetName( distName );
-
-        dQA->cd();
-        hProj->Write();
-
-        ResponseFitResult fr = FitResponse( hProj, halfWidth, minEntries );
-        if( fr.valid ){
-            hJES->SetBinContent( ieta + 1, fr.jes );
-            hJES->SetBinError( ieta + 1, fr.jesErr );
-            hJER->SetBinContent( ieta + 1, fr.jer );
-            hJER->SetBinError( ieta + 1, fr.jerErr );
-        }
-        delete hProj;
-    }
-
-    dOut->cd();
-    hJES->Write();
-    hJER->Write();
-    delete hJES;
-    delete hJER;
-}
-
-// ---- vs pt_gen: marginal over both eta axes and pt_reco entirely, binned
-// directly off the response sparse's own uniform pT axis granularity (no
-// separate coarse slicing scheme, unlike Step 2's ptavgSlices). ----
+// ---- vs pt_gen: marginal over eta_reco and the other two ratio axes
+// entirely, binned directly off the response sparse's own uniform pT axis
+// granularity (no separate coarse slicing scheme, unlike Step 2's
+// ptavgSlices). Runs once per response variant (corr/reco/raw), so JES/JER
+// for all three land side by side for direct comparison. eta_reco-binned
+// extraction is deliberately not done here yet -- the axis is preserved in
+// the sparse for a future pass (see ResponseExtractor.h). ----
 
 static void ExtractVsPtGen(
     THnSparse* h, const TString& cone, const TString& collection,
-    const AxisBins& ptBins, TDirectory* dQA, TDirectory* dOut,
-    double halfWidth, int minEntries ){
+    const ResponseVariant& variant, const AxisBins& ptBins,
+    TDirectory* dQA, TDirectory* dOut, double halfWidth, int minEntries ){
 
     const int nPt = ptBins.nBins;
     const double lo = ptBins.lo;
     const double hi = ptBins.hi;
     const double width = ( hi - lo ) / nPt;
 
-    TString jesName = L2Name::ObjectName( cone, "JES", { "vs_ptgen" }, { collection } );
-    TString jerName = L2Name::ObjectName( cone, "JER", { "vs_ptgen" }, { collection } );
+    TString jesName = L2Name::ObjectName( cone, "JES", { variant.tag, "vs_ptgen" }, { collection } );
+    TString jerName = L2Name::ObjectName( cone, "JER", { variant.tag, "vs_ptgen" }, { collection } );
     TH1D* hJES = new TH1D( jesName, "", nPt, lo, hi );
     TH1D* hJER = new TH1D( jerName, "", nPt, lo, hi );
     hJES->GetXaxis()->SetTitle( "p_{T}^{gen} [GeV]" );
-    hJES->GetYaxis()->SetTitle( "JES = #LT p_{T}^{reco}/p_{T}^{gen} #GT" );
+    hJES->GetYaxis()->SetTitle( Form( "JES = #LT %s #GT", variant.label ) );
     hJER->GetXaxis()->SetTitle( hJES->GetXaxis()->GetTitle() );
-    hJER->GetYaxis()->SetTitle( "JER = #sigma / #LT p_{T}^{reco}/p_{T}^{gen} #GT" );
+    hJER->GetYaxis()->SetTitle( Form( "JER = #sigma / #LT %s #GT", variant.label ) );
 
     for( int ip = 0; ip < nPt; ip++ ){
         const double ptLo = lo + ip * width;
         const double ptHi = ptLo + width;
 
-        TString distName = L2Name::ObjectName( cone, "response",
+        TString distName = L2Name::ObjectName( cone, TString( "response_" ) + variant.tag,
             { L2Name::PtGenKey( ptLo, ptHi ) }, { collection } );
 
-        TH1D* hProj = ProjectTHnSparse1D( h, kRespRAxis,
+        TH1D* hProj = ProjectTHnSparse1D( h, variant.axis,
             { { kRespPtGenAxis, ptLo, ptHi } } );
         hProj->SetName( distName );
 
@@ -199,7 +161,7 @@ void runResponse( TString inputFile, TString outputFile ){
     // "_incl" as its own Step-1-file sentinel.
     int totalSteps = 0;
     for( const TString& cone : cfg.coneLabels ){
-        if( fIn->Get( cone + "/" + cone + "_incl_resp" ) ) totalSteps += kNCollections * 3;
+        if( fIn->Get( cone + "/" + cone + "_incl_resp" ) ) totalSteps += kNCollections * kNVariants;
     }
     if( totalSteps == 0 ){
         std::cerr << "No MC response histograms found in " << inputFile
@@ -221,8 +183,6 @@ void runResponse( TString inputFile, TString outputFile ){
         if( !hSentinel ) continue;
 
         TDirectory* coneDirOut = fOut->mkdir( cone.Data() );
-        TDirectory* dQA_abseta = coneDirOut->mkdir( "QA_response_abseta" );
-        TDirectory* dQA_fulleta = coneDirOut->mkdir( "QA_response_fulleta" );
         TDirectory* dQA_ptgen = coneDirOut->mkdir( "QA_response_ptgen" );
 
         for( int ic = 0; ic < kNCollections; ic++ ){
@@ -233,17 +193,10 @@ void runResponse( TString inputFile, TString outputFile ){
                 continue;
             }
 
-            THnSparse* hFolded = FoldEtaAxis( hRaw, kRespEtaGenAxis,
-                cone + kCollectionSuffixes[ic] + "_abseta" );
-
-            ExtractVsEtaGen( hFolded, cone, collection, false, dQA_abseta, coneDirOut, halfWidth, minEntries );
-            pb.Update();
-            ExtractVsEtaGen( hRaw, cone, collection, true, dQA_fulleta, coneDirOut, halfWidth, minEntries );
-            pb.Update();
-            ExtractVsPtGen( hRaw, cone, collection, bins.pt, dQA_ptgen, coneDirOut, halfWidth, minEntries );
-            pb.Update();
-
-            delete hFolded;
+            for( int iv = 0; iv < kNVariants; iv++ ){
+                ExtractVsPtGen( hRaw, cone, collection, kVariants[iv], bins.pt, dQA_ptgen, coneDirOut, halfWidth, minEntries );
+                pb.Update();
+            }
         }
     }
 
