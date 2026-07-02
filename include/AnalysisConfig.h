@@ -9,7 +9,6 @@
 struct AnalysisConfig {
     std::string configPath;
     std::string repoRoot;
-    bool usedDefaultConfig = false;
 
     std::vector<std::vector<std::string>> jecFilesPerCone;
     std::vector<std::vector<std::string>> residualFilesPerCone;

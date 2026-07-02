@@ -2,8 +2,8 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value] [CONFIG=path]
-#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value] [CONFIG=path]
+#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt CONFIG=path [--no-submit|-n] [TAG=value]
+#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] CONFIG=path [--no-submit|-n] [TAG=value]
 #
 # OUTPUT_DIR    — absolute EOS/AFS path where output ROOT files are written
 # -a/--all-txt  — submit every .txt filelist found in data/txt/
@@ -15,8 +15,12 @@
 #                 keep separate closure/reprocessing passes from landing in the
 #                 same output tree. No slashes allowed in value. Independent of
 #                 CONFIG below — mix and match freely, neither implies the other.
-# CONFIG=path   — TOML to submit with (default: cfg/2024ppRef.toml). Whatever is
-#                 selected is transferred to the sandbox under a fixed name
+# CONFIG=path   — required; TOML to submit with. Which TOML gets submitted is a
+#                 physics-affecting choice (e.g. main run-period config vs. a
+#                 closure config with different residual_files), so there is no
+#                 implicit default — pass CONFIG=cfg/2024ppRef.toml explicitly
+#                 for the standard run-period config. Whatever is selected is
+#                 transferred to the sandbox under a fixed name
 #                 (analysis_config.toml), so runtime_wrapper.sh never needs to
 #                 know the source filename — pointing this at a different run
 #                 period/collision system's TOML needs no other change here.
@@ -44,8 +48,8 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR -a|--all-txt [--no-submit|-n] [TAG=value] [CONFIG=path]" >&2
-    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] [--no-submit|-n] [TAG=value] [CONFIG=path]" >&2
+    echo "Usage: $0 OUTPUT_DIR -a|--all-txt CONFIG=path [--no-submit|-n] [TAG=value]" >&2
+    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] CONFIG=path [--no-submit|-n] [TAG=value]" >&2
     exit 1
 }
 
@@ -88,7 +92,12 @@ LIBRARY="${REPO_ROOT}/lib/libl2residuals.so"
 DATA_DIR="${REPO_ROOT}/data"
 FILELIST_DIR="${REPO_ROOT}/data/txt"
 
-if [[ -z "${CONFIG_PATH}" ]]; then CONFIG_PATH="${REPO_ROOT}/cfg/2024ppRef.toml"; fi
+if [[ -z "${CONFIG_PATH}" ]]; then
+    echo "ERROR: CONFIG=path is required -- which TOML gets submitted is a physics-affecting" >&2
+    echo "       choice (e.g. main run-period config vs. a closure config), so there is no" >&2
+    echo "       implicit default. Pass CONFIG=cfg/2024ppRef.toml explicitly if that's what you want." >&2
+    exit 1
+fi
 if [[ ! -f "${CONFIG_PATH}" ]]; then
     echo "ERROR: CONFIG file not found: ${CONFIG_PATH}" >&2
     exit 1
@@ -230,9 +239,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 
         FILELIST_MODE="$(lookup_filelist_mode "${BASENAME}")"
         case "${FILELIST_MODE}" in
-            triggered)     MODE="--triggered" ;;
-            non-triggered) MODE="--non-triggered" ;;
-            mc)            MODE="--monte-carlo" ;;
+            triggered|non-triggered|mc)
+                MODE="${FILELIST_MODE}"
+                ;;
             "")
                 echo "  SKIP  ${BASENAME} — no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
                 continue

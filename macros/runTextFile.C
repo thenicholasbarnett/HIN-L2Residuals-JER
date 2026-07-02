@@ -1,20 +1,26 @@
-// Compiled:    ./bin/runTextFile <triggered_residuals.root> <nontriggered_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
-//              ./bin/runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]
-// Interpreted: root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root","corrections/hp0_zb0")'
+// Compiled:    ./bin/runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
+//              ./bin/runTextFile SINGLE=residuals.root OUTPUT=out.root PREFIX=prefix [METHOD=gauss] [NORM=true] CONFIG=path
+// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
+//              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root","corrections/hp0_zb0")'
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the triggered
-// residuals if the slice starts at or above cfg.hltJ80Thresh, otherwise the
-// non-triggered residuals.
-// Writes "<output_text_prefix>_<cone>_abseta[_norm].txt" and "..._<cone>_eta[_norm].txt".
+// Every argument is a KEY=value token -- there are no positional arguments,
+// and none may be misspelled or omitted silently: an unknown token, a
+// malformed token, or a missing required token is an immediate CLI error.
+// CONFIG is always required; there is no default TOML.
 //
-// --single: for a dataset with no triggered/non-triggered split (e.g. one
-//           min-bias or single-trigger sample) — every pT slice reads from
-//           <residuals.root>.
-// method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
-// [direct]: pass the literal word "direct" to use the non-normalized intercepts
-//           instead of the kFSR-normalized ones (the standard/default method).
+// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the
+// triggered residuals if the slice starts at or above cfg.hltJ80Thresh,
+// otherwise the non-triggered residuals.
+// Writes "<prefix>_<cone>_abseta[_norm].txt" and "..._<cone>_eta[_norm].txt".
+//
+// SINGLE=: for a dataset with no triggered/non-triggered split (e.g. one
+//          min-bias or single-trigger sample) -- every pT slice reads from
+//          the one file. Mutually exclusive with TRIGGERED=/NONTRIGGERED=.
+// METHOD=: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
+// NORM=:   "true" (default) uses the kFSR-normalized intercepts (the standard
+//          method); "false" uses the direct, non-normalized variant instead.
 // [step3] eta_mode in the TOML ("both" | "abseta" | "eta") controls which of
 // the two text files (per cone) actually get written; see TextFileWriter.cxx.
 
@@ -29,31 +35,47 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 #endif
 
 #include "TextFileWriter.h"
-#include "ConfigCli.h"
+#include "CliTokens.h"
 #include "AnalysisConfig.h"
 
 #ifndef __CLING__
 #include <iostream>
+#include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runTextFile <triggered_residuals.root> <nontriggered_residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n"
-        "       runTextFile --single <residuals.root> <output.root> <output_text_prefix> [method] [direct] [CONFIG=path]\n";
+        "Usage: runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root PREFIX=prefix"
+        " [METHOD=gauss] [NORM=true] CONFIG=path\n"
+        "       runTextFile SINGLE=residuals.root OUTPUT=out.root PREFIX=prefix"
+        " [METHOD=gauss] [NORM=true] CONFIG=path\n";
 
-    L2ConfigCli::ApplyConfigArgument( argc, argv );
-    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
+    const std::set<std::string> kKnownKeys = {
+        "TRIGGERED", "NONTRIGGERED", "SINGLE", "OUTPUT", "PREFIX", "METHOD", "NORM", "CONFIG"
+    };
+    L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
 
-    if( !args.empty() && TString( args[0] ) == "--single" ){
-        if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
-        TString method = ( args.size() > 4 ) ? args[4] : Config().defaultMethod;
-        bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
-        runTextFile( args[1], args[2], args[3], method, useNorm );
+    setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
+
+    TString output = t.Require( "OUTPUT", kUsage );
+    TString prefix = t.Require( "PREFIX", kUsage );
+    TString method = t.Has( "METHOD" ) ? TString( t.Get( "METHOD" ) ) : Config().defaultMethod;
+    bool useNorm = t.Get( "NORM", "true" ) != "false";
+
+    const bool hasSingle = t.Has( "SINGLE" );
+    const bool hasSplit  = t.Has( "TRIGGERED" ) || t.Has( "NONTRIGGERED" );
+
+    if( hasSingle && hasSplit ){
+        std::cerr << "ERROR: pass either SINGLE=... or TRIGGERED=.../NONTRIGGERED=..., not both\n" << kUsage;
+        return 1;
+    }
+
+    if( hasSingle ){
+        runTextFile( t.Get( "SINGLE" ), output, prefix, method, useNorm );
         return 0;
     }
 
-    if( args.size() < 4 ){ std::cerr << kUsage; return 1; }
-    TString method = ( args.size() > 4 ) ? args[4] : Config().defaultMethod;
-    bool useNorm = !( ( args.size() > 5 ) && TString( args[5] ) == "direct" );
-    runTextFile( args[0], args[1], args[2], args[3], method, useNorm );
+    TString triggered    = t.Require( "TRIGGERED", kUsage );
+    TString nontriggered = t.Require( "NONTRIGGERED", kUsage );
+    runTextFile( triggered, nontriggered, output, prefix, method, useNorm );
     return 0;
 }
 #endif

@@ -38,11 +38,11 @@ void runAsymmetry( TString input, TString output, TString modeFlag, Long64_t max
     PrintConfigSummary( cfg );
 
     RunMode mode = RunMode::Triggered;
-    if( modeFlag == "--monte-carlo" || modeFlag == "-mc" ) mode = RunMode::MC;
-    else if( modeFlag == "--non-triggered" || modeFlag == "-nt" ) mode = RunMode::NonTriggered;
-    else if( modeFlag == "--triggered" || modeFlag == "-t" ) mode = RunMode::Triggered;
+    if( modeFlag == "mc" ) mode = RunMode::MC;
+    else if( modeFlag == "non-triggered" ) mode = RunMode::NonTriggered;
+    else if( modeFlag == "triggered" ) mode = RunMode::Triggered;
     else {
-        throw std::invalid_argument( Form( "ERROR: invalid runAsymmetry mode '%s'. Expected --monte-carlo/-mc, --non-triggered/-nt, or --triggered/-t.", modeFlag.Data() ) );
+        throw std::invalid_argument( Form( "ERROR: invalid runAsymmetry mode '%s'. Expected mc, non-triggered, or triggered.", modeFlag.Data() ) );
     }
 
     // checking configuration

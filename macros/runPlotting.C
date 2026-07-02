@@ -1,6 +1,12 @@
-// Compiled:    ./bin/runPlotting <residuals.root> [out_dir] [flags] [CONFIG=path]
-// Interpreted: root -l -b -q 'macros/runPlotting.C("residuals.root")'
+// Compiled:    ./bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] CONFIG=path
+// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
+//              root -l -b -q 'macros/runPlotting.C("residuals.root")'
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+//
+// Every argument is a KEY=value token -- there are no positional arguments,
+// and none may be misspelled or omitted silently: an unknown token, a
+// malformed token, or a missing required token is an immediate CLI error.
+// CONFIG is always required; there is no default TOML.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -20,7 +26,7 @@ R__LOAD_LIBRARY(lib/libl2residuals.so)
 
 #include "Binning.h"
 #include "AnalysisConfig.h"
-#include "ConfigCli.h"
+#include "CliTokens.h"
 #include "ProgressBar.h"
 
 #include "plotting/Style.h"
@@ -177,18 +183,24 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
 
 #ifndef __CLING__
 #include <iostream>
+#include <set>
 int main( int argc, char* argv[] ){
-    L2ConfigCli::ApplyConfigArgument( argc, argv );
-    std::vector<std::string> args = L2ConfigCli::PositionalArgs( argc, argv );
-    if( args.size() < 1 ){
-        std::cerr << "Usage: runPlotting <residuals.root> [out_dir] [flags]"
-                  << L2ConfigCli::ConfigUsage() << "\n"
-                  << "  flags: omit for the curated smart default, \"all\" for every plot\n"
-                  << "         unconditionally, or a space-separated list of:\n"
-                  << "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n";
-        return 1;
-    }
-    runPlotting( args[0], args.size() >= 2 ? args[1] : "", args.size() >= 3 ? args[2] : "" );
+    static const char* const kUsage =
+        "Usage: runPlotting INPUT=file.root [OUTDIR=dir] [FLAGS=\"...\"] CONFIG=path\n"
+        "  FLAGS: omit for the curated smart default, \"all\" for every plot\n"
+        "         unconditionally, or a space-separated list of:\n"
+        "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n";
+
+    const std::set<std::string> kKnownKeys = { "INPUT", "OUTDIR", "FLAGS", "CONFIG" };
+    L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
+
+    setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
+
+    TString input  = t.Require( "INPUT", kUsage );
+    TString outDir = t.Get( "OUTDIR", "" );
+    TString flags  = t.Get( "FLAGS", "" );
+
+    runPlotting( input, outDir, flags );
     return 0;
 }
 #endif

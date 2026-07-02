@@ -55,18 +55,25 @@ TString ResolvePath( const TString& path, const std::string& root ){
 
 }
 
+// No implicit fallback to cfg/2024ppRef.toml: which TOML gets loaded is a
+// physics-affecting choice (e.g. main run-period config vs. a closure
+// config with different residual_files), so it must always come from an
+// explicit source — either L2RESIDUALS_CONFIG (set directly, or via a
+// compiled binary's required CONFIG= token) or an explicit path passed
+// straight to LoadAnalysisConfig(). L2RESIDUALS_HOME is a different,
+// narrower mechanism (relative-path resolution within an already-chosen
+// TOML, see ConfigRoot() below) and deliberately does NOT count as an
+// implicit config selection here.
 std::string DefaultConfigPath(){
     const char* envConfig = std::getenv( "L2RESIDUALS_CONFIG" );
     if( envConfig && envConfig[0] ) return ResolveConfigPath( envConfig );
 
-    const char* envHome = std::getenv( "L2RESIDUALS_HOME" );
-    if( envHome && envHome[0] ) return std::string( envHome ) + "/cfg/2024ppRef.toml";
-
-    return ResolvePath( std::string( "cfg/2024ppRef.toml" ), RepoRoot() );
+    throw std::runtime_error(
+        "No config resolvable: set L2RESIDUALS_CONFIG, or pass CONFIG=path on the "
+        "command line (compiled binaries), or an explicit path to LoadAnalysisConfig()." );
 }
 
 AnalysisConfig LoadAnalysisConfig( const std::string& path ){
-    const bool explicitConfig = !path.empty() || ( std::getenv( "L2RESIDUALS_CONFIG" ) && std::getenv( "L2RESIDUALS_CONFIG" )[0] );
     const std::string configPath = path.empty() ? DefaultConfigPath() : ResolveConfigPath( path );
     const auto doc = toml::parse_file( configPath );
     const std::string repoRoot = ConfigRoot( configPath );
@@ -74,7 +81,6 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     AnalysisConfig cfg;
     cfg.configPath = configPath;
     cfg.repoRoot = repoRoot;
-    cfg.usedDefaultConfig = !explicitConfig;
 
     cfg.vetoMapPath  = ResolvePath( doc["paths"]["veto_map"].value_or( std::string{} ), repoRoot );
     cfg.jsonPath     = ResolvePath( TString( doc["paths"]["golden_json"].value_or( std::string{} ).c_str() ), repoRoot );
@@ -158,16 +164,5 @@ const AnalysisConfig& Config(){
 }
 
 void PrintConfigSummary( const AnalysisConfig& cfg ){
-    static constexpr const char* kBoldYellow = "\033[1;33m";
-    static constexpr const char* kReset = "\033[0m";
-
     std::cout << "Config: " << cfg.configPath << "\n";
-    if( cfg.usedDefaultConfig ){
-        std::cout << kBoldYellow
-                  << "WARNING: no CONFIG=path or L2RESIDUALS_CONFIG was provided; "
-                  << "using the default cfg/2024ppRef.toml. Pass CONFIG="
-                  << cfg.configPath
-                  << " to make this run explicit."
-                  << kReset << "\n";
-    }
 }

@@ -44,7 +44,7 @@ rm -rf build bin lib && cmake -B build && cmake --build build
 <strong> Batch Process Asymmetries </strong>
 
 ```
-bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt> [CONFIG=cfg/2024ppRef.toml]
+bash ./condor/make_condor.sh <output_files-dir> <input_HiForest-filelist.txt> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
@@ -54,25 +54,25 @@ bash ./condor/batch_hadd.sh <output_asymmetry-file.root> <input_glob> <batch_siz
 <strong> Get Residual Corrections </strong>
 
 ```
-./bin/runResiduals <input_data-asymmetries-file.root> <mc_asymmetries_file.root> <output_residuals-file.root> [CONFIG=cfg/2024ppRef.toml]
+./bin/runResiduals DATA=<input_data-asymmetries-file.root> MC=<mc_asymmetries_file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runTextFile <triggered_residuals-file.root> <nontriggered_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [CONFIG=cfg/2024ppRef.toml]
+./bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> CONFIG=cfg/2024ppRef.toml
 ```
 
 <strong> Plot </strong>
 
 ```
-./bin/runPlotting <input_asymmetry-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting INPUT=<input_asymmetry-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runPlotting <input_residuals-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting INPUT=<input_residuals-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 ```
-./bin/runPlotting <input_corrections-file.root> <output_plots-dir> [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting INPUT=<input_corrections-file.root> OUTDIR=<output_plots-dir> CONFIG=cfg/2024ppRef.toml
 ```
 
 <h1> Usage </h1> 
@@ -105,7 +105,7 @@ Analysis parameters — file paths, tree names, cone labels, JEC files, trigger 
 
 The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched and must stay in the same order. The loader validates lengths before running.
 
-`[binning] ptavg_edges` sets the p<sub>T</sub><sup>avg</sup> slice boundaries used by Steps 2/3 and `runPlotting` (strictly ascending, at least 2 entries). Rebinning only needs a TOML edit and a Step 2/3 rerun — no recompile — but it's still a full rerun, not just a replot: Step 2 already collapses the fine-grained pT axis into per-slice fitted means, so the plotting macro only ever sees whatever slicing Step 2 committed to disk. Keep an edge exactly at (or only add edges strictly above/below) `trigger.threshold`, since Step 3 assigns each whole slice to HP or ZB based on its lower edge — a slice straddling the threshold goes entirely to ZB.
+`[binning] ptavg_edges` sets the p<sub>T</sub><sup>avg</sup> slice boundaries used by Steps 2/3 and `runPlotting` (strictly ascending, at least 2 entries). Rebinning only needs a TOML edit and a Step 2/3 rerun — no recompile — but it's still a full rerun, not just a replot: Step 2 already collapses the fine-grained pT axis into per-slice fitted means, so the plotting macro only ever sees whatever slicing Step 2 committed to disk. Keep an edge exactly at (or only add edges strictly above/below) `trigger.threshold`, since Step 3 assigns each whole slice to the triggered or non-triggered dataset based on its lower edge — a slice straddling the threshold goes entirely to the non-triggered dataset.
 
 `[cuts]` holds `min_jet_pt` (global floor — inclusive jets and the dijet subleading-jet cut; the third jet used for α is exempt), `dphi` (back-to-back requirement), `max_abs_a` (Step 1 dijet acceptance), and `min_entries_per_bin` (Step 2 fit-attempt floor). `[trees] filter` and `[jet_id] veto_map_histogram` name the event-filter branch and which histogram to read from the veto map file.
 
@@ -113,12 +113,18 @@ To add a new C++ analysis config value, update three places: `cfg/2024ppRef.toml
 
 Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and pass it explicitly with `CONFIG=path`.
 
-Each compiled entry point accepts an optional `CONFIG=path` argument and prints the resolved TOML path at startup. By default compiled binaries look for `cfg/2024ppRef.toml` under the compiled repo source directory, so they can be launched from outside the repo. Relative paths inside the TOML, such as `data/veto/...`, `data/json/...`, and `data/jec/...`, are resolved relative to that same repo root. Absolute paths are left unchanged. To override globally:
+Every compiled entry point takes `CONFIG=path` as a **required** argument and prints the resolved TOML path at startup — there is no implicit default TOML. Which config gets loaded is a physics-affecting choice (e.g. the main run-period config vs. a closure config with different `residual_files`), so a missing `CONFIG=` is always a hard CLI error, never a silent fallback to `cfg/2024ppRef.toml`. Relative paths inside the TOML, such as `data/veto/...`, `data/json/...`, and `data/jec/...`, are resolved relative to the repo root — the compiled-in source directory, or `L2RESIDUALS_HOME` if set. `L2RESIDUALS_HOME` is a separate, narrower mechanism than `CONFIG`: it only affects *where relative paths inside an already-chosen TOML resolve from*, and does not itself select or default a TOML.
+
+`L2RESIDUALS_CONFIG` is the environment-variable equivalent of `CONFIG=path` — set it once in a shell so interpreted-ROOT usage (which bypasses the compiled CLI entirely, see below) and repeated invocations don't need `CONFIG=...` retyped every time. A compiled binary's own `CONFIG=` token still takes precedence when both are present:
 
 ```bash
-export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml  # point to a specific file
-export L2RESIDUALS_HOME=/path/to/repo               # looks in $L2RESIDUALS_HOME/cfg/
+export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml   # required by every entry point, one way or another
+export L2RESIDUALS_HOME=/path/to/repo                # relative-path resolution only; does not select a TOML
 ```
+
+<h3> Command-Line Convention </h3>
+
+Every compiled binary's arguments are `KEY=value` tokens — there are no positional arguments anywhere in this CLI, and argument order never matters. This removes an entire class of silent argument-order bugs (e.g. swapping `DATA=`/`MC=`, or `TRIGGERED=`/`NONTRIGGERED=`), since every value is self-identifying regardless of where it appears on the command line. Required tokens — `CONFIG=` on every binary, plus whichever input/output tokens that binary needs — are validated immediately: a missing required token, an unrecognized token (e.g. a typo like `OUTPT=`), or any bare argument that isn't a valid `KEY=value` token at all is an immediate usage error, never something silently ignored or defaulted. See `include/CliTokens.h` for the parser shared by every entry point.
 
 <h3> Naming Convention </h3>
 
@@ -157,14 +163,14 @@ plots/ak4PF/adist/eta_0p0_0p261/ptavg_30_70/alpha_0p05/
 
 <h3> <b> Step 1 </b> — Fill Asymmetry Histograms </h3>
 
-Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `-mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
+Read HiForest ROOT files, apply L2Relative JEC (plus `jec.residual_files`, if set, for data only — never for `MODE=mc`), select dijets, and fill a 4D {η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α, A} THnSparse for each clustering algorithm.
 
 ```
-./bin/runAsymmetry <input_HiForest-file.root> <output_asymmetry-file.root> [mode] [maxEvents] [CONFIG=cfg/2024ppRef.toml]
+./bin/runAsymmetry INPUT=<input_HiForest-file.root> OUTPUT=<output_asymmetry-file.root> MODE=triggered|non-triggered|mc [MAXEVENTS=n] CONFIG=cfg/2024ppRef.toml
 ```
 
-Flags for each type of dataset: `-t`/`--triggered` (e.g. HardProbes), `-nt`/`--non-triggered` (e.g. ZeroBias or MinBias), `-mc`/`--monte-carlo`. Triggered and non-triggered are both data — the only difference is whether an HLT decision and efficiency-plateau cut apply; which physical dataset plays which role is a per-run-period choice, not something the code hardcodes.
-An optional integer fourth argument limits the number of events processed.
+`MODE=triggered` (e.g. HardProbes), `MODE=non-triggered` (e.g. ZeroBias or MinBias), or `MODE=mc`. Triggered and non-triggered are both data — the only difference is whether an HLT decision and efficiency-plateau cut apply; which physical dataset plays which role is a per-run-period choice, not something the code hardcodes.
+`MAXEVENTS=n` optionally limits the number of events processed.
 
 <u> Output Structure: </u>
 
@@ -180,7 +186,7 @@ ak4PF/
 Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
 
 ```
-./bin/runResiduals <input_data-asymmetry-file.root> <input_mc-asymmetry-file.root> <output_residuals-file.root> [CONFIG=cfg/2024ppRef.toml]
+./bin/runResiduals DATA=<input_data-asymmetry-file.root> MC=<input_mc-asymmetry-file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
 ```
 
 <u> Output Structure: </u>
@@ -200,20 +206,20 @@ ak4PF/
 Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes and ZeroBias/MinBias): for each p<sub>T</sub><sup>avg</sup> slice, uses the triggered file if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and the non-triggered file otherwise — the triggered dataset is trigger-biased below its efficiency plateau, the non-triggered dataset fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./bin/runTextFile <triggered_residuals-file.root> <nontriggered_residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
+./bin/runTextFile TRIGGERED=<triggered_residuals-file.root> NONTRIGGERED=<nontriggered_residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 
-# methods:  gauss (default) | doubleGauss | trunc90 | trunc95
-# [direct]: kFSR-normalized intercepts are used by default (the standard method);
-#           pass the literal word "direct" for the non-normalized variant instead
+# METHOD: gauss (default) | doubleGauss | trunc90 | trunc95
+# NORM:   true (default) uses the kFSR-normalized intercepts (the standard method);
+#         NORM=false uses the direct, non-normalized variant instead
 ```
 
-For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold):
+For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold), pass `SINGLE=` instead of `TRIGGERED=`/`NONTRIGGERED=` (mutually exclusive with them):
 
 ```
-./bin/runTextFile --single <residuals-file.root> <output_corrections-file.root> <output_text-prefix> [method] [direct] [CONFIG=cfg/2024ppRef.toml]
+./bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> PREFIX=<output_text-prefix> [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 ```
 
-For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `direct` is passed:
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files that can be parsed with a header. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `NORM=false` is passed:
 
 ```
 <output_text-prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
@@ -230,12 +236,12 @@ ak4PF/
 
 <h2> Plotting </h2>
 
-`runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `flags` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `"all"` runs every applicable flag unconditionally; a space-separated list runs exactly those flags.
+`runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `FLAGS=` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `FLAGS=all` runs every applicable flag unconditionally; a space-separated value runs exactly those flags.
 
 ```
-./bin/runPlotting <input_asymmetries-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
-./bin/runPlotting <input_residuals-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
-./bin/runPlotting <input_corrections-file.root> <output_plots-dir> [flags] [CONFIG=cfg/2024ppRef.toml]
+./bin/runPlotting INPUT=<input_asymmetries-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
 ```
 
 | Flag | Input | Description | In smart default? |
@@ -254,9 +260,9 @@ ak4PF/
 
 <br>
 
-Example of multiple flags being passed space-separated as a single quoted argument:
+Example of multiple flags being passed space-separated as a single quoted `FLAGS=` value:
 ```bash
-./bin/runPlotting residuals.root plots/ "finals etasym methods" CONFIG=cfg/2024ppRef.toml
+./bin/runPlotting INPUT=residuals.root OUTDIR=plots/ FLAGS="finals etasym methods" CONFIG=cfg/2024ppRef.toml
 ```
 
 <h2> Condor Submission </h2>
@@ -282,31 +288,33 @@ CMake refuses to configure on lxplus without `cmsenv`, and `make_condor.sh` chec
 
 ```bash
 # all filelists in data/txt/
-bash condor/make_condor.sh /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals --all-txt
+bash condor/make_condor.sh /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals --all-txt CONFIG=cfg/2024ppRef.toml
 
 # specific filelist
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt
+bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt CONFIG=cfg/2024ppRef.toml
 
 # multiple filelists
 bash condor/make_condor.sh /eos/.../l2residuals \
     data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
-    data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt
+    data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt \
+    CONFIG=cfg/2024ppRef.toml
 
 # dry run
-bash condor/make_condor.sh /eos/.../l2residuals -n
+bash condor/make_condor.sh /eos/.../l2residuals --all-txt CONFIG=cfg/2024ppRef.toml -n
 
 # tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt TAG=clos_abseta
+bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+    CONFIG=cfg/2024ppRef.toml TAG=clos_abseta
 
-# submit with a specific TOML (default: cfg/2024ppRef.toml) — independent of TAG,
-# mix and match freely; useful for closure passes or a different run period/system
+# a different TOML entirely — independent of TAG, mix and match freely;
+# useful for closure passes or a different run period/system
 bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
     TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
 ```
 
 Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
-`CONFIG=path` picks which TOML gets submitted with the jobs (default `cfg/2024ppRef.toml`), independent of `TAG` — mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), and its `[condor].cmssw_src` value is stamped into the worker `runtime_wrapper.sh`; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
+`CONFIG=path` picks which TOML gets submitted with the jobs — **required, no default**, since which TOML gets used is a physics-affecting choice (e.g. main run-period config vs. a closure config) — independent of `TAG`, mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), and its `[condor].cmssw_src` value is stamped into the worker `runtime_wrapper.sh`; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
 <h2> Hadd Many Files </h2>
 

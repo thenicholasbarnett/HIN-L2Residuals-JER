@@ -130,8 +130,12 @@ foreach(test ${TESTS})
     endif()
     add_test(NAME ${name} COMMAND ${name})
     # Keep test CWD at the repo root so any test-created output paths stay
-    # predictable. Config/data paths are resolved from the compiled repo root.
-    set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    # predictable. CONFIG no longer has an implicit fallback (see
+    # AnalysisConfig.cxx), so tests must set L2RESIDUALS_CONFIG explicitly
+    # rather than relying on one.
+    set_tests_properties(${name} PROPERTIES
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/2024ppRef.toml")
 endforeach()
 
 add_test(NAME TestBuild

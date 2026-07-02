@@ -41,4 +41,5 @@ echo "Output: ${OUTPUT}"
 echo "Mode:   ${MODE}"
 
 chmod +x "${EXECUTABLE}"
-./"${EXECUTABLE}" "${INPUT}" "${OUTPUT}" "${MODE}"
+# The compiled binary's CLI is entirely KEY=value tokens, no positional args.
+./"${EXECUTABLE}" "INPUT=${INPUT}" "OUTPUT=${OUTPUT}" "MODE=${MODE}" "CONFIG=${START_DIR}/analysis_config.toml"
