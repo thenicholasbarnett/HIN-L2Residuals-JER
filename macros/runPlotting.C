@@ -41,6 +41,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include "plotting/MethodComparisons.h"
 #include "plotting/FinalCorrections.h"
 #include "plotting/NormComparisons.h"
+#include "plotting/ResponsePlots.h"
 #include "plotting/Counters.h"
 
 #include <vector>
@@ -78,6 +79,9 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 //   "ptfit"     — Step 3 pT-dependence fit: correction factor vs pT_avg per eta bin (PlotPtFit)
 //   "kinematics"— Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
 //   "event"     — Step-1 event-level QA: vz, primary vertex filter, HLT trigger
+//   "response"  — runResponse JES/JER: per-bin response distributions with a
+//                 Gaussian guide fit, plus JES/JER vs eta_gen and vs pT_gen
+//                 summary overlays (incl/tag/probe) (PlotResponse)
 // ============================================================
 
 // Smart-default "finals" inclusion. PlotFinals draws from Step 2's native
@@ -130,6 +134,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
     const bool doPtFit    = doAllLiteral || doSmartDefault || flags.Contains( "ptfit" );
     const bool doKine     = doAllLiteral || doSmartDefault || flags.Contains( "kinematics" );
     const bool doEvent    = doAllLiteral || doSmartDefault || flags.Contains( "event" );
+    const bool doResponse = doAllLiteral || doSmartDefault || flags.Contains( "response" );
 
     // "kinematics" named explicitly (or "all") pulls in inclusive jets too;
     // the smart default sticks to tag/probe only.
@@ -153,6 +158,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
         if( doAlpha )    totalPlots += CountAlphaFitPlots( fIn, cone, bins );
         if( doPtFit )    totalPlots += CountPtFitPlots( fIn, cone );
         if( doKine )     totalPlots += CountKinematicsPlots( fIn, cone, kineIncludeIncl );
+        if( doResponse ) totalPlots += CountResponsePlots( fIn, cone );
     }
 
     if( totalPlots == 0 ){
@@ -177,6 +183,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
         if( doAlpha )    PlotAlphaFit( fIn, outDir, cone, bins,        pb );
         if( doPtFit )    PlotPtFit( fIn, outDir, cone,                   pb );
         if( doKine )     PlotKinematics( fIn, outDir, cone, kineIncludeIncl, pb );
+        if( doResponse ) PlotResponse( fIn, outDir, cone, cfg.responseGausFitHalfWidth, pb );
     }
 
     pb.Finish();
@@ -191,7 +198,7 @@ int main( int argc, char* argv[] ){
         "Usage: runPlotting INPUT=file.root [OUTDIR=dir] [FLAGS=\"...\"] [CLOSURE=true] CONFIG=path\n"
         "  FLAGS: omit for the curated smart default, \"all\" for every plot\n"
         "         unconditionally, or a space-separated list of:\n"
-        "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event\n"
+        "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event response\n"
         "  CLOSURE=true: \"finals\" plots use a fixed 0.95-1.05 y-range with 0.99/1.01\n"
         "         guide lines instead of the auto-scaled range, for checking a\n"
         "         closure pass's R_MC/R_data ~= 1. No effect on any other flag.\n";

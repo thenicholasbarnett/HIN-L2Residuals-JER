@@ -132,6 +132,7 @@ AnalysisConfig LoadAnalysisConfig( const std::string& path ){
     cfg.minEntriesPerBin = doc["cuts"]["min_entries_per_bin"].value_or( 0 );
     cfg.residualGausFitHalfWidth = doc["cuts"]["residual_gaus_fit_half_width"].value_or( 0.5 );
     cfg.residualAlphaFitHi = doc["cuts"]["residual_alpha_fit_hi"].value_or( 0.31 );
+    cfg.responseGausFitHalfWidth = doc["cuts"]["response_gaus_fit_half_width"].value_or( 0.3 );
 
     // Step 3 output selection only — Step 2 always computes and stores every
     // method (gauss/doubleGauss/trunc90/trunc95) and both eta modes regardless

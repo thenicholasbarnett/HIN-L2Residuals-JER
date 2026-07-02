@@ -36,6 +36,13 @@ inline TString AlphaKey( const RangeBin& alphaSlice ){
     return CleanKey( alphaSlice.shortName );
 }
 
+// For a raw numeric pT_gen bin (runResponse's JES/JER-vs-pT_gen extraction,
+// which bins directly off the response THnSparse's own uniform pT axis
+// rather than a curated RangeBin slice list like ptavgSlices).
+inline TString PtGenKey( double lo, double hi ){
+    return Form( "ptgen_%d_%d", ( int )lo, ( int )hi );
+}
+
 inline TString EtaModeKey( bool fullEta ){
     return fullEta ? "fulleta" : "abseta";
 }

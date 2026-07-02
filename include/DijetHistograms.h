@@ -21,13 +21,21 @@
 // MC-only (Init's isMC flag), JES/JER inputs — parallel to, not a replacement
 // for, the TH3Ds above (those keep the same behavior/stats for both data and
 // MC):
-//   hInclJetResp  — 4D THnSparse (eta, phi, pT, pT^reco/pT^gen) for corrected
-//                    jets passing cfg.minPt, ref-matched only
+//   hInclJetResp  — 5D THnSparse (eta_reco, pT_reco, eta_gen, pT_gen,
+//                    pT_reco/pT_gen) for corrected jets passing cfg.minPt,
+//                    ref-matched only
 //   hTagJetResp   — same, for the tag jet of each valid dijet, ref-matched only
 //   hProbeJetResp — same, for the probe jet of each valid dijet, ref-matched only
 // "ref-matched" means the ntuple's refpt[j] (index-aligned to reco jet j) is
 // >= 0; a negative refpt marks no matching GenJet, and that jet is dropped
-// from these histograms entirely (never filled with a bogus ratio).
+// from these histograms entirely (never filled with a bogus ratio). No phi
+// axis — this pipeline's correction philosophy is eta-only everywhere
+// downstream, and phi is essentially uncorrelated with the other axes (unlike
+// eta_gen/pT_gen, which are tightly correlated with their reco counterparts
+// for matched jets), so it would have pushed sparse storage close to one
+// filled bin per jet for comparatively little use. A dedicated, much smaller
+// phi-uniformity QA histogram (e.g. TProfile2D) is the right tool if that's
+// ever needed instead.
 
 struct ConeHistograms {
 
@@ -37,10 +45,11 @@ struct ConeHistograms {
     static constexpr int kAAxis = 3;
 
     // axis order within hInclJetResp/hTagJetResp/hProbeJetResp
-    static constexpr int kRespEtaAxis = 0;
-    static constexpr int kRespPhiAxis = 1;
-    static constexpr int kRespPtAxis = 2;
-    static constexpr int kRespRAxis = 3;
+    static constexpr int kRespEtaRecoAxis = 0;
+    static constexpr int kRespPtRecoAxis = 1;
+    static constexpr int kRespEtaGenAxis = 2;
+    static constexpr int kRespPtGenAxis = 3;
+    static constexpr int kRespRAxis = 4;
 
     THnSparse* hAsym = nullptr;
     TH3D* hInclJet = nullptr;
@@ -81,26 +90,26 @@ struct ConeHistograms {
         hInclJet->Fill( jetEta, jetPhi, corrPt, weight );
     }
 
-    // MC only — refPt is the ntuple's refpt[j] for this jet; refPt < 0 means
-    // no matched GenJet, so the jet is dropped rather than filled with a
-    // meaningless ratio.
-    void FillInclJetResp( float corrPt, float jetEta, float jetPhi, float refPt, float weight ){
+    // MC only — refPt/refEta are the ntuple's refpt[j]/refeta[j] for this
+    // jet; refPt < 0 means no matched GenJet, so the jet is dropped rather
+    // than filled with a meaningless ratio.
+    void FillInclJetResp( float corrPt, float jetEta, float refPt, float refEta, float weight ){
         if( refPt < 0 ) return;
-        double x[4] = { jetEta, jetPhi, corrPt, corrPt / refPt };
+        double x[5] = { jetEta, corrPt, refEta, refPt, corrPt / refPt };
         hInclJetResp->Fill( x, weight );
     }
 
-    // MC only — refPt is index-aligned to pt/eta/phi (the ntuple's refpt[]
-    // array). Tag and probe are matched independently: one being unmatched
-    // does not drop the other.
+    // MC only — refPt/refEta are index-aligned to pt/eta (the ntuple's
+    // refpt[]/refeta[] arrays). Tag and probe are matched independently: one
+    // being unmatched does not drop the other.
     void FillResp( const DijetResult& d, const float* pt, const float* eta,
-                  const float* phi, const float* refPt, float weight ){
+                  const float* refPt, const float* refEta, float weight ){
         if( refPt[d.tagIdx] >= 0 ){
-            double xt[4] = { eta[d.tagIdx], phi[d.tagIdx], pt[d.tagIdx], pt[d.tagIdx] / refPt[d.tagIdx] };
+            double xt[5] = { eta[d.tagIdx], pt[d.tagIdx], refEta[d.tagIdx], refPt[d.tagIdx], pt[d.tagIdx] / refPt[d.tagIdx] };
             hTagJetResp->Fill( xt, weight );
         }
         if( refPt[d.probeIdx] >= 0 ){
-            double xp[4] = { eta[d.probeIdx], phi[d.probeIdx], pt[d.probeIdx], pt[d.probeIdx] / refPt[d.probeIdx] };
+            double xp[5] = { eta[d.probeIdx], pt[d.probeIdx], refEta[d.probeIdx], refPt[d.probeIdx], pt[d.probeIdx] / refPt[d.probeIdx] };
             hProbeJetResp->Fill( xp, weight );
         }
     }
@@ -119,12 +128,15 @@ struct ConeHistograms {
     }
 
 private:
-    // eta, phi, pT, response — variable-width CMS JEC eta bins on axis 0,
-    // matching the TH3Ds' X axis (kEtaEdges).
+    // eta_reco, pT_reco, eta_gen, pT_gen, response — variable-width CMS JEC
+    // eta bins on both eta axes (matching the TH3Ds' X axis, kEtaEdges);
+    // pT_gen reuses the same uniform binning as pT_reco (bins.pt) for
+    // consistent granularity between the two.
     static THnSparse* MakeRespSparse( const TString& name, const BinningConfig& bins ){
         THnSparse* h = MakeTHnSparse<THnSparseD>( name, "",
-            { bins.eta, bins.phi, bins.pt, bins.response } );
-        SetEtaBins( h, kRespEtaAxis );
+            { bins.eta, bins.pt, bins.eta, bins.pt, bins.response } );
+        SetEtaBins( h, kRespEtaRecoAxis );
+        SetEtaBins( h, kRespEtaGenAxis );
         h->Sumw2();
         return h;
     }

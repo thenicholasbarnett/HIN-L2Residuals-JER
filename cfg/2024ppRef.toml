@@ -58,6 +58,10 @@ max_abs_a = 0.7
 min_entries_per_bin = 100
 residual_gaus_fit_half_width = 0.5
 residual_alpha_fit_hi = 0.31
+# Gaussian fit window for runResponse's JES/JER extraction: [1-x, 1+x] around
+# the pT_reco/pT_gen response, analogous to residual_gaus_fit_half_width above
+# (which is centered at 0, not 1).
+response_gaus_fit_half_width = 0.3
 
 [binning]
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]

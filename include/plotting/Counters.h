@@ -10,6 +10,7 @@
 #include "plotting/Utilities.h"
 #include "plotting/AsymmetryDistributions.h"   // kMinEntriesPlot
 #include "plotting/Kinematics.h"               // kNKinematicsCollections, kKinematicsCollections, kNKinematicsPtMins
+#include "plotting/ResponsePlots.h"            // kNResponseCollections, kResponseCollections
 #include "Binning.h"
 #include "Naming.h"
 
@@ -198,6 +199,66 @@ inline int CountEventPlots( TFile* fIn ){
     if( fIn->Get( "hvz_all" ) && fIn->Get( "hvz" ) ) n++;
     if( fIn->Get( "hfilt" ) ) n++;
     if( fIn->Get( "h_hlt_j80" ) ) n++;
+    return n;
+}
+
+inline int CountResponsePlots( TFile* fIn, const TString& cone ){
+    bool any = false;
+    for( int ic = 0; ic < kNResponseCollections && !any; ic++ ){
+        TString name = L2Name::ObjectName( cone, "JES", { "vs_ptgen" }, { kResponseCollections[ic] } );
+        if( HasHAny( fIn, { cone + "/" + name } ) ) any = true;
+    }
+    if( !any ) return 0;
+
+    int n = 0;
+    for( int ic = 0; ic < kNResponseCollections; ic++ ){
+        const TString collection = kResponseCollections[ic];
+
+        for( int mode = 0; mode < 2; mode++ ){
+            const bool fullEta = ( mode == 1 );
+            const TString etaMode = L2Name::EtaModeKey( fullEta );
+            const TString dirName = fullEta ? "QA_response_fulleta" : "QA_response_abseta";
+            TDirectory* d = ( TDirectory* )fIn->Get( cone + "/" + dirName );
+            const int nEta = fullEta ? ( int )kEtaEdges.size() - 1 : ( int )kAbsEtaEdges.size() - 1;
+            for( int ie = 0; ie < nEta; ie++ ){
+                TString etaKey = L2Name::EtaKey( ie, fullEta );
+                TString objName = L2Name::ObjectName( cone, "response", { etaMode, etaKey }, { collection } );
+                TH1D* h = d ? ( TH1D* )d->Get( objName ) : nullptr;
+                if( h && h->GetEntries() >= kMinEntriesPlot ) n++;
+            }
+        }
+
+        TString jesName = L2Name::ObjectName( cone, "JES", { "vs_ptgen" }, { collection } );
+        TH1D* hJes = ( TH1D* )fIn->Get( cone + "/" + jesName );
+        if( hJes ){
+            TDirectory* dPt = ( TDirectory* )fIn->Get( cone + "/QA_response_ptgen" );
+            for( int ip = 1; ip <= hJes->GetNbinsX(); ip++ ){
+                const double lo = hJes->GetXaxis()->GetBinLowEdge( ip );
+                const double hi = hJes->GetXaxis()->GetBinUpEdge( ip );
+                TString objName = L2Name::ObjectName( cone, "response",
+                    { L2Name::PtGenKey( lo, hi ) }, { collection } );
+                TH1D* h = dPt ? ( TH1D* )dPt->Get( objName ) : nullptr;
+                if( h && h->GetEntries() >= kMinEntriesPlot ) n++;
+            }
+        }
+    }
+
+    // summary plots: up to 6 canvases per cone (JES/JER x abseta/fulleta/ptgen),
+    // each drawn whenever at least one collection has the corresponding object.
+    auto countSummary = [&]( const TString& quantity, const std::vector<TString>& keys ) -> int {
+        for( int ic = 0; ic < kNResponseCollections; ic++ ){
+            TString name = L2Name::ObjectName( cone, quantity, keys, { kResponseCollections[ic] } );
+            if( HasHAny( fIn, { cone + "/" + name } ) ) return 1;
+        }
+        return 0;
+    };
+    n += countSummary( "JES", { "abseta", "vs_etagen" } );
+    n += countSummary( "JER", { "abseta", "vs_etagen" } );
+    n += countSummary( "JES", { "fulleta", "vs_etagen" } );
+    n += countSummary( "JER", { "fulleta", "vs_etagen" } );
+    n += countSummary( "JES", { "vs_ptgen" } );
+    n += countSummary( "JER", { "vs_ptgen" } );
+
     return n;
 }
 

@@ -36,6 +36,7 @@ struct AnalysisConfig {
     int minEntriesPerBin = 0;
     double residualGausFitHalfWidth = 0.5;
     double residualAlphaFitHi = 0.31;
+    double responseGausFitHalfWidth = 0.3;
 
     TString defaultMethod = "gauss";
     TString etaModeOutput = "both";

@@ -168,6 +168,20 @@ inline THnSparse* FoldEtaAxis( THnSparse* h, Int_t etaAxis, const TString& newNa
         hfold->SetBinError( newCoords.data(), TMath::Sqrt( oldErr * oldErr + err * err ) );
     }
 
+    // hfold is built entirely via SetBinContent/SetBinError above, never
+    // Fill() -- so its own entry counter would otherwise end up counting
+    // "unique filled-bin combinations touched while folding," not real
+    // physical entries. Folding never changes the total physical entry
+    // count (it only remaps the eta coordinate), so copy it directly from
+    // h. Without this, any THnSparse::Projection() taken straight off
+    // hfold inherits the wrong (too-small) entries count, silently failing
+    // downstream CanFit(..., minEntries) guards. Callers that route through
+    // an intermediate native TH2/TH1 projection before checking entries
+    // (e.g. ResidualsExtractor.cxx's ExtractAndFit) never hit this, since
+    // TH2::ProjectionY recomputes entries fresh from actual bin content
+    // regardless -- but that's incidental, not a substitute for fixing it here.
+    hfold->SetEntries( h->GetEntries() );
+
     return hfold;
 }
 

@@ -77,6 +77,9 @@ runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=tri
 # Step 3, one residual file for every pT slice
 ./build/bin/runTextFile SINGLE=<residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
 
+# JES/JER extraction, on a hadded Step 1 MC file (independent of Steps 2/3)
+./build/bin/runResponse INPUT=<mc_asymmetry.root> OUTPUT=<response.root> CONFIG=cfg/2024ppRef.toml
+
 # Plot any workflow output
 ./build/bin/runPlotting INPUT=<input.root> OUTDIR=<output_plots_dir> CONFIG=cfg/2024ppRef.toml
 ```
@@ -167,6 +170,7 @@ Every compiled binary's arguments are `KEY=value` tokens — there are no positi
 | `runResiduals` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
 | `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
 | `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
+| `runResponse` | `INPUT=`, `OUTPUT=`, `CONFIG=` | none |
 | `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=`, `CLOSURE=` |
 
 `MODE=` must be `triggered`, `non-triggered`, or `mc`. `PREFIX=` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`. `CLOSURE=true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`.
@@ -224,6 +228,28 @@ hvz_all, hvz, hfilt, h_hlt_j80          # TH1D Event Information
 ak4PF/
   ak4PF_asym                            # THnSparse Asymmetries
   ak4PF_incl, ak4PF_tag, ak4PF_probe    # TH3D Kinematics
+  ak4PF_incl_resp, ak4PF_tag_resp,
+    ak4PF_probe_resp                    # THnSparse (η_reco, p_T^reco, η_gen, p_T^gen, response), MC mode only
+```
+
+<h3> <b> JES/JER Extraction </b> — <code>runResponse</code> </h3>
+
+Reads a hadded Step 1 MC file (no data-mode equivalent — the response THnSparses above are MC-only) and, for each cone and each matched jet collection (incl/tag/probe), extracts JES (mean of a Gaussian fit to the p<sub>T</sub><sup>reco</sup>/p<sub>T</sub><sup>gen</sup> response) and JER (σ/mean of the same fit, the standard fractional-resolution convention) as a function of η<sub>gen</sub> and, separately, p<sub>T</sub><sup>gen</sup>. Binning is always on the gen quantity, never reco — conditioning on truth directly avoids the falling-spectrum migration bias that binning by a resolution-smeared reco quantity would introduce.
+
+```
+./build/bin/runResponse INPUT=<input_mc-asymmetry-file.root> OUTPUT=<output_response-file.root> CONFIG=cfg/2024ppRef.toml
+```
+
+<u> Output Structure: </u>
+```
+ak4PF/
+  QA_response_abseta/, QA_response_fulleta/, QA_response_ptgen/  ← raw per-bin response distributions (no embedded fit)
+  ak4PF_JES_abseta_vs_etagen_incl, _tag, _probe    ← TH1D vs |η_gen|
+  ak4PF_JER_abseta_vs_etagen_incl, _tag, _probe
+  ak4PF_JES_fulleta_vs_etagen_incl, _tag, _probe   ← TH1D vs η_gen
+  ak4PF_JER_fulleta_vs_etagen_incl, _tag, _probe
+  ak4PF_JES_vs_ptgen_incl, _tag, _probe            ← TH1D vs p_T^gen
+  ak4PF_JER_vs_ptgen_incl, _tag, _probe
 ```
 
 <h3> <b> Step 2 </b> — Extract Residuals </h3>
@@ -285,8 +311,9 @@ ak4PF/
 
 ```
 ./build/bin/runPlotting INPUT=<input_asymmetries-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
-./build/bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
-./build/bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] [CLOSURE=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] [CLOSURE=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_response-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
 ```
 
 | Flag | Input | Description | In smart default? |
@@ -301,6 +328,7 @@ ak4PF/
 | `normcomp` | Step 2 | normalized vs non-normalized extrapolated corrections comparison | no — explicit only |
 | `finals` | Step 2 or 3 | α→0 intercepts (Step 2) or final merged corrections (Step 3), all p<sub>T</sub><sup>avg</sup> slices overlaid. `CLOSURE=true` fixes the y-range to 0.95–1.05 with 0.99/1.01 guide lines for closure checks | Step 3 only (via the corrfinal-grid path); suppressed by default on a Step 2 file even though the flag itself would find data there — pass it explicitly to get it from Step 2 |
 | `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn | yes |
+| `response` | `runResponse` | Per-bin p<sub>T</sub><sup>reco</sup>/p<sub>T</sub><sup>gen</sup> distributions with a Gaussian guide fit, plus JES/JER vs η<sub>gen</sub> and vs p<sub>T</sub><sup>gen</sup> summary overlays (incl/tag/probe) | yes |
 | `all` | any | Every applicable flag, unconditionally (including inclusive-jet kinematics and `finals` from either source) | n/a |
 
 <br>
@@ -398,4 +426,4 @@ The data files here are for the pp reference (5.36 TeV) collisions in 2024.
 ```
 ctest --test-dir build
 ```
-Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `runTextFile` triggered/non-triggered merge selection and output format/η ordering for both text files, as well as build/library load checks.
+Tests exist for `FindLeadingJets` and `MakeDijet` logic, `FoldEtaAxis` correctness, `ConeHistograms`' MC response histogram plumbing/matching, `runTextFile` triggered/non-triggered merge selection and output format/η ordering for both text files, `runResponse`'s JES/JER extraction (Gaussian fit recovery, per-bin entry-count guard, vs-η<sub>gen</sub>/vs-p<sub>T</sub><sup>gen</sup> binning), as well as build/library load checks.

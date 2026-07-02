@@ -43,17 +43,17 @@ int main(){
     Check( h.hProbeJetResp != nullptr, "hProbeJetResp created in MC mode" );
 
     // ── FillInclJetResp: matched jet lands at pT/refPt ──────────────────────
-    // Values are chosen away from axis bin edges (phi bins are 0.1-wide, pT
-    // bins are 10-wide, response bins are 0.01-wide) and exactly representable
-    // in float, so there's no float->double rounding ambiguity at a boundary
-    // between this fill and the test's independent FindBin lookup below.
+    // Values are chosen away from axis bin edges (pT/pT_gen bins are 10-wide,
+    // response bins are 0.01-wide) and exactly representable in float, so
+    // there's no float->double rounding ambiguity at a boundary between this
+    // fill and the test's independent FindBin lookup below.
     std::cout << "\n[3] FillInclJetResp: matched jet" << std::endl;
     {
-        // corrPt=105, eta=0.13, phi=0.25, refPt=80 -> response = 1.3125
-        h.FillInclJetResp( 105.0f, 0.13f, 0.25f, 80.0f, 1.0f );
-        Double_t x[4] = { 0.13, 0.25, 105.0, 1.3125 };
-        Int_t coords[4];
-        for( Int_t i = 0; i < 4; i++ ) coords[i] = h.hInclJetResp->GetAxis( i )->FindBin( x[i] );
+        // corrPt=105, eta=0.13, refPt=80, refEta=0.11 -> response = 1.3125
+        h.FillInclJetResp( 105.0f, 0.13f, 80.0f, 0.11f, 1.0f );
+        Double_t x[5] = { 0.13, 105.0, 0.11, 80.0, 1.3125 };
+        Int_t coords[5];
+        for( Int_t i = 0; i < 5; i++ ) coords[i] = h.hInclJetResp->GetAxis( i )->FindBin( x[i] );
         Double_t content = h.hInclJetResp->GetBinContent( coords );
         Check( std::fabs( content - 1.0 ) < kEps, "matched jet fills response = corrPt/refPt = 1.3125" );
     }
@@ -62,7 +62,7 @@ int main(){
     std::cout << "\n[4] FillInclJetResp: unmatched jet skipped" << std::endl;
     {
         Long64_t before = h.hInclJetResp->GetNbins();
-        h.FillInclJetResp( 50.0f, 1.0f, 1.0f, -1.0f, 1.0f );
+        h.FillInclJetResp( 50.0f, 1.0f, -1.0f, 1.0f, 1.0f );
         Long64_t after = h.hInclJetResp->GetNbins();
         Check( before == after, "unmatched jet (refPt<0) does not add a filled bin" );
     }
@@ -70,10 +70,10 @@ int main(){
     // ── FillResp: tag matched, probe unmatched — independent per-leg ────────
     std::cout << "\n[5] FillResp: tag matched, probe unmatched" << std::endl;
     {
-        float pt[]    = { 117.0f, 80.0f };
-        float eta[]   = { 0.3f, 2.5f };
-        float phi[]   = { 0.05f, 3.0f };
-        float refPt[] = { 96.0f, -1.0f };   // tag matched, probe unmatched
+        float pt[]     = { 117.0f, 80.0f };
+        float eta[]    = { 0.3f, 2.5f };
+        float refPt[]  = { 96.0f, -1.0f };   // tag matched, probe unmatched
+        float refEta[] = { 0.28f, 2.4f };
 
         DijetResult d;
         d.tagIdx = 0;
@@ -82,7 +82,7 @@ int main(){
         Long64_t beforeTag = h.hTagJetResp->GetNbins();
         Long64_t beforeProbe = h.hProbeJetResp->GetNbins();
 
-        h.FillResp( d, pt, eta, phi, refPt, 1.0f );
+        h.FillResp( d, pt, eta, refPt, refEta, 1.0f );
 
         Long64_t afterTag = h.hTagJetResp->GetNbins();
         Long64_t afterProbe = h.hProbeJetResp->GetNbins();
@@ -90,9 +90,9 @@ int main(){
         Check( afterTag == beforeTag + 1, "tag jet (matched) fills hTagJetResp" );
         Check( afterProbe == beforeProbe, "probe jet (unmatched) leaves hProbeJetResp untouched" );
 
-        Double_t x[4] = { eta[0], phi[0], pt[0], pt[0] / refPt[0] };
-        Int_t coords[4];
-        for( Int_t i = 0; i < 4; i++ ) coords[i] = h.hTagJetResp->GetAxis( i )->FindBin( x[i] );
+        Double_t x[5] = { eta[0], pt[0], refEta[0], refPt[0], pt[0] / refPt[0] };
+        Int_t coords[5];
+        for( Int_t i = 0; i < 5; i++ ) coords[i] = h.hTagJetResp->GetAxis( i )->FindBin( x[i] );
         Double_t content = h.hTagJetResp->GetBinContent( coords );
         Check( std::fabs( content - 1.0 ) < kEps, "tag response value = pT/refPt = 1.21875" );
     }
