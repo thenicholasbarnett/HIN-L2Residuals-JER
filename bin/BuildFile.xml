@@ -7,7 +7,7 @@
 <flags CXXFLAGS="-Isrc/Analysis/L2Residuals/include -Isrc/Analysis/L2Residuals/external -Isrc/Analysis/L2Residuals/cfg"/>
 
 <bin name="runAsymmetry" file="runAsymmetry.cc"/>
-<bin name="runResiduals" file="runResiduals.cc"/>
+<bin name="runCalibration" file="runCalibration.cc"/>
 <bin name="runTextFile" file="runTextFile.cc"/>
 <bin name="runPlotting" file="runPlotting.cc"/>
 <bin name="runResponse" file="runResponse.cc"/>

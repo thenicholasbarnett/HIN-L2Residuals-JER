@@ -1,6 +1,6 @@
-// CMake:       ./build/bin/runResiduals DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path
+// CMake:       ./build/bin/runCalibration DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runResiduals.C("data.root","mc.root","out.root")'
+//              root -l -b -q 'macros/runCalibration.C("data.root","mc.root","out.root")'
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
@@ -19,7 +19,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 
-#include "ResidualsExtractor.h"
+#include "CalibrationExtractor.h"
 #include "CliTokens.h"
 
 #ifndef __CLING__
@@ -28,7 +28,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runResiduals DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path\n";
+        "Usage: runCalibration DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path\n";
 
     const std::set<std::string> kKnownKeys = { "DATA", "MC", "OUTPUT", "CONFIG" };
     L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
@@ -39,7 +39,7 @@ int main( int argc, char* argv[] ){
     TString mc     = t.Require( "MC", kUsage );
     TString output = t.Require( "OUTPUT", kUsage );
 
-    runResiduals( data, mc, output );
+    runCalibration( data, mc, output );
     return 0;
 }
 #endif

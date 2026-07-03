@@ -29,6 +29,26 @@ static const Color_t kColFull = HiroshigeLightRed();
 static const Color_t kColRefl = HiroshigeNightBlue();
 
 // ============================================================
+// JEC (default, mean-derived) vs JER SF (stddev-derived) selector for
+// Step 2 plots reading intercept/R/R_data/R_mc-kind objects -- see
+// runCalibration's CALIBRATION=JEC|JER token. Object names differ by a
+// "_jer" suffix (CalibrationExtractor.cxx writes both kinds side by side);
+// CalibKind builds the right one from the base JEC-kind string.
+// ============================================================
+
+inline TString CalibKind( const TString& base, bool useJer ){
+    return useJer ? base + "_jer" : base;
+}
+
+inline TString CalibTag( bool useJer ){
+    return useJer ? "JER SF" : "JEC";
+}
+
+inline TString CalibYTitle( bool useJer ){
+    return useJer ? "JER SF at #alpha#rightarrow0" : "R_{MC}/R_{data} at #alpha#rightarrow0";
+}
+
+// ============================================================
 // Global plotting style
 // ============================================================
 

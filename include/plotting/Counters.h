@@ -44,7 +44,7 @@ inline int CountAsymDistPlots( TFile* fIn, const TString& cone, const BinningCon
     return n;
 }
 
-inline int CountROverlayPlots( TFile* fIn, const TString& cone, const BinningConfig& bins ){
+inline int CountROverlayPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool useJer = false ){
     TDirectory* dRvals = ( TDirectory* )fIn->Get( cone + "/Rvals" );
     if( !dRvals ) return 0;
 
@@ -54,9 +54,9 @@ inline int CountROverlayPlots( TFile* fIn, const TString& cone, const BinningCon
             const TString alphaKey = L2Name::AlphaKey( aSl );
             for( const auto& ptSl : bins.ptavgSlices ){
                 const TString ptKey = L2Name::PtKey( ptSl );
-                const TString rdName = L2Name::ObjectName( cone, "R_data",
+                const TString rdName = L2Name::ObjectName( cone, CalibKind( "R_data", useJer ),
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
-                const TString rmName = L2Name::ObjectName( cone, "R_mc",
+                const TString rmName = L2Name::ObjectName( cone, CalibKind( "R_mc", useJer ),
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
                 if( HasH( dRvals, rdName ) && HasH( dRvals, rmName ) ) n++;
             }
@@ -65,7 +65,7 @@ inline int CountROverlayPlots( TFile* fIn, const TString& cone, const BinningCon
     return n;
 }
 
-inline int CountAlphaFitPlots( TFile* fIn, const TString& cone, const BinningConfig& bins ){
+inline int CountAlphaFitPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool useJer = false ){
     TDirectory* dGraphs = ( TDirectory* )fIn->Get( cone + "/graphs" );
     if( !dGraphs ) return 0;
 
@@ -76,7 +76,7 @@ inline int CountAlphaFitPlots( TFile* fIn, const TString& cone, const BinningCon
             const TString ptKey = L2Name::PtKey( ptSl );
             for( int ie = 0; ie < nEta; ie++ ){
                 const TString etaKey = L2Name::EtaKey( ie, false );
-                const TString gname = L2Name::ObjectName( cone, "R",
+                const TString gname = L2Name::ObjectName( cone, CalibKind( "R", useJer ),
                     {L2Name::EtaModeKey( false ), etaKey, ptKey}, {kMethodKeys[m]} );
                 if( HasGraphWithN( dGraphs, {gname + "_norm", gname}, 2 ) ) n++;
             }
@@ -106,14 +106,14 @@ inline int CountPtFitPlots( TFile* fIn, const TString& cone ){
     return n;
 }
 
-inline int CountEtaSymPlots( TFile* fIn, const TString& cone, const BinningConfig& bins ){
+inline int CountEtaSymPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool useJer = false ){
     int n = 0;
     for( int m = 0; m < kNMethods; m++ ){
         for( const auto& sl : bins.ptavgSlices ){
             const TString ptKey = L2Name::PtKey( sl );
-            const TString nameAbs = L2Name::ObjectName( cone, "intercept",
+            const TString nameAbs = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {L2Name::EtaModeKey( false ), ptKey}, {kMethodKeys[m]} );
-            const TString nameFull = L2Name::ObjectName( cone, "intercept",
+            const TString nameFull = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {L2Name::EtaModeKey( true ), ptKey}, {kMethodKeys[m]} );
             if( HasHAny( fIn, {cone + "/" + nameAbs} ) && HasHAny( fIn, {cone + "/" + nameFull} ) ) n++;
         }
@@ -121,18 +121,18 @@ inline int CountEtaSymPlots( TFile* fIn, const TString& cone, const BinningConfi
     return n;
 }
 
-inline int CountMethodCompPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool fullEta ){
+inline int CountMethodCompPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool fullEta, bool useJer = false ){
     int n = 0;
     const TString etaMode = L2Name::EtaModeKey( fullEta );
     for( const auto& sl : bins.ptavgSlices ){
-        const TString name = L2Name::ObjectName( cone, "intercept",
+        const TString name = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
             {etaMode, L2Name::PtKey( sl )}, {kMethodKeys[0]} );
         if( HasHAny( fIn, {cone + "/" + name} ) ) n++;
     }
     return n;
 }
 
-inline int CountFinalsPlots( TFile* fIn, const TString& cone, const BinningConfig& bins ){
+inline int CountFinalsPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool useJer = false ){
     int n = 0;
     for( int m = 0; m < kNMethods; m++ ){
         for( int mode = 0; mode < 2; mode++ ){
@@ -141,11 +141,12 @@ inline int CountFinalsPlots( TFile* fIn, const TString& cone, const BinningConfi
 
             bool anyValid = false;
             for( const auto& ptSl : bins.ptavgSlices ){
-                const TString name = L2Name::ObjectName( cone, "intercept",
+                const TString name = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                     {etaMode, L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
                 if( HasHAny( fIn, {cone + "/" + name} ) ){ anyValid = true; break; }
             }
-            if( !anyValid ){
+            // no JER SF equivalent of Step 3's corrfinal grid exists yet -- see PlotFinals
+            if( !anyValid && !useJer ){
                 const TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {kMethodKeys[m]} );
                 anyValid = HasHAny( fIn, {cone + "/" + gridName + "_norm", gridName + "_norm",
                                           cone + "/" + gridName, gridName} );
@@ -156,14 +157,14 @@ inline int CountFinalsPlots( TFile* fIn, const TString& cone, const BinningConfi
     return n;
 }
 
-inline int CountNormCompPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool fullEta ){
+inline int CountNormCompPlots( TFile* fIn, const TString& cone, const BinningConfig& bins, bool fullEta, bool useJer = false ){
     int n = 0;
     const TString etaMode = L2Name::EtaModeKey( fullEta );
     for( int m = 0; m < kNMethods; m++ ){
         bool anyValid = false;
         for( const auto& sl : bins.ptavgSlices ){
             const TString ptKey = L2Name::PtKey( sl );
-            const TString nameDirect = L2Name::ObjectName( cone, "intercept",
+            const TString nameDirect = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {etaMode, ptKey}, {kMethodKeys[m]} );
             if( HasHAny( fIn, {cone + "/" + nameDirect} )
                 && HasHAny( fIn, {cone + "/" + nameDirect + "_norm"} ) ){

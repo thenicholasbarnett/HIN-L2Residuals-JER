@@ -1,4 +1,4 @@
-#include "ResidualsExtractor.h"
+#include "CalibrationExtractor.h"
 
 #include "TFile.h"
 #include "TH1D.h"
@@ -37,12 +37,12 @@ static const char* const kMethodNames[] = { "gauss", "doubleGauss", "trunc90", "
 // ---- result structs ----
 
 struct GaussResult {
-    double mean = 0, meanErr = 0, sigma = 0, chi2ndf = -1;
+    double mean = 0, meanErr = 0, sigma = 0, sigmaErr = 0, chi2ndf = -1;
     bool valid = false;
 };
 
 struct TruncResult {
-    double mean = 0, meanErr = 0, nEff = 0;
+    double mean = 0, meanErr = 0, sigma = 0, sigmaErr = 0, nEff = 0;
     bool valid = false;
 };
 
@@ -53,6 +53,10 @@ struct ResidualFitControls {
     double alphaFitHi = 0.0;
     int outOfRangeMeanWarnings = 0;
 };
+
+// One R(alpha) point -- JES (mean-derived) and JER (stddev-derived) both
+// accumulate these, just fed different underlying fit quantities.
+struct RPoint { double alpha, val, err; };
 
 // ---- Gaussian fit in [-controls.gausFitHalfWidth, +controls.gausFitHalfWidth] ----
 
@@ -71,6 +75,7 @@ static GaussResult FitGauss( TH1D* h, const ResidualFitControls& controls ){
         r.mean = res->Parameter( 1 );
         r.meanErr = res->ParError( 1 );
         r.sigma = res->Parameter( 2 );
+        r.sigmaErr = res->ParError( 2 );
         r.chi2ndf = ( res->Ndf() > 0 ) ? res->Chi2() / res->Ndf() : -1.0;
         r.valid = true;
     }
@@ -113,6 +118,10 @@ static GaussResult FitDoubleGauss( TH1D* h, const ResidualFitControls& controls 
             r.meanErr = std::sqrt( TMath::Power( f1 * res->ParError( 1 ), 2 ) + TMath::Power( f2 * res->ParError( 4 ), 2 ) );
             r.sigma = std::sqrt( std::max( 0.0,
                 f1 * ( sigma1 * sigma1 + mean1 * mean1 ) + f2 * ( sigma2 * sigma2 + mean2 * mean2 ) - r.mean * r.mean ) );
+            // Same quick-estimate approximation as meanErr: propagate only the two
+            // component sigma errors (weighted the same way), ignoring cross terms
+            // from the mean/weight parameters entering the mixture sigma formula.
+            r.sigmaErr = std::sqrt( TMath::Power( f1 * res->ParError( 2 ), 2 ) + TMath::Power( f2 * res->ParError( 5 ), 2 ) );
             r.chi2ndf = ( res->Ndf() > 0 ) ? res->Chi2() / res->Ndf() : -1.0;
             r.valid = true;
         }
@@ -147,7 +156,7 @@ static std::pair<int, int> FindTruncBins( TH1D* h, double fraction,
     return { binLo, binHi };
 }
 
-// Compute the mean of h restricted to bins [binLo, binHi].
+// Compute the mean (and width) of h restricted to bins [binLo, binHi].
 // Converts nEff to entry-equivalent count so MC histograms filled with XS weights
 // (where Integral() << GetEntries()) are handled correctly.
 static TruncResult TruncMeanInRange( TH1D* h, int binLo, int binHi ){
@@ -163,6 +172,11 @@ static TruncResult TruncMeanInRange( TH1D* h, int binLo, int binHi ){
     h->GetXaxis()->SetRange( 0, 0 );
     r.mean = mean;
     r.meanErr = rms / TMath::Sqrt( nEffEntries );
+    r.sigma = rms;
+    // Standard large-N approximation for the SE of a sample std-dev estimate
+    // (asymptotic normal approximation) -- same "quick per-bin estimate"
+    // tradeoff as meanErr above, not a full jackknife/bootstrap estimate.
+    r.sigmaErr = rms / TMath::Sqrt( 2.0 * TMath::Max( nEffEntries - 1.0, 1.0 ) );
     r.nEff = nEffEntries;
     r.valid = true;
     return r;
@@ -175,7 +189,7 @@ static double ToRErr( double A, double dA ){ return dA * 2.0 / ( ( 1.0 - A ) * (
 
 static void ResetRange( THnSparse* h, int axis ){ h->GetAxis( axis )->SetRange( 0, 0 ); }
 
-static void WarnOutOfRangeMean(
+static void WarnOutOfRangeValue(
     ResidualFitControls& controls,
     const TString& cone,
     const TString& etaMode,
@@ -184,19 +198,134 @@ static void WarnOutOfRangeMean(
     const TString& alphaKey,
     const char* method,
     const char* sample,
-    double mean ){
+    const char* quantity,   // "mean A" (JES) or "stddev A" (JER)
+    double value ){
     if( controls.outOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings ){
         std::cerr << "WARNING: residual " << method << " " << sample
-                  << " mean A=" << mean
+                  << " " << quantity << "=" << value
                   << " exceeds configured max_abs_a=" << controls.maxAbsA
                   << " for " << cone << " " << etaMode << " " << etaKey
                   << " " << ptKey << " " << alphaKey
                   << "; dropping this point before R conversion\n";
     } else if( controls.outOfRangeMeanWarnings == kMaxOutOfRangeMeanWarnings ){
-        std::cerr << "WARNING: more residual mean A values exceed configured max_abs_a="
+        std::cerr << "WARNING: more residual values exceed configured max_abs_a="
                   << controls.maxAbsA << "; suppressing further detailed warnings\n";
     }
     controls.outOfRangeMeanWarnings++;
+}
+
+// ---- R(alpha) -> alpha=0 intercept, direct and kFSR-normalized ----
+//
+// Shared by both JES (fed mean-derived R points) and JER (fed stddev-derived
+// R points) -- the linear-fit-and-extrapolate machinery, including the
+// kFSR-style normalization (divide by the value at the fit range's high
+// edge, fit, multiply back), doesn't care what physical quantity the R
+// points came from. Builds and writes a TGraphErrors of pts (plus a
+// normalized companion graph, if valid) to dGraphs; returns the extrapolated
+// intercept(s).
+
+struct ExtrapResult {
+    double c0 = 0, ec0 = 0;      // direct intercept
+    double c0n = 0, ec0n = 0;    // kFSR-normalized intercept
+    bool valid = false;
+    bool normValid = false;
+};
+
+static ExtrapResult FitAndExtrapolate(
+    const std::vector<RPoint>& pts, const TString& gname, Color_t color,
+    const ResidualFitControls& controls, TDirectory* dGraphs ){
+
+    ExtrapResult out;
+    const int n = ( int )pts.size();
+    std::vector<double> x( n ), y( n ), ex( n, 0.0 ), ey( n );
+    for( int k = 0; k < n; k++ ){
+        x[k] = pts[k].alpha;
+        y[k] = pts[k].val;
+        ey[k] = pts[k].err;
+    }
+
+    TGraphErrors* gr = new TGraphErrors( n, x.data(), y.data(), ex.data(), ey.data() );
+    gr->SetName( gname );
+    gr->SetTitle( ";#alpha threshold;R_{MC}/R_{data}" );
+    gr->SetMarkerStyle( 20 );
+    gr->SetMarkerColor( color );
+    gr->SetLineColor( color );
+
+    if( !CanFit( gr, { 0.0, controls.alphaFitHi }, 2 ) ){ delete gr; return out; }
+
+    // "R" option: only points within the configured fit range enter the chi2.
+    // Points above the range are displayed in the graph but excluded from the fit.
+    TF1* fitFn = new TF1( gname + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
+    fitFn->SetParameter( 0, 1.0 );
+    fitFn->SetParameter( 1, 0.0 );
+    fitFn->SetLineColor( color );
+    gr->Fit( fitFn, "QR" );
+
+    out.c0 = fitFn->GetParameter( 0 );
+    out.ec0 = fitFn->GetParError( 0 );
+    out.valid = true;
+
+    // ---- normalized variant: divide each point by the value at the high end of the fit range,
+    //      fit, then multiply the intercept back. Errors differ from direct
+    //      method because the normalization changes the fit input distribution. ----
+    double normVal = 0, normErr = 0;
+    for( int k = n - 1; k >= 0; k-- ){
+        if( pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6 ){
+            normVal = pts[k].val;
+            normErr = pts[k].err;
+            break;
+        }
+    }
+    if( normVal > 1e-6 ){
+        int nfit = 0;
+        for( int k = 0; k < n && pts[k].alpha <= controls.alphaFitHi + 1e-4; k++ ) nfit++;
+
+        std::vector<double> xn( nfit ), yn( nfit ), exn( nfit, 0.0 ), eyn( nfit );
+        bool bad = false;
+        for( int k = 0; k < nfit; k++ ){
+            if( std::abs( pts[k].val ) < 1e-6 ){ bad = true; break; }
+            xn[k] = pts[k].alpha;
+            yn[k] = pts[k].val / normVal;
+            eyn[k] = yn[k] * TMath::Sqrt(
+                TMath::Power( pts[k].err / pts[k].val, 2.0 ) +
+                TMath::Power( normErr / normVal, 2.0 ) );
+        }
+        if( !bad && nfit >= 2 ){
+            TString gnorm = gname + "_norm";
+            TGraphErrors* grn = new TGraphErrors( nfit, xn.data(), yn.data(), exn.data(), eyn.data() );
+            grn->SetName( gnorm );
+            grn->SetTitle( ";#alpha threshold;R_{MC}/R_{data} (norm.)" );
+            grn->SetMarkerStyle( 20 );
+            grn->SetMarkerColor( color );
+            grn->SetLineColor( color );
+            TF1* fn = new TF1( gnorm + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
+            fn->SetParameter( 0, 1.0 );
+            fn->SetParameter( 1, 0.0 );
+            fn->SetLineColor( color );
+            grn->Fit( fn, "QR" );
+
+            const double c0n = fn->GetParameter( 0 );
+            const double ec0n = fn->GetParError( 0 );
+            out.c0n = c0n * normVal;
+            out.ec0n = ( std::abs( c0n ) > 1e-9 )
+                ? out.c0n * TMath::Sqrt(
+                    TMath::Power( ec0n / c0n, 2.0 ) +
+                    TMath::Power( normErr / normVal, 2.0 ) )
+                : ec0n * normVal;
+            out.normValid = true;
+
+            dGraphs->cd();
+            grn->Write();
+            delete fn;
+            delete grn;
+        }
+    }
+
+    dGraphs->cd();
+    gr->Write();  // fit function clone is embedded in graph by ROOT's Fit()
+    delete fitFn;  // delete the original (clone in graph list is separately owned)
+    delete gr;
+    return out;
 }
 
 // ============================================================
@@ -209,16 +338,31 @@ static void WarnOutOfRangeMean(
 // Output names follow the global key order:
 //   cone, object kind, eta mode/bin, ptavg, alpha, method/detail.
 //
+// Every (alpha, ptSlice, etaBin) fit -- Gauss, double-Gauss, trunc90, trunc95
+// -- already returns both the mean and the width (sigma / truncated RMS) of
+// the A distribution as a side effect. JES uses the mean (as before); JER SF
+// uses the width, fed through the exact same R=(1+x)/(1-x) transform and the
+// same linear-fit-and-extrapolate-to-alpha=0 machinery (Nicky's explicit
+// call -- R is literally (1+stddev_A)/(1-stddev_A), same formula as the mean
+// case, not a different resolution-specific transform). Riding both through
+// one pass avoids re-projecting/re-fitting the same per-bin A distributions
+// twice.
+//
 // Outputs per (method, ptSlice):
-//   {cone}_intercept_{etaMode}_{ptSlice}_{method}
+//   {cone}_intercept_{etaMode}_{ptSlice}_{method}          (JES, mean-derived)
 //   {cone}_intercept_{etaMode}_{ptSlice}_{method}_norm
+//   {cone}_intercept_jer_{etaMode}_{ptSlice}_{method}       (JER SF, stddev-derived)
+//   {cone}_intercept_jer_{etaMode}_{ptSlice}_{method}_norm
 //
 // Outputs in dRvals per (method, alphaSlice, ptSlice):
 //   {cone}_R_data_{etaMode}_{ptSlice}_{alphaSlice}_{method}
 //   {cone}_R_mc_{etaMode}_{ptSlice}_{alphaSlice}_{method}
+//   {cone}_R_data_jer_{etaMode}_{ptSlice}_{alphaSlice}_{method}
+//   {cone}_R_mc_jer_{etaMode}_{ptSlice}_{alphaSlice}_{method}
 //
 // Outputs in dGraphs per (method, ptSlice, etaBin):
 //   TGraphErrors of R_MC/R_data vs alpha (all bins), with the configured fit range embedded
+//   ("R_jer" kind for the JER SF companion graph)
 // ============================================================
 
 static void ExtractAndFit(
@@ -239,10 +383,14 @@ static void ExtractAndFit(
     const bool fullEta = !nameSuffix.IsNull();
     const TString etaMode = L2Name::EtaModeKey( fullEta );
 
-    struct RPoint { double alpha, val, err; };
     // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within the configured fit range.
+    // rptsJer mirrors rpts exactly, fed stddev-derived R points instead of mean-derived ones.
     std::vector<std::vector<std::vector<std::vector<RPoint>>>>
         rpts( kNMethods,
+            std::vector<std::vector<std::vector<RPoint>>>( nPt,
+                std::vector<std::vector<RPoint>>( nEta ) ) );
+    std::vector<std::vector<std::vector<std::vector<RPoint>>>>
+        rptsJer( kNMethods,
             std::vector<std::vector<std::vector<RPoint>>>( nPt,
                 std::vector<std::vector<RPoint>>( nEta ) ) );
 
@@ -250,18 +398,22 @@ static void ExtractAndFit(
     using RH = std::vector<std::vector<std::vector<TH1D*>>>;
     RH hRd( kNMethods, std::vector<std::vector<TH1D*>>( nAlpha, std::vector<TH1D*>( nPt, nullptr ) ) );
     RH hRm( kNMethods, std::vector<std::vector<TH1D*>>( nAlpha, std::vector<TH1D*>( nPt, nullptr ) ) );
+    RH hRdJer( kNMethods, std::vector<std::vector<TH1D*>>( nAlpha, std::vector<TH1D*>( nPt, nullptr ) ) );
+    RH hRmJer( kNMethods, std::vector<std::vector<TH1D*>>( nAlpha, std::vector<TH1D*>( nPt, nullptr ) ) );
 
     for( int m = 0; m < kNMethods; m++ ){
         for( int ia = 0; ia < nAlpha; ia++ ){
             for( int ip = 0; ip < nPt; ip++ ){
-                TString bn = L2Name::ObjectName( cone, "R_data",
-                    { etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] ) },
-                    { kMethodNames[m] } );
-                hRd[m][ia][ip] = new TH1D( bn, "", ( int )etaEdges.size() - 1, etaEdges.data() );
-                bn = L2Name::ObjectName( cone, "R_mc",
-                    { etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] ) },
-                    { kMethodNames[m] } );
-                hRm[m][ia][ip] = new TH1D( bn, "", ( int )etaEdges.size() - 1, etaEdges.data() );
+                const std::vector<TString> keys =
+                    { etaMode, L2Name::PtKey( bins.ptavgSlices[ip] ), L2Name::AlphaKey( bins.alphaSlices[ia] ) };
+                hRd[m][ia][ip] = new TH1D( L2Name::ObjectName( cone, "R_data", keys, { kMethodNames[m] } ),
+                    "", ( int )etaEdges.size() - 1, etaEdges.data() );
+                hRm[m][ia][ip] = new TH1D( L2Name::ObjectName( cone, "R_mc", keys, { kMethodNames[m] } ),
+                    "", ( int )etaEdges.size() - 1, etaEdges.data() );
+                hRdJer[m][ia][ip] = new TH1D( L2Name::ObjectName( cone, "R_data_jer", keys, { kMethodNames[m] } ),
+                    "", ( int )etaEdges.size() - 1, etaEdges.data() );
+                hRmJer[m][ia][ip] = new TH1D( L2Name::ObjectName( cone, "R_mc_jer", keys, { kMethodNames[m] } ),
+                    "", ( int )etaEdges.size() - 1, etaEdges.data() );
             }
         }
     }
@@ -325,18 +477,22 @@ static void ExtractAndFit(
                 double alphaX = aSlice.hi;
 
                 // Accumulate all alpha bins; "QR" fit later selects only those within the configured fit range.
-                auto acrunning = [&]( int method, double Ad, double eAd,
-                                             double Am, double eAm, bool ok ){
+                // Shared by JES (fed mean/meanErr) and JER SF (fed sigma/sigmaErr) --
+                // same R=(1+x)/(1-x) transform either way, just a different rptsOut/hRdOut/hRmOut target.
+                auto accumulate = [&]( std::vector<std::vector<std::vector<std::vector<RPoint>>>>& rptsOut,
+                                       RH& hRdOut, RH& hRmOut, const char* quantity,
+                                       int method, double Ad, double eAd,
+                                       double Am, double eAm, bool ok ){
                     if( !ok ) return;
                     bool outsideConfiguredRange = false;
                     if( std::abs( Ad ) > controls.maxAbsA ){
-                        WarnOutOfRangeMean( controls, cone, etaMode, etaKey, ptKey, alphaKey,
-                            kMethodNames[method], "data", Ad );
+                        WarnOutOfRangeValue( controls, cone, etaMode, etaKey, ptKey, alphaKey,
+                            kMethodNames[method], "data", quantity, Ad );
                         outsideConfiguredRange = true;
                     }
                     if( std::abs( Am ) > controls.maxAbsA ){
-                        WarnOutOfRangeMean( controls, cone, etaMode, etaKey, ptKey, alphaKey,
-                            kMethodNames[method], "MC", Am );
+                        WarnOutOfRangeValue( controls, cone, etaMode, etaKey, ptKey, alphaKey,
+                            kMethodNames[method], "MC", quantity, Am );
                         outsideConfiguredRange = true;
                     }
                     if( outsideConfiguredRange ) return;
@@ -346,17 +502,22 @@ static void ExtractAndFit(
                     double ratio = Rm / Rd;
                     double eRatio = ratio * TMath::Sqrt(
                         ( eRd/Rd )*( eRd/Rd ) + ( eRm/Rm )*( eRm/Rm ) );
-                    rpts[method][ipt][ieta].push_back( { alphaX, ratio, eRatio } );
-                    hRd[method][ialpha][ipt]->SetBinContent( ieta + 1, Rd );
-                    hRd[method][ialpha][ipt]->SetBinError( ieta + 1, eRd );
-                    hRm[method][ialpha][ipt]->SetBinContent( ieta + 1, Rm );
-                    hRm[method][ialpha][ipt]->SetBinError( ieta + 1, eRm );
+                    rptsOut[method][ipt][ieta].push_back( { alphaX, ratio, eRatio } );
+                    hRdOut[method][ialpha][ipt]->SetBinContent( ieta + 1, Rd );
+                    hRdOut[method][ialpha][ipt]->SetBinError( ieta + 1, eRd );
+                    hRmOut[method][ialpha][ipt]->SetBinContent( ieta + 1, Rm );
+                    hRmOut[method][ialpha][ipt]->SetBinError( ieta + 1, eRm );
                 };
 
-                acrunning( 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
-                acrunning( 1, ddg.mean, ddg.meanErr, mdg.mean, mdg.meanErr, ddg.valid && mdg.valid );
-                acrunning( 2, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
-                acrunning( 3, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
+                accumulate( rpts, hRd, hRm, "mean A", 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
+                accumulate( rpts, hRd, hRm, "mean A", 1, ddg.mean, ddg.meanErr, mdg.mean, mdg.meanErr, ddg.valid && mdg.valid );
+                accumulate( rpts, hRd, hRm, "mean A", 2, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
+                accumulate( rpts, hRd, hRm, "mean A", 3, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
+
+                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 0, gd.sigma, gd.sigmaErr, gm.sigma, gm.sigmaErr, gd.valid && gm.valid );
+                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 1, ddg.sigma, ddg.sigmaErr, mdg.sigma, mdg.sigmaErr, ddg.valid && mdg.valid );
+                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 2, td90.sigma, td90.sigmaErr, tm90.sigma, tm90.sigmaErr, td90.valid && tm90.valid );
+                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 3, td95.sigma, td95.sigmaErr, tm95.sigma, tm95.sigmaErr, td95.valid && tm95.valid );
 
                 delete hAData;
                 delete hAMC;
@@ -374,7 +535,7 @@ static void ExtractAndFit(
         pb.Update();
     }
 
-    // ---- write R_data and R_mc histograms ----
+    // ---- write R_data and R_mc histograms (JES and JER SF) ----
 
     dRvals->cd();
     for( int m = 0; m < kNMethods; m++ ){
@@ -382,13 +543,17 @@ static void ExtractAndFit(
             for( int ip = 0; ip < nPt; ip++ ){
                 hRd[m][ia][ip]->Write();
                 hRm[m][ia][ip]->Write();
+                hRdJer[m][ia][ip]->Write();
+                hRmJer[m][ia][ip]->Write();
                 delete hRd[m][ia][ip];
                 delete hRm[m][ia][ip];
+                delete hRdJer[m][ia][ip];
+                delete hRmJer[m][ia][ip];
             }
         }
     }
 
-    // ---- build TGraphErrors and fit R_ratio vs alpha ----
+    // ---- build TGraphErrors and fit R_ratio vs alpha (JES, then JER SF) ----
 
     for( int method = 0; method < kNMethods; method++ ){
         for( int ipt = 0; ipt < nPt; ipt++ ){
@@ -396,6 +561,8 @@ static void ExtractAndFit(
 
             TString ptKey = L2Name::PtKey( ptSlice );
             TString corrName = L2Name::ObjectName( cone, "intercept",
+                { etaMode, ptKey }, { kMethodNames[method] } );
+            TString corrNameJer = L2Name::ObjectName( cone, "intercept_jer",
                 { etaMode, ptKey }, { kMethodNames[method] } );
 
             TH1D* hCorr = new TH1D( corrName, "",
@@ -408,118 +575,60 @@ static void ExtractAndFit(
             hCorrNorm->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
             hCorrNorm->GetYaxis()->SetTitle( "k_{FSR} #cdot R_{MC}/R_{data}|_{fit range high edge}" );
 
+            TH1D* hCorrJer = new TH1D( corrNameJer, "",
+                ( int )etaEdges.size() - 1, etaEdges.data() );
+            hCorrJer->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
+            hCorrJer->GetYaxis()->SetTitle( "JER SF: R_{MC}/R_{data} (stddev A) at #alpha=0" );
+
+            TH1D* hCorrNormJer = new TH1D( corrNameJer + "_norm", "",
+                ( int )etaEdges.size() - 1, etaEdges.data() );
+            hCorrNormJer->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
+            hCorrNormJer->GetYaxis()->SetTitle( "k_{FSR} #cdot JER SF|_{fit range high edge}" );
+
             for( int ieta = 0; ieta < nEta; ieta++ ){
-                const auto& pts = rpts[method][ipt][ieta];
-                int n = ( int )pts.size();
-                std::vector<double> x( n ), y( n ), ex( n, 0.0 ), ey( n );
-                for( int k = 0; k < n; k++ ){
-                    x[k] = pts[k].alpha;
-                    y[k] = pts[k].val;
-                    ey[k] = pts[k].err;
-                }
+                TString etaKey = L2Name::EtaKey( ieta, fullEta );
 
                 TString gname = L2Name::ObjectName( cone, "R",
-                    { etaMode, L2Name::EtaKey( ieta, fullEta ), ptKey }, { kMethodNames[method] } );
-
-                TGraphErrors* gr = new TGraphErrors( n,
-                    x.data(), y.data(), ex.data(), ey.data() );
-                gr->SetName( gname );
-                gr->SetTitle( ";#alpha threshold;R_{MC}/R_{data}" );
-                gr->SetMarkerStyle( 20 );
-                gr->SetMarkerColor( ptSlice.color );
-                gr->SetLineColor( ptSlice.color );
-
-                if( !CanFit( gr, { 0.0, controls.alphaFitHi }, 2 ) ){ delete gr; continue; }
-
-                // "R" option: only points within the configured fit range enter the chi2.
-                // Points above the range are displayed in the graph but excluded from the fit.
-                TF1* fitFn = new TF1( gname + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
-                fitFn->SetParameter( 0, 1.0 );
-                fitFn->SetParameter( 1, 0.0 );
-                fitFn->SetLineColor( ptSlice.color );
-                gr->Fit( fitFn, "QR" );
-
-                hCorr->SetBinContent( ieta + 1, fitFn->GetParameter( 0 ) );
-                hCorr->SetBinError( ieta + 1, fitFn->GetParError( 0 ) );
-
-                // ---- normalized variant: divide each point by the value at the high end of the fit range,
-                //      fit, then multiply the intercept back. Errors differ from direct
-                //      method because the normalization changes the fit input distribution. ----
-                double normVal = 0, normErr = 0;
-                for( int k = n - 1; k >= 0; k-- ){
-                    if( pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6 ){
-                        normVal = pts[k].val;
-                        normErr = pts[k].err;
-                        break;
-                    }
+                    { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
+                ExtrapResult jes = FitAndExtrapolate( rpts[method][ipt][ieta], gname, ptSlice.color, controls, dGraphs );
+                if( jes.valid ){
+                    hCorr->SetBinContent( ieta + 1, jes.c0 );
+                    hCorr->SetBinError( ieta + 1, jes.ec0 );
                 }
-                if( normVal > 1e-6 ){
-                    // count points within fit range
-                    int nfit = 0;
-                    for( int k = 0; k < n && pts[k].alpha <= controls.alphaFitHi + 1e-4; k++ ) nfit++;
-
-                    std::vector<double> xn( nfit ), yn( nfit ), exn( nfit, 0.0 ), eyn( nfit );
-                    bool bad = false;
-                    for( int k = 0; k < nfit; k++ ){
-                        if( std::abs( pts[k].val ) < 1e-6 ){ bad = true; break; }
-                        xn[k] = pts[k].alpha;
-                        yn[k] = pts[k].val / normVal;
-                        eyn[k] = yn[k] * TMath::Sqrt(
-                            TMath::Power( pts[k].err / pts[k].val, 2.0 ) +
-                            TMath::Power( normErr / normVal, 2.0 ) );
-                    }
-                    if( !bad && nfit >= 2 ){
-                        TString gnorm = gname + "_norm";
-                        TGraphErrors* grn = new TGraphErrors( nfit,
-                            xn.data(), yn.data(), exn.data(), eyn.data() );
-                        grn->SetName( gnorm );
-                        grn->SetTitle( ";#alpha threshold;R_{MC}/R_{data} (norm.)" );
-                        grn->SetMarkerStyle( 20 );
-                        grn->SetMarkerColor( ptSlice.color );
-                        grn->SetLineColor( ptSlice.color );
-                        TF1* fn = new TF1( gnorm + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi );
-                        fn->SetParameter( 0, 1.0 );
-                        fn->SetParameter( 1, 0.0 );
-                        fn->SetLineColor( ptSlice.color );
-                        grn->Fit( fn, "QR" );
-
-                        double c0n = fn->GetParameter( 0 );
-                        double ec0n = fn->GetParError( 0 );
-                        double c0 = c0n * normVal;
-                        double ec0 = ( std::abs( c0n ) > 1e-9 )
-                            ? c0 * TMath::Sqrt(
-                                TMath::Power( ec0n / c0n, 2.0 ) +
-                                TMath::Power( normErr / normVal, 2.0 ) )
-                            : ec0n * normVal;
-
-                        hCorrNorm->SetBinContent( ieta + 1, c0 );
-                        hCorrNorm->SetBinError( ieta + 1, ec0 );
-
-                        dGraphs->cd();
-                        grn->Write();
-                        delete fn;
-                        delete grn;
-                    }
+                if( jes.normValid ){
+                    hCorrNorm->SetBinContent( ieta + 1, jes.c0n );
+                    hCorrNorm->SetBinError( ieta + 1, jes.ec0n );
                 }
 
-                dGraphs->cd();
-                gr->Write();  // fit function clone is embedded in graph by ROOT's Fit()
-                delete fitFn;  // delete the original (clone in graph list is separately owned)
-                delete gr;
+                TString gnameJer = L2Name::ObjectName( cone, "R_jer",
+                    { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
+                ExtrapResult jer = FitAndExtrapolate( rptsJer[method][ipt][ieta], gnameJer, ptSlice.color, controls, dGraphs );
+                if( jer.valid ){
+                    hCorrJer->SetBinContent( ieta + 1, jer.c0 );
+                    hCorrJer->SetBinError( ieta + 1, jer.ec0 );
+                }
+                if( jer.normValid ){
+                    hCorrNormJer->SetBinContent( ieta + 1, jer.c0n );
+                    hCorrNormJer->SetBinError( ieta + 1, jer.ec0n );
+                }
             }
 
             dOut->cd();
             hCorr->Write();
             hCorrNorm->Write();
+            hCorrJer->Write();
+            hCorrNormJer->Write();
             delete hCorr;
             delete hCorrNorm;
+            delete hCorrJer;
+            delete hCorrNormJer;
         }
     }
 }
 
 // ============================================================
 
-void runResiduals( TString dataFile, TString mcFile, TString outputFile ){
+void runCalibration( TString dataFile, TString mcFile, TString outputFile ){
 
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );

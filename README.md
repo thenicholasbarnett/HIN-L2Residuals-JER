@@ -11,7 +11,7 @@ Residual jet energy corrections are determined to account for differences in dat
 <br>
 <i> Plot various jet collection kinematics and event information. </i>
 
-<b> Step 2 - Determine Residual Corrections </b>
+<b> Step 2 - Determine JEC and JER Calibrations </b>
 <br>
 <i> Plot asymmetries, k<sub>FSR</sub> extrapolations, data to simulation response ratios, method comparisons, and more! </i>
 
@@ -58,7 +58,7 @@ scram b -j4
 which runAsymmetry
 ```
 
-SCRAM writes executables to `$CMSSW_BASE/bin/$SCRAM_ARCH/`, which `cmsenv` puts on `PATH`, so commands are called as `runAsymmetry`, `runResiduals`, etc. If `cmsenv` is not available in a fresh shell, first run `source /cvmfs/cms.cern.ch/cmsset_default.sh`.
+SCRAM writes executables to `$CMSSW_BASE/bin/$SCRAM_ARCH/`, which `cmsenv` puts on `PATH`, so commands are called as `runAsymmetry`, `runCalibration`, etc. If `cmsenv` is not available in a fresh shell, first run `source /cvmfs/cms.cern.ch/cmsset_default.sh`.
 
 <strong> Command Tokens </strong>
 
@@ -69,7 +69,7 @@ All compiled commands use `KEY=value` tokens. There are no positional arguments.
 runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=triggered|non-triggered|mc CONFIG=cfg/2024ppRef.toml
 
 # Step 2, often local CMake after hadd
-./build/bin/runResiduals DATA=<data_asymmetry.root> MC=<mc_asymmetry.root> OUTPUT=<residuals.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runCalibration DATA=<data_asymmetry.root> MC=<mc_asymmetry.root> OUTPUT=<residuals.root> CONFIG=cfg/2024ppRef.toml
 
 # Step 3, split triggered/non-triggered residuals
 ./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
@@ -167,13 +167,13 @@ Every compiled binary's arguments are `KEY=value` tokens — there are no positi
 | Binary | Required tokens | Optional tokens |
 | :- | :- | :- |
 | `runAsymmetry` | `INPUT=`, `OUTPUT=`, `MODE=`, `CONFIG=` | `MAXEVENTS=` |
-| `runResiduals` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
+| `runCalibration` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
 | `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
 | `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
 | `runResponse` | `INPUT=`, `OUTPUT=`, `CONFIG=` | none |
-| `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=`, `CLOSURE=` |
+| `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=`, `CLOSURE=`, `CALIBRATION=` |
 
-`MODE=` must be `triggered`, `non-triggered`, or `mc`. `PREFIX=` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`. `CLOSURE=true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`.
+`MODE=` must be `triggered`, `non-triggered`, or `mc`. `PREFIX=` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`. `CLOSURE=true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `CALIBRATION=JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis.
 
 <h3> Naming Convention </h3>
 
@@ -252,23 +252,25 @@ ak4PF/
   ak4PF_JER_raw_vs_ptgen_incl, _tag, _probe
 ```
 
-<h3> <b> Step 2 </b> — Extract Residuals </h3>
+<h3> <b> Step 2 </b> — Extract Calibrations (JEC + JER SF) </h3>
 
-Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0`.
+Read <b>Step 1</b> files after hadd (one data, one MC), project asymmetry distributions for each (η<sup>probe</sup>, p<sub>T</sub><sup>avg</sup>, α) bin, get asymmetry means with different methods (Gaussian, double-Gaussian, trunc90, trunc95), build response graphs, and extrapolate k<sub>FSR</sub> values as `α → 0` — this is the JEC (L2Residual) correction. The same per-bin fits also yield JER scale factors: each fit already returns the width (σ, or the truncated RMS) of the A distribution alongside the mean, so a second R = (1+σ<sub>A</sub>)/(1-σ<sub>A</sub>) ratio is built from the width — same transform, same linear fit vs α, same kFSR-normalized variant, same 4 methods — riding the identical per-bin A-distribution projection as the JEC extraction, not a separate pass. (JEC here is a different quantity from `runResponse`'s MC-only JES — see the JES/JER Extraction section below.)
 
 ```
-./build/bin/runResiduals DATA=<input_data-asymmetry-file.root> MC=<input_mc-asymmetry-file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runCalibration DATA=<input_data-asymmetry-file.root> MC=<input_mc-asymmetry-file.root> OUTPUT=<output_residuals-file.root> CONFIG=cfg/2024ppRef.toml
 ```
 
 <u> Output Structure: </u>
 ```
 ak4PF/
-  QA_data/, QA_mc/                ← A distribution histograms (|η|)
+  QA_data/, QA_mc/                ← A distribution histograms (|η|) -- shared by JEC and JER SF, not duplicated
   QA_data_fulleta/, QA_mc_fulleta/
-  graphs/                         ← TGraphErrors of R vs α with fit
-  Rvals/, Rvals_fulleta/          ← R_data and R_MC TH1Ds per alpha/pT slice
-  ak4PF_intercept_abseta_ptavg_40_90_gauss       ← α→0 intercept TH1D
-  ak4PF_intercept_abseta_ptavg_40_90_gauss_norm  ← kFSR-normalized variant
+  graphs/                         ← TGraphErrors of R vs α with fit (JEC: "R_...", JER SF: "R_jer_...")
+  Rvals/, Rvals_fulleta/          ← R_data/R_mc TH1Ds per alpha/pT slice (JEC: "R_data_.../R_mc_...", JER SF: "R_data_jer_.../R_mc_jer_...")
+  ak4PF_intercept_abseta_ptavg_40_90_gauss           ← JEC α→0 intercept TH1D
+  ak4PF_intercept_abseta_ptavg_40_90_gauss_norm      ← kFSR-normalized variant
+  ak4PF_intercept_jer_abseta_ptavg_40_90_gauss       ← JER SF α→0 intercept TH1D
+  ak4PF_intercept_jer_abseta_ptavg_40_90_gauss_norm  ← kFSR-normalized variant
   ...  (all methods, all pT slices, abseta and fulleta)
 ```
 
@@ -311,7 +313,7 @@ ak4PF/
 
 ```
 ./build/bin/runPlotting INPUT=<input_asymmetries-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
-./build/bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] [CLOSURE=true] CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting INPUT=<input_residuals-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] [CLOSURE=true] [CALIBRATION=JEC|JER] CONFIG=cfg/2024ppRef.toml
 ./build/bin/runPlotting INPUT=<input_corrections-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] [CLOSURE=true] CONFIG=cfg/2024ppRef.toml
 ./build/bin/runPlotting INPUT=<input_response-file.root> [OUTDIR=<output_plots-dir>] [FLAGS="..."] CONFIG=cfg/2024ppRef.toml
 ```
@@ -330,6 +332,8 @@ ak4PF/
 | `ptfit` | Step 3 | Correction factor vs p<sub>T</sub><sup>avg</sup> per eta bin, with the 3-parameter fit drawn | yes |
 | `response` | `runResponse` | Per-bin response distributions (corr/reco/raw) with a Gaussian guide fit, plus JES/JER vs p<sub>T</sub><sup>gen</sup> summary overlays (incl/tag/probe per variant), and a corr-vs-reco-vs-raw comparison overlay per collection | yes |
 | `all` | any | Every applicable flag, unconditionally (including inclusive-jet kinematics and `finals` from either source) | n/a |
+
+`CALIBRATION=JEC|JER` (default `JEC`) switches `roverlay`, `alpha`, `methods`, `etasym`, `normcomp`, and `finals` between the JEC output (mean-derived, the L2Residual correction) and the JER SF output (stddev-derived) — see the Step 2 section above. `adist` is unaffected (its A-distribution QA histograms aren't duplicated between the two). `kinematics`, `event`, `ptfit`, and `response` don't have a JEC/JER axis and ignore `CALIBRATION=` entirely. `finals`' Step 3 `corrfinal`-grid fallback has no JER SF equivalent yet, so `CALIBRATION=JER` against a Step 3 file only ever finds Step 2's native `intercept_jer_*` objects.
 
 <br>
 

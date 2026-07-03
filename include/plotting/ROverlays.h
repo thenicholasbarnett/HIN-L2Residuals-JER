@@ -25,7 +25,7 @@
 
 inline void PlotROverlay( TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
-                         ProgressBar& pb ){
+                         ProgressBar& pb, bool useJer = false ){
     TDirectory* dRvals = ( TDirectory* )fIn->Get( cone + "/Rvals" );
 
     const int nPt    = ( int )bins.ptavgSlices.size();
@@ -39,9 +39,9 @@ inline void PlotROverlay( TFile* fIn, const TString& outDir,
 
                 TString ptKey = L2Name::PtKey( ptSl );
                 TString alphaKey = L2Name::AlphaKey( aSl );
-                TString rdName = L2Name::ObjectName( cone, "R_data",
+                TString rdName = L2Name::ObjectName( cone, CalibKind( "R_data", useJer ),
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
-                TString rmName = L2Name::ObjectName( cone, "R_mc",
+                TString rmName = L2Name::ObjectName( cone, CalibKind( "R_mc", useJer ),
                     {L2Name::EtaModeKey( false ), ptKey, alphaKey}, {kMethodKeys[m]} );
 
                 TH1D* hRd = GetHAny( dRvals, {rdName} );
@@ -57,8 +57,9 @@ inline void PlotROverlay( TFile* fIn, const TString& outDir,
                 TH1D* hRmc = ( TH1D* )hRm->Clone( rmName + "_c" ); hRmc->SetDirectory( 0 );
                 TH1D* hRat = RatioH( hRmc, hRdc, rdName + "_rat" );
 
-                const TString cvName = Form( "roverlay_%s_%s_%s_%s",
-                    cone.Data(), kMethodKeys[m], ptKey.Data(), alphaKey.Data() );
+                const TString calibKey = useJer ? "jer" : "jec";
+                const TString cvName = Form( "roverlay_%s_%s_%s_%s_%s",
+                    cone.Data(), calibKey.Data(), kMethodKeys[m], ptKey.Data(), alphaKey.Data() );
                 TwoPad cv = MakeTwoPad( cvName );
 
                 // ---- main pad ----
@@ -90,8 +91,8 @@ inline void PlotROverlay( TFile* fIn, const TString& outDir,
 
                 TLatex* tex = new TLatex();
                 tex->SetNDC(); tex->SetTextSize( 0.050 ); tex->SetTextFont( 62 );
-                tex->DrawLatex( 0.16, 0.91, Form( "%s  |  %s  |  %s  |  %s",
-                    cone.Data(), kMethodLabels[m], ptSl.title.Data(), aSl.title.Data() ) );
+                tex->DrawLatex( 0.16, 0.91, Form( "%s  |  %s  |  %s  |  %s  |  %s",
+                    cone.Data(), kMethodLabels[m], ptSl.title.Data(), aSl.title.Data(), CalibTag( useJer ).Data() ) );
 
                 // ---- ratio pad ----
                 cv.ratio->cd();
@@ -103,7 +104,7 @@ inline void PlotROverlay( TFile* fIn, const TString& outDir,
                 RefLine( cv.ratio, ( double )kAbsEtaEdges.front(), ( double )kAbsEtaEdges.back(), 1.0 );
 
                 cv.c->cd();
-                SavePlot( cv.c, outDir, cone, "roverlay", {ptKey, alphaKey}, cvName );
+                SavePlot( cv.c, outDir, cone, "roverlay", {calibKey, ptKey, alphaKey}, cvName );
                 pb.Update();
 
                 delete hRd; delete hRm;

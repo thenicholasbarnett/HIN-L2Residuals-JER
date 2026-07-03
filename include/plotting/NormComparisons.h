@@ -26,11 +26,12 @@
 
 inline void PlotNormComp( TFile* fIn, const TString& outDir,
                          const TString& cone, const BinningConfig& bins,
-                         bool fullEta, ProgressBar& pb ){
+                         bool fullEta, ProgressBar& pb, bool useJer = false ){
     const TString etaMode = L2Name::EtaModeKey( fullEta );
     const TString xTitle  = fullEta ? "#eta" : "|#eta|";
     const double  xMin    = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
     const double  xMax    = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
+    const TString calibKey = useJer ? "jer" : "jec";
     const int nPt = ( int )bins.ptavgSlices.size();
     for( int m = 0; m < kNMethods; m++ ){
         std::vector<TH1D*> hDirect( nPt, nullptr );
@@ -39,7 +40,7 @@ inline void PlotNormComp( TFile* fIn, const TString& outDir,
         for( int ip = 0; ip < nPt; ip++ ){
             const auto& sl = bins.ptavgSlices[ip];
             TString ptKey = L2Name::PtKey( sl );
-            TString nameDirect = L2Name::ObjectName( cone, "intercept",
+            TString nameDirect = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {etaMode, ptKey}, {kMethodKeys[m]} );
             TString nameNorm   = nameDirect + "_norm";
             hDirect[ip] = GetHAny( fIn, {cone + "/" + nameDirect} );
@@ -65,8 +66,8 @@ inline void PlotNormComp( TFile* fIn, const TString& outDir,
             hRatios[ip] = RatioH( hNorm[ip], hDirect[ip], rn );
         }
 
-        const TString cvName = Form( "normcomp_%s_%s_%s",
-            cone.Data(), kMethodKeys[m], etaMode.Data() );
+        const TString cvName = Form( "normcomp_%s_%s_%s_%s",
+            cone.Data(), calibKey.Data(), kMethodKeys[m], etaMode.Data() );
         TwoPad cv = MakeTwoPad( cvName );
 
         // ---- main pad ----
@@ -104,7 +105,7 @@ inline void PlotNormComp( TFile* fIn, const TString& outDir,
             const auto& ptSl = bins.ptavgSlices[ip];
             StyleH( hDirect[ip], ptSl.color, 20, 1.5f );
             hDirect[ip]->GetYaxis()->SetRangeUser( ylo, yhi );
-            hDirect[ip]->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha#rightarrow0" );
+            hDirect[ip]->GetYaxis()->SetTitle( CalibYTitle( useJer ) );
             hDirect[ip]->GetYaxis()->SetTitleSize( 0.052 );
             hDirect[ip]->GetYaxis()->SetTitleOffset( 1.15 );
             hDirect[ip]->GetYaxis()->SetLabelSize( 0.048 );
@@ -126,8 +127,8 @@ inline void PlotNormComp( TFile* fIn, const TString& outDir,
 
         TLatex* tex = new TLatex();
         tex->SetNDC(); tex->SetTextSize( 0.051 ); tex->SetTextFont( 62 );
-        tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s",
-            cone.Data(), kMethodLabels[m], xTitle.Data() ) );
+        tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s   |   %s",
+            cone.Data(), kMethodLabels[m], xTitle.Data(), CalibTag( useJer ).Data() ) );
 
         // ---- ratio pad ----
         cv.ratio->cd();
@@ -147,7 +148,7 @@ inline void PlotNormComp( TFile* fIn, const TString& outDir,
         if( !firstR ) RefLine( cv.ratio, xMin, xMax, 1.0 );
 
         cv.c->cd();
-        SavePlot( cv.c, outDir, cone, "normcomp", {etaMode}, cvName );
+        SavePlot( cv.c, outDir, cone, "normcomp", {calibKey, etaMode}, cvName );
         pb.Update();
 
         delete dummyD;

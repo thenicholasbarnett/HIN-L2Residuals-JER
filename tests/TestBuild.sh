@@ -36,7 +36,7 @@ check "executable is runnable"       "test -x build/bin/runAsymmetry"
 check "prints usage with no args"    "{ build/bin/runAsymmetry 2>&1 || true; } | grep -q 'Usage:'"
 check "exits non-zero with no args"  "! build/bin/runAsymmetry"
 check "runTextFile exists"           "test -f build/bin/runTextFile"
-check "runResiduals exists"          "test -f build/bin/runResiduals"
+check "runCalibration exists"        "test -f build/bin/runCalibration"
 check "runPlotting exists"           "test -f build/bin/runPlotting"
 
 echo ""

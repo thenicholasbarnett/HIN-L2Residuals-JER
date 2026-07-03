@@ -21,15 +21,16 @@
 
 inline void PlotEtaSym( TFile* fIn, const TString& outDir,
                        const TString& cone, const BinningConfig& bins,
-                       ProgressBar& pb ){
+                       ProgressBar& pb, bool useJer = false ){
+    const TString calibKey = useJer ? "jer" : "jec";
     for( int m = 0; m < kNMethods; m++ ){
         for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
             const auto& sl = bins.ptavgSlices[ip];
             TString ptKey = L2Name::PtKey( sl );
 
-            const TString nameAbs = L2Name::ObjectName( cone, "intercept",
+            const TString nameAbs = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {L2Name::EtaModeKey( false ), ptKey}, {kMethodKeys[m]} );
-            const TString nameFull = L2Name::ObjectName( cone, "intercept",
+            const TString nameFull = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {L2Name::EtaModeKey( true ), ptKey}, {kMethodKeys[m]} );
             TH1D* hAbs  = GetHAny( fIn, {cone + "/" + nameAbs} );
             TH1D* hFull = GetHAny( fIn, {cone + "/" + nameFull} );
@@ -43,8 +44,8 @@ inline void PlotEtaSym( TFile* fIn, const TString& outDir,
             TH1D* hRefl  = Reflect( hAbs, nameAbs + "_refl" );
             TH1D* hRatio = RatioH( hFull, hRefl, nameAbs + "_rat" );
 
-            const TString cvName = Form( "etasym_%s_%s_%s",
-                cone.Data(), kMethodKeys[m], ptKey.Data() );
+            const TString cvName = Form( "etasym_%s_%s_%s_%s",
+                cone.Data(), calibKey.Data(), kMethodKeys[m], ptKey.Data() );
             TwoPad cv = MakeTwoPad( cvName );
 
             // ---- main pad ----
@@ -58,7 +59,7 @@ inline void PlotEtaSym( TFile* fIn, const TString& outDir,
 
             auto [ylo, yhi] = YRange( {hFull, hRefl} );
             hFull->GetYaxis()->SetRangeUser( ylo, yhi );
-            hFull->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha#rightarrow0" );
+            hFull->GetYaxis()->SetTitle( CalibYTitle( useJer ) );
             hFull->GetYaxis()->SetTitleSize( 0.055 );
             hFull->GetYaxis()->SetTitleOffset( 1.10 );
             hFull->GetYaxis()->SetLabelSize( 0.050 );
@@ -82,8 +83,8 @@ inline void PlotEtaSym( TFile* fIn, const TString& outDir,
             tex->SetNDC();
             tex->SetTextSize( 0.051 );
             tex->SetTextFont( 62 );
-            tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s",
-                cone.Data(), kMethodLabels[m], sl.title.Data() ) );
+            tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s   |   %s",
+                cone.Data(), kMethodLabels[m], sl.title.Data(), CalibTag( useJer ).Data() ) );
 
             // ---- ratio pad ----
             cv.ratio->cd();
@@ -96,7 +97,7 @@ inline void PlotEtaSym( TFile* fIn, const TString& outDir,
             RefLine( cv.ratio, kEtaEdges.front(), kEtaEdges.back(), 1.0 );
 
             cv.c->cd();
-            SavePlot( cv.c, outDir, cone, "etasym", {ptKey}, cvName );
+            SavePlot( cv.c, outDir, cone, "etasym", {calibKey, ptKey}, cvName );
             pb.Update();
 
             // hAbs was not drawn — delete manually

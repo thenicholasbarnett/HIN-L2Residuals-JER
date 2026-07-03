@@ -30,7 +30,8 @@
 
 inline void PlotFinals( TFile* fIn, const TString& outDir,
                        const TString& cone, const BinningConfig& bins,
-                       ProgressBar& pb, bool isClosure = false ){
+                       ProgressBar& pb, bool isClosure = false, bool useJer = false ){
+    const TString calibKey = useJer ? "jer" : "jec";
     for( int m = 0; m < kNMethods; m++ ){
         for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
             const bool   fullEta  = ( ieta == 1 );
@@ -41,7 +42,7 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
 
             std::vector<TH1D*> hists;
             for( const auto& ptSl : bins.ptavgSlices ){
-                TString name = L2Name::ObjectName( cone, "intercept",
+                TString name = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                     {etaMode, L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
                 hists.push_back( GetHAny( fIn, {cone + "/" + name} ) );
             }
@@ -52,8 +53,11 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
             // method) instead of per-slice histograms — project each pT slice's row
             // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
-            // grid's Y edges are built from exactly those slices in order.
-            if( !anyValid ){
+            // grid's Y edges are built from exactly those slices in order. No JER SF
+            // equivalent exists yet (runTextFile doesn't write one) -- this fallback
+            // is JEC-only regardless of useJer, so a JER request against a Step 3
+            // file simply finds nothing, same as any other unmet flag.
+            if( !anyValid && !useJer ){
                 // Step 3 stores only whichever of direct/kFSR-norm it was run with —
                 // try norm first (matches PlotAlphaFit's convention), then direct.
                 TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {kMethodKeys[m]} );
@@ -80,8 +84,8 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
                 continue;
             }
 
-            const TString cvName = Form( "finals_%s_%s_%s",
-                cone.Data(), kMethodKeys[m], etaMode.Data() );
+            const TString cvName = Form( "finals_%s_%s_%s_%s",
+                cone.Data(), calibKey.Data(), kMethodKeys[m], etaMode.Data() );
             TCanvas* c = new TCanvas( cvName, "", 800, 600 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.13 );
@@ -106,7 +110,7 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
                 const auto& ptSl = bins.ptavgSlices[ip];
                 StyleH( hists[ip], ptSl.color, kMethodStyles[m], 1.5f );
                 hists[ip]->GetYaxis()->SetRangeUser( ylo, yhi );
-                hists[ip]->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha#rightarrow0" );
+                hists[ip]->GetYaxis()->SetTitle( CalibYTitle( useJer ) );
                 hists[ip]->GetYaxis()->SetTitleSize( 0.052 );
                 hists[ip]->GetYaxis()->SetTitleOffset( 1.15 );
                 hists[ip]->GetYaxis()->SetLabelSize( 0.048 );
@@ -151,10 +155,10 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             tex->SetNDC();
             tex->SetTextSize( 0.048 );
             tex->SetTextFont( 62 );
-            tex->DrawLatex( 0.14, 0.92, Form( "%s  |  %s  |  %s",
-                cone.Data(), kMethodLabels[m], xTitle.Data() ) );
+            tex->DrawLatex( 0.14, 0.92, Form( "%s  |  %s  |  %s  |  %s",
+                cone.Data(), kMethodLabels[m], xTitle.Data(), CalibTag( useJer ).Data() ) );
 
-            SavePlot( c, outDir, cone, "finals", {etaMode}, cvName );
+            SavePlot( c, outDir, cone, "finals", {calibKey, etaMode}, cvName );
             pb.Update();
 
             delete c;   // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)

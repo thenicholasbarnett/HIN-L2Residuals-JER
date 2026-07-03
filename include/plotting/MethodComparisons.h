@@ -25,19 +25,20 @@
 
 inline void PlotMethodComp( TFile* fIn, const TString& outDir,
                            const TString& cone, const BinningConfig& bins,
-                           bool fullEta, ProgressBar& pb ){
+                           bool fullEta, ProgressBar& pb, bool useJer = false ){
     const TString etaMode  = L2Name::EtaModeKey( fullEta );
     const TString etaLabel = fullEta ? "Full #eta" : "|#eta|";
     const double  xMin     = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
     const double  xMax     = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
     const TString xTitle   = fullEta ? "#eta" : "|#eta|";
+    const TString calibKey = useJer ? "jer" : "jec";
 
     for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
         const auto& sl = bins.ptavgSlices[ip];
 
         std::vector<TH1D*> hists( kNMethods, nullptr );
         for( int m = 0; m < kNMethods; m++ ){
-            TString name = L2Name::ObjectName( cone, "intercept",
+            TString name = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
                 {etaMode, L2Name::PtKey( sl )}, {kMethodKeys[m]} );
             hists[m] = GetHAny( fIn, {cone + "/" + name} );
         }
@@ -59,8 +60,8 @@ inline void PlotMethodComp( TFile* fIn, const TString& outDir,
         }
 
         TString ptKey = L2Name::PtKey( sl );
-        const TString cvName = Form( "methods_%s_%s_%s",
-            cone.Data(), etaMode.Data(), ptKey.Data() );
+        const TString cvName = Form( "methods_%s_%s_%s_%s",
+            cone.Data(), calibKey.Data(), etaMode.Data(), ptKey.Data() );
         TwoPad cv = MakeTwoPad( cvName );
 
         // ---- main pad ----
@@ -80,7 +81,7 @@ inline void PlotMethodComp( TFile* fIn, const TString& outDir,
             if( !hists[m] ) continue;
             StyleH( hists[m], kMethodColors[m], kMethodStyles[m], 2.f );
             hists[m]->GetYaxis()->SetRangeUser( ylo, yhi );
-            hists[m]->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha#rightarrow0" );
+            hists[m]->GetYaxis()->SetTitle( CalibYTitle( useJer ) );
             hists[m]->GetYaxis()->SetTitleSize( 0.055 );
             hists[m]->GetYaxis()->SetTitleOffset( 1.10 );
             hists[m]->GetYaxis()->SetLabelSize( 0.050 );
@@ -99,8 +100,8 @@ inline void PlotMethodComp( TFile* fIn, const TString& outDir,
         tex->SetNDC();
         tex->SetTextSize( 0.051 );
         tex->SetTextFont( 62 );
-        tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s",
-            cone.Data(), etaLabel.Data(), sl.title.Data() ) );
+        tex->DrawLatex( 0.16, 0.91, Form( "%s   |   %s   |   %s   |   %s",
+            cone.Data(), etaLabel.Data(), sl.title.Data(), CalibTag( useJer ).Data() ) );
 
         // ---- ratio pad ----
         cv.ratio->cd();
@@ -127,7 +128,7 @@ inline void PlotMethodComp( TFile* fIn, const TString& outDir,
         }
 
         cv.c->cd();
-        SavePlot( cv.c, outDir, cone, "methods", {etaMode, ptKey}, cvName );
+        SavePlot( cv.c, outDir, cone, "methods", {calibKey, etaMode, ptKey}, cvName );
         pb.Update();
 
         // ratios and hists were drawn on pads — canvas cascade deletes them
