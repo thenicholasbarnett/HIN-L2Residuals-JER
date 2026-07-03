@@ -15,9 +15,17 @@
 #
 # OUTPUT=dir       — required; absolute EOS/AFS path where output ROOT files are written
 # ALLTXT=true      — submit every .txt filelist found in data/txt/ (default false)
-# FILELISTS="..."  — space-separated list of specific filelists to submit, quoted
-#                     as one token (e.g. FILELISTS="a.txt b.txt"). Mutually
-#                     exclusive with ALLTXT=true; exactly one of the two is required.
+# FILELISTS="..."  — space-separated list of specific filelists and/or directories
+#                     to submit, quoted as one token (e.g. FILELISTS="a.txt b.txt" or
+#                     FILELISTS="data/txt/2026-07-03"). A directory entry expands to
+#                     every *.txt file directly inside it (non-recursive), so you can
+#                     stage a subset of filelists into its own directory (e.g. named
+#                     after today's date) and point FILELISTS= at that directory
+#                     instead of listing each file. [condor.filelist_modes] keys off
+#                     the filelist's basename only, not its path, so this works with
+#                     no TOML changes regardless of which directory a filelist lives
+#                     in. Mutually exclusive with ALLTXT=true; exactly one of the two
+#                     is required.
 # NOSUBMIT=true    — generate submission files without submitting (default false)
 # TAG=value        — optional label for this pass (e.g. TAG=abs_eta, TAG=clos_dir_eta).
 #                     Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
@@ -61,7 +69,9 @@
 #     or, if the repo is checked out as $CMSSW_BASE/src/Analysis/L2Residuals:
 #       scram b -j4
 #   - All five cone JEC files must be present in data/jec/ before submitting
-#   - Set [condor].cmssw_src in the selected TOML
+#   - The CMSSW src directory used on worker jobs is derived from cmsenv
+#     (CMSSW_BASE/src) at submission time, not a TOML setting -- just make
+#     sure you're submitting from the cmsenv shell for the release you want.
 
 set -euo pipefail
 
@@ -182,28 +192,6 @@ lookup_filelist_mode() {
     ' "${CONFIG_PATH}"
 }
 
-CMSSW_SRC_FROM_CONFIG="$(awk '
-    /^[[:space:]]*\[/ {
-        in_condor = ( $0 ~ /^[[:space:]]*\[condor\][[:space:]]*(#.*)?$/ )
-        next
-    }
-    in_condor && $0 ~ /^[[:space:]]*cmssw_src[[:space:]]*=/ {
-        line = $0
-        sub( /^[^=]*=[[:space:]]*"/, "", line )
-        sub( /"[[:space:]]*(#.*)?$/, "", line )
-        print line
-        exit
-    }
-' "${CONFIG_PATH}")"
-if [[ -z "${CMSSW_SRC_FROM_CONFIG}" || "${CMSSW_SRC_FROM_CONFIG}" == REQUIRED_* ]]; then
-    echo "ERROR: ${CONFIG_PATH} must set [condor].cmssw_src to the CMSSW src directory used for worker jobs" >&2
-    exit 1
-fi
-if [[ ! -d "${CMSSW_SRC_FROM_CONFIG}" ]]; then
-    echo "ERROR: [condor].cmssw_src does not exist: ${CMSSW_SRC_FROM_CONFIG}" >&2
-    exit 1
-fi
-
 if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
     echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
@@ -211,6 +199,18 @@ if [[ -z "${CMSSW_BASE:-}" ]]; then
     echo "       cd /path/to/L2Residuals-2024ppref" >&2
     echo "       cmake -S . -B build && cmake --build build" >&2
     echo "       or build the SCRAM executable with: scram b -j4" >&2
+    exit 1
+fi
+
+# The CMSSW src directory used for worker jobs is derived from the active
+# cmsenv, not a TOML setting -- CMSSW_BASE (set by cmsenv, already required
+# above) is the release area, so CMSSW_BASE/src is exactly the src directory
+# a worker job needs to `scramv1 runtime -sh` from. This always reflects
+# whichever CMSSW release the submitter actually has set up, so there's
+# nothing to keep in sync in the TOML and nothing to get stale.
+CMSSW_SRC_FROM_CONFIG="${CMSSW_BASE}/src"
+if [[ ! -d "${CMSSW_SRC_FROM_CONFIG}" ]]; then
+    echo "ERROR: CMSSW_BASE/src does not exist: ${CMSSW_SRC_FROM_CONFIG}" >&2
     exit 1
 fi
 
@@ -247,14 +247,31 @@ if [[ "${USE_ALL}" == true ]]; then
         exit 1
     fi
 else
+    FILELISTS=()
     for f in "${EXPLICIT_FILELISTS[@]}"; do
-        if [[ ! -f "${f}" ]]; then
-            echo "ERROR: filelist not found: ${f}" >&2
+        if [[ -d "${f}" ]]; then
+            DIR_TXT=("${f}"/*.txt)
+            if [[ ! -f "${DIR_TXT[0]}" ]]; then
+                echo "ERROR: no .txt filelists found in directory: ${f}" >&2
+                exit 1
+            fi
+            FILELISTS+=("${DIR_TXT[@]}")
+        elif [[ -f "${f}" ]]; then
+            FILELISTS+=("${f}")
+        else
+            echo "ERROR: filelist not found (not a file or directory): ${f}" >&2
             exit 1
         fi
     done
-    FILELISTS=("${EXPLICIT_FILELISTS[@]}")
 fi
+
+# Resolve to absolute paths now, before cd-ing into WORKDIR below --
+# filelists are read directly from their original location (never copied
+# into the submission sandbox; see the data/ staging comment further down
+# for why data/txt/ specifically isn't part of that copy).
+for i in "${!FILELISTS[@]}"; do
+    FILELISTS[$i]="$(cd "$(dirname "${FILELISTS[$i]}")" && pwd)/$(basename "${FILELISTS[$i]}")"
+done
 
 TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
 SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
@@ -283,7 +300,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
     sed "s|@CMSSW_SRC@|${CMSSW_SRC_ESCAPED}|g" "${CONDOR_DIR}/runtime_wrapper.sh" > runtime_wrapper.sh
     cp "${BINARY}"  runAsymmetry
     if [[ -n "${LIBRARY}" ]]; then cp "${LIBRARY}" libl2residuals.so; fi
-    cp -r "${DATA_DIR}" data
+    # Only jec/veto/json are read by the worker (via [paths]/[jec] in
+    # analysis_config.toml, resolved relative to this sandbox's data/) --
+    # data/txt/ is read once here on the submit host to build the per-job
+    # Arguments= lines below, never by the worker itself, and data/root/
+    # and data/sample/ are local-only derived/sample artifacts a worker
+    # never touches at all. Copying the whole data/ directory here used to
+    # stage several GB of dead weight into every submission sandbox.
+    mkdir -p data
+    for sub in jec veto json; do
+        if [[ -d "${DATA_DIR}/${sub}" ]]; then
+            cp -r "${DATA_DIR}/${sub}" "data/${sub}"
+        fi
+    done
     cp "${CONFIG_PATH}" analysis_config.toml
     chmod +x runtime_wrapper.sh runAsymmetry
 
@@ -315,7 +344,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 
         mkdir -p "logs/${LABEL}/out" "logs/${LABEL}/err" "logs/${LABEL}/log"
 
-        FILELIST_FILE="data/txt/$(basename "${FILELIST_PATH}")"
+        FILELIST_FILE="${FILELIST_PATH}"
         TOTAL=$(grep -c . "${FILELIST_FILE}" || echo 0)
         SUBMIT_FILE="submit_${LABEL}.condor"
         COUNT=0

@@ -1,15 +1,16 @@
-// CMake:       ./build/bin/runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
-//              ./build/bin/runTextFile TRIGGERED=trig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
-//              ./build/bin/runTextFile NONTRIGGERED=notrig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
+// CMake:       ./build/bin/runTextFile -triggered trig.root -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -triggered trig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile args.config  (with lines like: triggered = trig.root)
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root")'
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Every argument is a KEY=value token -- there are no positional arguments,
-// and none may be misspelled or omitted silently: an unknown token, a
-// malformed token, or a missing required token is an immediate CLI error.
-// CONFIG is always required; there is no default TOML.
+// Compiled arguments accept JetMET-style "-key value", config files with
+// "key = value", and the original KEY=value shell-token form. Unknown keys,
+// malformed options, and missing required values are immediate CLI errors.
+// config/CONFIG is always required; there is no default TOML.
 //
 // Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the
 // triggered residuals if the slice starts at or above cfg.hltJ80Thresh,
@@ -55,13 +56,11 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root"
-        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path\n"
-        "       runTextFile TRIGGERED=trig.root OUTPUT=out.root"
-        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path   (single, trigger-biased dataset)\n"
-        "       runTextFile NONTRIGGERED=notrig.root OUTPUT=out.root"
-        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path   (single, unbiased dataset)\n"
-        "  PREFIX: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
+        "Usage: runTextFile [-triggered trig.root] [-nontriggered notrig.root]"
+        " [-output out.root] [-prefix name] [-method gauss] [-norm true] [-config path]\n"
+        "       runTextFile args.config   # config file lines use: key = value\n"
+        "       Pass triggered, nontriggered, or both. Legacy KEY=value tokens are also accepted.\n"
+        "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
 
     const std::set<std::string> kKnownKeys = {
         "TRIGGERED", "NONTRIGGERED", "OUTPUT", "PREFIX", "METHOD", "NORM", "CONFIG"

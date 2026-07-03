@@ -60,33 +60,48 @@ which runAsymmetry
 
 SCRAM writes executables to `$CMSSW_BASE/bin/$SCRAM_ARCH/`, which `cmsenv` puts on `PATH`, so commands are called as `runAsymmetry`, `runCalibration`, etc. If `cmsenv` is not available in a fresh shell, first run `source /cvmfs/cms.cern.ch/cmsset_default.sh`.
 
-<strong> Command Tokens </strong>
+<strong> Command Options </strong>
 
-All compiled commands use `KEY=value` tokens. There are no positional arguments. `CONFIG=path` is required by every compiled entry point, and typos such as `OUTPT=...` are rejected immediately.
+Compiled commands accept JetMET-style `-key value` options and optional config
+files whose contents use `key = value`. The older `KEY=value` shell-token form
+is still accepted for compatibility. `config` is required by every compiled
+entry point, and typos such as `-outpt ...` are rejected immediately.
 
 ```bash
 # Step 1, usually on lxplus/Condor or from a SCRAM shell
-runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=triggered|non-triggered|mc CONFIG=cfg/2024ppRef.toml
+runAsymmetry -input <input_HiForest.root> -output <output_asymmetry.root> -mode triggered|non-triggered|mc -config cfg/2024ppRef.toml
 
 # Step 2, often local CMake after hadd
-./build/bin/runCalibration DATA=<data_asymmetry.root> MC=<mc_asymmetry.root> OUTPUT=<residuals.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runCalibration -data <data_asymmetry.root> -mc <mc_asymmetry.root> -output <residuals.root> -config cfg/2024ppRef.toml
 
 # Step 3, split triggered/non-triggered residuals
-./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile -triggered <triggered_residuals.root> -nontriggered <nontriggered_residuals.root> -output <corrections.root> [-prefix <name>] -config cfg/2024ppRef.toml
 
 # Step 3, single dataset (only one of TRIGGERED=/NONTRIGGERED=)
-./build/bin/runTextFile NONTRIGGERED=<residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
+./build/bin/runTextFile -nontriggered <residuals.root> -output <corrections.root> [-prefix <name>] -config cfg/2024ppRef.toml
 
 # JES/JER extraction, on a hadded Step 1 MC file (independent of Steps 2/3)
-./build/bin/runResponse INPUT=<mc_asymmetry.root> OUTPUT=<response.root> CONFIG=cfg/2024ppRef.toml
+./build/bin/runResponse -input <mc_asymmetry.root> -output <response.root> -config cfg/2024ppRef.toml
 
 # Plot any workflow output
-./build/bin/runPlotting INPUT=<input.root> OUTDIR=<output_plots_dir> CONFIG=cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input.root> -outdir <output_plots_dir> -config cfg/2024ppRef.toml
+```
+
+Any compiled command can also read an argument config file first:
+
+```text
+input = data/root/asymmetry_mc.root
+output = data/root/response_mc.root
+config = cfg/2024ppRef.toml
+```
+
+```bash
+./build/bin/runResponse response_args.config
 ```
 
 <strong> Batch Process Asymmetries </strong>
 
-Build with SCRAM or with CMake under `cmsenv`, set `[condor].cmssw_src` in the selected TOML, then submit Step 1 jobs:
+Build with SCRAM or with CMake under `cmsenv`, then submit Step 1 jobs (the CMSSW `src` directory used on worker nodes is derived automatically from the active `cmsenv`, no TOML setting needed):
 
 ```bash
 bash ./condor/make_condor.sh OUTPUT=<output_files_dir> FILELISTS=<input_HiForest_filelist.txt> CONFIG=cfg/2024ppRef.toml
@@ -147,7 +162,7 @@ The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched an
 
 `[cuts]` holds `min_jet_pt` (global floor — inclusive jets and the dijet subleading-jet cut; the third jet used for α is exempt), `dphi` (back-to-back requirement), `max_abs_a` (Step 1 dijet acceptance), and `min_entries_per_bin` (Step 2 fit-attempt floor). `[trees] filter` and `[jet_id] veto_map_histogram` name the event-filter branch and which histogram to read from the veto map file.
 
-To add a new C++ analysis config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`. Condor-only keys such as `[condor].cmssw_src` are consumed by `condor/make_condor.sh`.
+To add a new C++ analysis config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`. Condor-only keys such as `[condor.filelist_modes]` are consumed by `condor/make_condor.sh` directly, not by the C++ config.
 
 Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and pass it explicitly with `CONFIG=path`.
 
@@ -162,18 +177,30 @@ export L2RESIDUALS_HOME=/path/to/repo                # relative-path resolution 
 
 <h3> Command-Line Convention </h3>
 
-Every compiled binary's arguments — and `condor/make_condor.sh`'s — are `KEY=value` tokens — there are no positional arguments anywhere in this CLI, and argument order never matters. This removes an entire class of silent argument-order bugs (e.g. swapping `DATA=`/`MC=`, or `TRIGGERED=`/`NONTRIGGERED=`), since every value is self-identifying regardless of where it appears on the command line. Required tokens — `CONFIG=` on every binary, plus whichever input/output tokens that binary needs — are validated immediately: a missing required token, an unrecognized token (e.g. a typo like `OUTPT=`), or any bare argument that isn't a valid `KEY=value` token at all is an immediate usage error, never something silently ignored or defaulted. Keys are case-insensitive and tolerate surrounding whitespace on a quoted token (`config = cfg/x.toml` parses identically to `CONFIG=cfg/x.toml`) — this is about tolerating formatting, not typos, so a misspelled key (`COFNIG=`) still fails loud. See `include/CliTokens.h` for the parser shared by every compiled entry point; `make_condor.sh` implements the same rules natively in bash since it isn't one of the compiled binaries.
+Every compiled binary accepts three argument styles:
 
-| Binary | Required tokens | Optional tokens |
+```bash
+./build/bin/runResponse -input mc_asymmetry.root -output response.root -config cfg/2024ppRef.toml
+./build/bin/runResponse response_args.config
+./build/bin/runResponse INPUT=mc_asymmetry.root OUTPUT=response.root CONFIG=cfg/2024ppRef.toml
+```
+
+The first two forms mirror JetMET's `CommandLine` convention: config files use
+`key = value`, and shell overrides use `-key value`. Command-line values
+override values loaded from earlier config files. Keys are case-insensitive,
+and unknown keys fail loud. `condor/make_condor.sh` is a bash helper and still
+uses the original `KEY=value` convention.
+
+| Binary | Required options | Optional options |
 | :- | :- | :- |
-| `runAsymmetry` | `INPUT=`, `OUTPUT=`, `MODE=`, `CONFIG=` | `MAXEVENTS=` |
-| `runCalibration` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
-| `runTextFile` merge mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
-| `runTextFile` single-dataset mode | `TRIGGERED=` *or* `NONTRIGGERED=` (exactly one), `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
-| `runResponse` | `INPUT=`, `OUTPUT=`, `CONFIG=` | none |
-| `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=`, `CLOSURE=`, `CALIBRATION=` |
+| `runAsymmetry` | `input`, `output`, `mode`, `config` | `maxevents` |
+| `runCalibration` | `data`, `mc`, `output`, `config` | none |
+| `runTextFile` merge mode | `triggered`, `nontriggered`, `output`, `config` | `prefix`, `method`, `norm` |
+| `runTextFile` single-dataset mode | `triggered` *or* `nontriggered` (exactly one), `output`, `config` | `prefix`, `method`, `norm` |
+| `runResponse` | `input`, `output`, `config` | none |
+| `runPlotting` | `input`, `config` | `outdir`, `flags`, `closure`, `calibration` |
 
-`MODE=` must be `triggered`, `non-triggered`, or `mc`. `PREFIX=` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `METHOD=` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `NORM=false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `FLAGS=` for plotting must be quoted if it contains spaces, e.g. `FLAGS="finals etasym methods"`. `CLOSURE=true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `CALIBRATION=JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis.
+`mode` must be `triggered`, `non-triggered`, or `mc`. `prefix` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `method` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `norm = false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `flags` for plotting can be passed as multiple shell words after `-flags`, e.g. `-flags finals etasym methods`, or as a config-file line `flags = finals etasym methods`. `closure = true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `calibration = JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis.
 
 <h3> Naming Convention </h3>
 
@@ -354,8 +381,7 @@ Example of multiple flags being passed space-separated as a single quoted `FLAGS
 <b>Step 1</b> runs on HTCondor — one job per HiForest input file. <b>Step 2</b> and <b>Step 3</b> run locally after using hadd on the output files from <b>Step 1</b>.
 
 <strong> Before First Submission: </strong>
-1. Set `[condor].cmssw_src` in the TOML you will pass with `CONFIG=...`; this should point to the CMSSW `src` directory used by worker jobs.
-2. Build `runAsymmetry` in a CMSSW environment. SCRAM is preferred on lxplus:
+1. Build `runAsymmetry` in a CMSSW environment. SCRAM is preferred on lxplus. The CMSSW `src` directory used by worker jobs is derived automatically from whichever `cmsenv` is active when you submit (`$CMSSW_BASE/src`) — there's no TOML setting for it, so just make sure you're submitting from the right release's `cmsenv` shell.
 
 ```bash
 cd <CMSSW_RELEASE>/src
@@ -375,7 +401,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-The runtime wrapper copied into each submission is stamped with the TOML's `cmssw_src` value and runs `scramv1 runtime -sh` on the worker before executing `./runAsymmetry`.
+The runtime wrapper copied into each submission is stamped with `$CMSSW_BASE/src` (from the submitter's active `cmsenv`, not a TOML value) and runs `scramv1 runtime -sh` on the worker before executing `./runAsymmetry`.
 
 <strong> Submitting HTCondor Jobs </strong>
 
@@ -393,6 +419,11 @@ bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals \
     FILELISTS="data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt" \
     CONFIG=cfg/2024ppRef.toml
 
+# a directory instead of individual files -- every *.txt directly inside it is submitted;
+# handy for staging a subset of filelists into their own directory (e.g. named after
+# today's date) without listing each one
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/2026-07-03 CONFIG=cfg/2024ppRef.toml
+
 # dry run
 bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals ALLTXT=true CONFIG=cfg/2024ppRef.toml NOSUBMIT=true
 
@@ -406,11 +437,11 @@ bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/fileli
     TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
 ```
 
-`ALLTXT=true` and `FILELISTS=` are mutually exclusive; exactly one is required. Both default to their "off" state (`ALLTXT=false`, no filelists) if omitted, same as `NOSUBMIT=false`.
+`ALLTXT=true` and `FILELISTS=` are mutually exclusive; exactly one is required. Both default to their "off" state (`ALLTXT=false`, no filelists) if omitted, same as `NOSUBMIT=false`. `FILELISTS=` entries can be files, directories (expanded to every `*.txt` directly inside, non-recursive), or a mix of both in the same quoted token. `[condor.filelist_modes]` keys off each filelist's basename only, never its path, so moving filelists into a dated subdirectory needs no TOML changes.
 
 Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
-`CONFIG=path` picks which TOML gets submitted with the jobs — **required, no default**, since which TOML gets used is a physics-affecting choice (e.g. main run-period config vs. a closure config) — independent of `TAG`, mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`), and its `[condor].cmssw_src` value is stamped into the worker `runtime_wrapper.sh`; for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
+`CONFIG=path` picks which TOML gets submitted with the jobs — **required, no default**, since which TOML gets used is a physics-affecting choice (e.g. main run-period config vs. a closure config) — independent of `TAG`, mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`); for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
 <h2> Hadd Many Files </h2>
 

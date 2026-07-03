@@ -1,12 +1,13 @@
-// CMake:       ./build/bin/runPlotting INPUT=residuals.root [OUTDIR=dir] [FLAGS="..."] [CLOSURE=true] [CALIBRATION=JEC|JER] CONFIG=path
+// CMake:       ./build/bin/runPlotting -input residuals.root [-outdir dir] [-flags "..."] [-closure true] [-calibration JEC|JER] -config path
+//              ./build/bin/runPlotting args.config  (with lines like: flags = finals etasym)
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runPlotting.C("residuals.root")'
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Every argument is a KEY=value token -- there are no positional arguments,
-// and none may be misspelled or omitted silently: an unknown token, a
-// malformed token, or a missing required token is an immediate CLI error.
-// CONFIG is always required; there is no default TOML.
+// Compiled arguments accept JetMET-style "-key value", config files with
+// "key = value", and the original KEY=value shell-token form. Unknown keys,
+// malformed options, and missing required values are immediate CLI errors.
+// config/CONFIG is always required; there is no default TOML.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -209,7 +210,9 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
 #include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runPlotting INPUT=file.root [OUTDIR=dir] [FLAGS=\"...\"] [CLOSURE=true] [CALIBRATION=JEC|JER] CONFIG=path\n"
+        "Usage: runPlotting [-input file.root] [-outdir dir] [-flags \"...\"] [-closure true] [-calibration JEC|JER] [-config path]\n"
+        "       runPlotting args.config   # config file lines use: key = value\n"
+        "       Legacy KEY=value tokens are also accepted.\n"
         "  FLAGS: omit for the curated smart default, \"all\" for every plot\n"
         "         unconditionally, or a space-separated list of:\n"
         "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event response\n"

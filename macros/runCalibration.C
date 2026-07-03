@@ -1,13 +1,14 @@
-// CMake:       ./build/bin/runCalibration DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path
+// CMake:       ./build/bin/runCalibration -data data.root -mc mc.root -output out.root -config path
+//              ./build/bin/runCalibration args.config  (with lines like: data = data.root)
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runCalibration.C("data.root","mc.root","out.root")'
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Every argument is a KEY=value token -- there are no positional arguments,
-// and none may be misspelled or omitted silently: an unknown token, a
-// malformed token, or a missing required token is an immediate CLI error.
-// CONFIG is always required; there is no default TOML.
+// Compiled arguments accept JetMET-style "-key value", config files with
+// "key = value", and the original KEY=value shell-token form. Unknown keys,
+// malformed options, and missing required values are immediate CLI errors.
+// config/CONFIG is always required; there is no default TOML.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
@@ -28,7 +29,9 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runCalibration DATA=data.root MC=mc.root OUTPUT=out.root CONFIG=path\n";
+        "Usage: runCalibration [-data data.root] [-mc mc.root] [-output out.root] [-config path]\n"
+        "       runCalibration args.config   # config file lines use: key = value\n"
+        "       Legacy KEY=value tokens are also accepted.\n";
 
     const std::set<std::string> kKnownKeys = { "DATA", "MC", "OUTPUT", "CONFIG" };
     L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );

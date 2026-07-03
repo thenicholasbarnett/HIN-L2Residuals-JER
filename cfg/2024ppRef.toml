@@ -3,10 +3,6 @@ veto_map = "data/veto/Winter25Prompt25_RunCDE.root"
 golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 
 [condor]
-# CMSSW src directory used on HTCondor worker nodes.
-# Must match the environment used to configure/build the submitted binary.
-cmssw_src = "REQUIRED_SET_ME/path/to/CMSSW_RELEASE/src"
-
 # Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
 # triggered | non-triggered | mc. make_condor.sh looks up each filelist it
 # would submit here; comment out (or omit) an entry to skip submitting jobs
