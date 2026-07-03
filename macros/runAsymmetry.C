@@ -5,14 +5,18 @@
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Compiled arguments accept JetMET-style "-key value", config files with
-// "key = value", and the original KEY=value shell-token form. Unknown keys,
-// malformed options, and missing required values are immediate CLI errors.
-// config/CONFIG is always required; there is no default TOML.
+// Compiled arguments use JetMET's own CommandLine parser (vendored under
+// external/jetmet/, see include/RunAsymmetry.h's neighbors): "-key value" on
+// the shell, or a leading params.config file with "key = value" lines.
+// Unknown/unused options and missing required values are immediate CLI
+// errors, reported together by CommandLine::check(). config is always
+// required; there is no default TOML. Keys are matched exactly as written
+// below (case-sensitive) -- this is CommandLine's own convention.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
+R__ADD_INCLUDE_PATH(external)
 #if defined(__APPLE__)
 R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
@@ -21,32 +25,36 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 
 #include "RunAsymmetry.h"
-#include "CliTokens.h"
+#include "jetmet/CommandLine.h"
 
 #ifndef __CLING__
 #include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runAsymmetry [-input in.root] [-output out.root]"
-        " [-mode triggered|non-triggered|mc] [-maxevents n] [-config path]\n"
-        "       runAsymmetry args.config   # config file lines use: key = value\n"
-        "       Legacy KEY=value tokens are also accepted.\n";
+        "Usage: runAsymmetry -input in.root -output out.root"
+        " -mode triggered|non-triggered|mc [-maxevents n] -config path\n"
+        "       runAsymmetry args.config   # config file lines use: key = value\n";
 
-    const std::set<std::string> kKnownKeys = { "INPUT", "OUTPUT", "MODE", "MAXEVENTS", "CONFIG" };
-    L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
+    CommandLine cl;
+    if( !cl.parse( argc, argv ) ) return 1;
 
-    setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
+    std::string input   = cl.getValue<std::string>( "input" );
+    std::string output  = cl.getValue<std::string>( "output" );
+    std::string mode    = cl.getValue<std::string>( "mode" );
+    long long maxEvents = cl.getValue<long long>( "maxevents", -1LL );
+    std::string config  = cl.getValue<std::string>( "config" );
 
-    TString input  = t.Require( "INPUT", kUsage );
-    TString output = t.Require( "OUTPUT", kUsage );
-    TString mode   = t.Require( "MODE", kUsage );
-    Long64_t maxEvents = t.Has( "MAXEVENTS" ) ? std::atoll( t.Get( "MAXEVENTS" ).c_str() ) : -1;
+    if( !cl.check() ){
+        std::cerr << kUsage;
+        return 1;
+    }
+
+    setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
 
     try {
-        runAsymmetry( input, output, mode, maxEvents );
+        runAsymmetry( input, output, mode, ( Long64_t )maxEvents );
     } catch( const std::exception& e ){
         std::cerr << e.what() << "\n";
         return 1;

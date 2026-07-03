@@ -7,10 +7,12 @@
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Compiled arguments accept JetMET-style "-key value", config files with
-// "key = value", and the original KEY=value shell-token form. Unknown keys,
-// malformed options, and missing required values are immediate CLI errors.
-// config/CONFIG is always required; there is no default TOML.
+// Compiled arguments use JetMET's own CommandLine parser (vendored under
+// external/jetmet/): "-key value" on the shell, or a leading params.config
+// file with "key = value" lines. Unknown/unused options and missing required
+// values are immediate CLI errors, reported together by CommandLine::check().
+// config is always required; there is no default TOML. Keys are matched
+// exactly as written below (case-sensitive).
 //
 // Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the
 // triggered residuals if the slice starts at or above cfg.hltJ80Thresh,
@@ -21,25 +23,26 @@
 // "data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt" and
 // "..._<cone>_eta[_norm].txt".
 //
-// TRIGGERED=/NONTRIGGERED=: pass both for the merge (as above). Pass only
+// -triggered/-nontriggered: pass both for the merge (as above). Pass only
 //          one for single-dataset mode -- the two are NOT interchangeable:
-//          TRIGGERED= alone means this one dataset is itself trigger-biased,
+//          -triggered alone means this one dataset is itself trigger-biased,
 //          so pT_avg slices below cfg.hltJ80Thresh are dropped entirely (no
-//          non-triggered fallback exists to fill them in). NONTRIGGERED=
+//          non-triggered fallback exists to fill them in). -nontriggered
 //          alone means the dataset is not trigger-biased, so every pT_avg
 //          slice is used unconditionally, no threshold cut. At least one of
 //          the two is required.
-// PREFIX=: a plain filename prefix, NOT a path -- must not contain '/'.
+// -prefix: a plain filename prefix, NOT a path -- must not contain '/'.
 //          Optional; defaults to "L2Residual" when omitted.
-// METHOD=: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
-// NORM=:   "true" (default) uses the kFSR-normalized intercepts (the standard
-//          method); "false" uses the direct, non-normalized variant instead.
+// -method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
+// -norm:   true (default) uses the kFSR-normalized intercepts (the standard
+//          method); false uses the direct, non-normalized variant instead.
 // [step3] eta_mode in the TOML ("both" | "abseta" | "eta") controls which of
 // the two text files (per cone) actually get written; see TextFileWriter.cxx.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
+R__ADD_INCLUDE_PATH(external)
 #if defined(__APPLE__)
 R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
@@ -48,49 +51,63 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 
 #include "TextFileWriter.h"
-#include "CliTokens.h"
+#include "jetmet/CommandLine.h"
 #include "AnalysisConfig.h"
 
 #ifndef __CLING__
+#include <cstdlib>
 #include <iostream>
-#include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runTextFile [-triggered trig.root] [-nontriggered notrig.root]"
-        " [-output out.root] [-prefix name] [-method gauss] [-norm true] [-config path]\n"
+        "Usage: runTextFile -triggered trig.root -nontriggered notrig.root"
+        " -output out.root [-prefix name] [-method gauss] [-norm true] -config path\n"
         "       runTextFile args.config   # config file lines use: key = value\n"
-        "       Pass triggered, nontriggered, or both. Legacy KEY=value tokens are also accepted.\n"
+        "       Pass -triggered, -nontriggered, or both.\n"
         "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
 
-    const std::set<std::string> kKnownKeys = {
-        "TRIGGERED", "NONTRIGGERED", "OUTPUT", "PREFIX", "METHOD", "NORM", "CONFIG"
-    };
-    L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
+    CommandLine cl;
+    if( !cl.parse( argc, argv ) ) return 1;
 
-    setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
+    // config is queried and exported first, ahead of check()'s aggregate
+    // report: Config() (called just below for -method's default) is a
+    // process-wide singleton that reads L2RESIDUALS_CONFIG, so it must be
+    // set before any other default-value expression can safely touch it.
+    std::string config = cl.getValue<std::string>( "config" );
+    if( config.empty() ){
+        std::cerr << "ERROR: missing required config=... argument\n" << kUsage;
+        return 1;
+    }
+    setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
 
-    TString output = t.Require( "OUTPUT", kUsage );
-    TString prefix = t.Get( "PREFIX", "" );
-    TString method = t.Has( "METHOD" ) ? TString( t.Get( "METHOD" ) ) : Config().defaultMethod;
-    bool useNorm = t.Get( "NORM", "true" ) != "false";
+    std::string output = cl.getValue<std::string>( "output" );
+    std::string prefix = cl.getValue<std::string>( "prefix", std::string( "" ) );
+    std::string method = cl.getValue<std::string>( "method", std::string( Config().defaultMethod.Data() ) );
+    bool useNorm        = cl.getValue<bool>( "norm", true );
+    std::string trig    = cl.getValue<std::string>( "triggered", std::string( "" ) );
+    std::string noTrig  = cl.getValue<std::string>( "nontriggered", std::string( "" ) );
 
-    const bool hasTrig   = t.Has( "TRIGGERED" );
-    const bool hasNoTrig = t.Has( "NONTRIGGERED" );
+    if( !cl.check() ){
+        std::cerr << kUsage;
+        return 1;
+    }
+
+    const bool hasTrig   = !trig.empty();
+    const bool hasNoTrig = !noTrig.empty();
 
     if( !hasTrig && !hasNoTrig ){
-        std::cerr << "ERROR: pass TRIGGERED=..., NONTRIGGERED=..., or both\n" << kUsage;
+        std::cerr << "ERROR: pass -triggered ..., -nontriggered ..., or both\n" << kUsage;
         return 1;
     }
 
     if( hasTrig && hasNoTrig ){
-        runTextFile( t.Get( "TRIGGERED" ), t.Get( "NONTRIGGERED" ), output, prefix, method, useNorm );
+        runTextFile( trig, noTrig, output, prefix, method, useNorm );
         return 0;
     }
 
     if( hasTrig ){
-        runTextFile( t.Get( "TRIGGERED" ), SingleDatasetKind::Triggered, output, prefix, method, useNorm );
+        runTextFile( trig, SingleDatasetKind::Triggered, output, prefix, method, useNorm );
     } else {
-        runTextFile( t.Get( "NONTRIGGERED" ), SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+        runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
     }
     return 0;
 }

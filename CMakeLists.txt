@@ -88,12 +88,29 @@ set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
 # Vendored single header takes priority — no network dependency
 set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
-# shared library from src/
+# shared library from src/, plus vendored external/ sources that need compiling
+# (header-only vendored deps like toml++/nlohmann-json need nothing here)
 file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
+file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS external/jetmet/*.cc)
+list(APPEND SOURCES ${EXTERNAL_SOURCES})
+# external/jetmet_jer/ (vendored CMSSW CondFormats/JetMETObjects JER SF
+# reader/writer) needs -DSTANDALONE. This can't be scoped to just its own
+# two translation units via set_source_files_properties: JetResolutionObject.h
+# switches its declared member types (TFormula vs. CMSSW's
+# reco::FormulaEvaluator) on that macro, so every translation unit that
+# includes the header -- src/TextFileWriter.cxx, not just the vendored .cc
+# files themselves -- needs the same definition, or declarations disagree.
+# Applied PUBLIC (not just to l2residuals's own sources): tests/*.cxx also
+# include this header directly (e.g. TestTextFileWriter.cxx round-tripping
+# the JER SF writer through it) and link against l2residuals, so they need
+# the same definition propagated to them, not just the library's own sources.
+file(GLOB JETMET_JER_SOURCES CONFIGURE_DEPENDS external/jetmet_jer/*.cc)
+list(APPEND SOURCES ${JETMET_JER_SOURCES})
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
     target_include_directories(l2residuals PUBLIC include cfg ${NLOHMANN_JSON_INCLUDE_DIR})
     target_compile_definitions(l2residuals PUBLIC L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(l2residuals PUBLIC STANDALONE)
     target_link_libraries(l2residuals ${ROOT_LIBRARIES})
 else()
     # header-only placeholder until src/ is populated

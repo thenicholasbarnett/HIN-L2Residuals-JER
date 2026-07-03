@@ -4,14 +4,17 @@
 //              root -l -b -q 'macros/runPlotting.C("residuals.root")'
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Compiled arguments accept JetMET-style "-key value", config files with
-// "key = value", and the original KEY=value shell-token form. Unknown keys,
-// malformed options, and missing required values are immediate CLI errors.
-// config/CONFIG is always required; there is no default TOML.
+// Compiled arguments use JetMET's own CommandLine parser (vendored under
+// external/jetmet/): "-key value" on the shell, or a leading params.config
+// file with "key = value" lines. Unknown/unused options and missing required
+// values are immediate CLI errors, reported together by CommandLine::check().
+// config is always required; there is no default TOML. Keys are matched
+// exactly as written below (case-sensitive).
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
+R__ADD_INCLUDE_PATH(external)
 #if defined(__APPLE__)
 R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
@@ -27,7 +30,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 
 #include "Binning.h"
 #include "AnalysisConfig.h"
-#include "CliTokens.h"
+#include "jetmet/CommandLine.h"
 #include "ProgressBar.h"
 
 #include "plotting/Style.h"
@@ -206,37 +209,42 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
 }
 
 #ifndef __CLING__
+#include <cstdlib>
 #include <iostream>
-#include <set>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runPlotting [-input file.root] [-outdir dir] [-flags \"...\"] [-closure true] [-calibration JEC|JER] [-config path]\n"
+        "Usage: runPlotting -input file.root [-outdir dir] [-flags \"...\"] [-closure true] [-calibration JEC|JER] -config path\n"
         "       runPlotting args.config   # config file lines use: key = value\n"
-        "       Legacy KEY=value tokens are also accepted.\n"
-        "  FLAGS: omit for the curated smart default, \"all\" for every plot\n"
+        "  -flags: omit for the curated smart default, \"all\" for every plot\n"
         "         unconditionally, or a space-separated list of:\n"
         "         etasym methods finals normcomp adist roverlay alpha ptfit kinematics event response\n"
-        "  CLOSURE=true: \"finals\" plots use a fixed 0.95-1.05 y-range with 0.99/1.01\n"
+        "  -closure true: \"finals\" plots use a fixed 0.95-1.05 y-range with 0.99/1.01\n"
         "         guide lines instead of the auto-scaled range, for checking a\n"
         "         closure pass's R_MC/R_data ~= 1. No effect on any other flag.\n"
-        "  CALIBRATION=JEC|JER (default JEC): switches etasym/methods/finals/normcomp/\n"
+        "  -calibration JEC|JER (default JEC): switches etasym/methods/finals/normcomp/\n"
         "         roverlay/alpha between the mean-derived JEC output and the\n"
         "         stddev-derived JER SF output. No effect on adist/kinematics/event/\n"
         "         ptfit/response.\n";
 
-    const std::set<std::string> kKnownKeys = { "INPUT", "OUTDIR", "FLAGS", "CLOSURE", "CALIBRATION", "CONFIG" };
-    L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
+    CommandLine cl;
+    if( !cl.parse( argc, argv ) ) return 1;
 
-    setenv( "L2RESIDUALS_CONFIG", t.Require( "CONFIG", kUsage ).c_str(), 1 );
+    std::string input       = cl.getValue<std::string>( "input" );
+    std::string outDir      = cl.getValue<std::string>( "outdir", std::string( "" ) );
+    std::string flags       = cl.getValue<std::string>( "flags", std::string( "" ) );
+    bool isClosure          = cl.getValue<bool>( "closure", false );
+    std::string calibration = cl.getValue<std::string>( "calibration", std::string( "JEC" ) );
+    std::string config      = cl.getValue<std::string>( "config" );
 
-    TString input  = t.Require( "INPUT", kUsage );
-    TString outDir = t.Get( "OUTDIR", "" );
-    TString flags  = t.Get( "FLAGS", "" );
-    bool isClosure = t.Get( "CLOSURE", "false" ) == "true";
+    if( !cl.check() ){
+        std::cerr << kUsage;
+        return 1;
+    }
 
-    std::string calibration = t.Get( "CALIBRATION", "JEC" );
+    setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
+
     if( calibration != "JEC" && calibration != "JER" ){
-        std::cerr << "Invalid CALIBRATION=\"" << calibration << "\" -- must be JEC or JER\n" << kUsage;
+        std::cerr << "Invalid -calibration \"" << calibration << "\" -- must be JEC or JER\n" << kUsage;
         return 1;
     }
     bool useJer = ( calibration == "JER" );

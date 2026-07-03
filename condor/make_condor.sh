@@ -2,7 +2,7 @@
 # Submit one runAsymmetry job per input HiForest file.
 #
 # Arguments are JetMET-style "-flag value" (matching the compiled binaries'
-# CLI, include/CliTokens.h) or bare boolean "-flag" switches -- no
+# CLI, external/jetmet/CommandLine.h) or bare boolean "-flag" switches -- no
 # positional arguments, no KEY=value. Flag names are case-insensitive
 # (matched after uppercasing) but otherwise this is a plain left-to-right
 # parse: an unrecognized flag, a value-taking flag with nothing after it, or
