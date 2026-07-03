@@ -78,10 +78,10 @@ runAsymmetry -input <input_HiForest.root> -output <output_asymmetry.root> -mode 
 ./build/bin/runCalibration -data <data_asymmetry.root> -mc <mc_asymmetry.root> -output <residuals.root> -config cfg/2024ppRef.toml
 
 # Step 3, split triggered/non-triggered residuals
-./build/bin/runTextFile -triggered <triggered_residuals.root> -nontriggered <nontriggered_residuals.root> -output <corrections.root> [-prefix <name>] -config cfg/2024ppRef.toml
+./build/bin/runTextFile -triggered <triggered_residuals.root> -nontriggered <nontriggered_residuals.root> -output <corrections.root> [-tag <name>] -config cfg/2024ppRef.toml
 
 # Step 3, single dataset (only one of -triggered/-nontriggered)
-./build/bin/runTextFile -nontriggered <residuals.root> -output <corrections.root> [-prefix <name>] -config cfg/2024ppRef.toml
+./build/bin/runTextFile -nontriggered <residuals.root> -output <corrections.root> [-tag <name>] -config cfg/2024ppRef.toml
 
 # JES/JER extraction, on a hadded Step 1 MC file (independent of Steps 2/3)
 ./build/bin/runResponse -input <mc_asymmetry.root> -output <response.root> -config cfg/2024ppRef.toml
@@ -205,14 +205,14 @@ CLI. It does not accept config files.
 | :- | :- | :- |
 | `runAsymmetry` | `input`, `output`, `mode`, `config` | `maxevents` |
 | `runCalibration` | `data`, `mc`, `output`, `config` | none |
-| `runTextFile` merge mode | `triggered`, `nontriggered`, `output`, `config` | `prefix`, `method`, `norm` |
-| `runTextFile` single-dataset mode | `triggered` *or* `nontriggered` (exactly one), `output`, `config` | `prefix`, `method`, `norm` |
+| `runTextFile` merge mode | `triggered`, `nontriggered`, `output`, `config` | `tag`, `method`, `norm` |
+| `runTextFile` single-dataset mode | `triggered` *or* `nontriggered` (exactly one), `output`, `config` | `tag`, `method`, `norm` |
 | `runResponse` | `input`, `output`, `config` | none |
-| `runPlotting` | `input`, `config` | `outdir`, `flags`, `closure`, `calibration` |
+| `runPlotting` | `input`, `config` | `outdir`, `flags`, `closure`, `calibration`, `tag` |
 | `make_condor.sh` (all filelists) | `output`, `alltxt`, `config` | `nosubmit`, `tag` |
 | `make_condor.sh` (specific filelists) | `output`, `filelists`, `config` | `nosubmit`, `tag` |
 
-`mode` must be `triggered`, `non-triggered`, or `mc`. `prefix` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `method` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `norm = false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `flags` for plotting can be passed as multiple shell words after `-flags`, e.g. `-flags finals etasym methods`, or as a config-file line `flags = finals etasym methods`. `closure = true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `calibration = JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis.
+`mode` must be `triggered`, `non-triggered`, or `mc`. `tag` for `runTextFile` is a plain filename tag, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `method` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `norm = false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `flags` for plotting can be passed as multiple shell words after `-flags`, e.g. `-flags finals etasym methods`, or as a config-file line `flags = finals etasym methods`. `closure = true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `calibration = JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis. `tag` for `runPlotting` is a plain name (no `/`) that, when given, writes plots to `outdir/tag/` instead of `outdir/` directly, so separate runs against the same `outdir` (e.g. JEC vs JER, or two different input files) don't overwrite each other's PNGs.
 
 <h3> Naming Convention </h3>
 
@@ -318,7 +318,7 @@ ak4PF/
 Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes and ZeroBias/MinBias): for each p<sub>T</sub><sup>avg</sup> slice, uses the triggered file if the slice starts at or above the trigger threshold (`trigger.threshold` in `cfg/2024ppRef.toml`, i.e. `cfg.hltJ80Thresh`) and the non-triggered file otherwise — the triggered dataset is trigger-biased below its efficiency plateau, the non-triggered dataset fills in the rest. Processes every cone in `cones.labels` in one call.
 
 ```
-./build/bin/runTextFile -triggered <triggered_residuals-file.root> -nontriggered <nontriggered_residuals-file.root> -output <output_corrections-file.root> [-prefix <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
+./build/bin/runTextFile -triggered <triggered_residuals-file.root> -nontriggered <nontriggered_residuals-file.root> -output <output_corrections-file.root> [-tag <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
 
 # -method: gauss (default) | doubleGauss | trunc90 | trunc95
 # -norm:   true (default) uses the kFSR-normalized intercepts (the standard method);
@@ -331,21 +331,21 @@ For a single dataset with no triggered/non-triggered split, pass only one of `-t
 # single, trigger-biased dataset (e.g. HardProbes-only, no ZeroBias/MinBias companion) --
 # pT_avg slices below the trigger threshold are dropped entirely, since there's no
 # non-triggered fallback to fill them in
-./build/bin/runTextFile -triggered <residuals-file.root> -output <output_corrections-file.root> [-prefix <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
+./build/bin/runTextFile -triggered <residuals-file.root> -output <output_corrections-file.root> [-tag <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
 
 # single, unbiased dataset (e.g. ZeroBias/MinBias-only) -- every pT_avg slice is used
 # unconditionally, no threshold cut
-./build/bin/runTextFile -nontriggered <residuals-file.root> -output <output_corrections-file.root> [-prefix <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
+./build/bin/runTextFile -nontriggered <residuals-file.root> -output <output_corrections-file.root> [-tag <name>] [-method gauss] [-norm true] -config cfg/2024ppRef.toml
 ```
 
-For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files per cone that can be parsed with a header. These always go to `data/jec/preliminary/` (relative to the repo root, created automatically if missing) — a gitignored directory reserved for locally-generated/preliminary corrections, not a caller-chosen path. `-prefix` is a plain filename prefix, not a path (it must not contain `/`); it defaults to `L2Residual` when omitted. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `-norm false` is passed:
+For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files per cone that can be parsed with a header. These always go to `data/jec/preliminary/` (relative to the repo root, created automatically if missing) — a gitignored directory reserved for locally-generated/preliminary corrections, not a caller-chosen path. `-tag` is a plain filename tag, not a path (it must not contain `/`); it defaults to `L2Residual` when omitted. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `-norm false` is passed:
 
 ```
-data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
-data/jec/preliminary/<prefix>_<cone>_eta[_norm].txt      ← independent fit per full-η bin, no mirroring
+data/jec/preliminary/<tag>_<cone>_abseta[_norm].txt   ← fit on |η|, mirrored onto both eta halves
+data/jec/preliminary/<tag>_<cone>_eta[_norm].txt      ← independent fit per full-η bin, no mirroring
 ```
 
-Alongside these, two JER SF text files per cone are also written — `..._<cone>_abseta_jer[_norm].txt` and `..._<cone>_eta_jer[_norm].txt` — using the same `intercept_jer_*` input the JER scale factors already come from (see Step 2 above) and the same `eta_mode`/`-norm`/`-prefix` rules. Unlike the JEC files, these are a direct binned grid (one flat value per eta-bin/p<sub>T,avg</sub>-slice cell, no p<sub>T</sub>-dependence fit), written in the real, standard CMS JER text format via a vendored `JME::JetResolutionObject` (`external/jetmet_jer/`, from CMSSW `CondFormats/JetMETObjects`) rather than a hand-rolled format.
+Alongside these, two JER SF text files per cone are also written — `..._<cone>_abseta_jer[_norm].txt` and `..._<cone>_eta_jer[_norm].txt` — using the same `intercept_jer_*` input the JER scale factors already come from (see Step 2 above) and the same `eta_mode`/`-norm`/`-tag` rules. Unlike the JEC files, these are a direct binned grid (one flat value per eta-bin/p<sub>T,avg</sub>-slice cell, no p<sub>T</sub>-dependence fit), written in the real, standard CMS JER text format via a vendored `JME::JetResolutionObject` (`external/jetmet_jer/`, from CMSSW `CondFormats/JetMETObjects`) rather than a hand-rolled format.
 
 <u> Output ROOT Structure: </u>
 ```
@@ -360,10 +360,10 @@ ak4PF/
 `runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `-flags` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `-flags all` runs every applicable flag unconditionally; a space-separated value runs exactly those flags.
 
 ```
-./build/bin/runPlotting -input <input_asymmetries-file.root> [-outdir <output_plots-dir>] [-flags "..."] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_residuals-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-calibration JEC|JER] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_corrections-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_response-file.root> [-outdir <output_plots-dir>] [-flags "..."] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_asymmetries-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_residuals-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-calibration JEC|JER] [-tag name] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_corrections-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-tag name] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_response-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] -config cfg/2024ppRef.toml
 ```
 
 | Flag | Input | Description | In smart default? |

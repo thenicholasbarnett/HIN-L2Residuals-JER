@@ -1,6 +1,6 @@
-// CMake:       ./build/bin/runTextFile -triggered trig.root -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
-//              ./build/bin/runTextFile -triggered trig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
-//              ./build/bin/runTextFile -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+// CMake:       ./build/bin/runTextFile -triggered trig.root -nontriggered notrig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -triggered trig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -nontriggered notrig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
 //              ./build/bin/runTextFile args.config  (with lines like: triggered = trig.root)
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root")'
@@ -20,7 +20,7 @@
 // Correction text files always go to data/jec/preliminary/ (relative to the
 // repo root, created automatically) -- gitignored, meant for locally
 // generated/preliminary corrections. Writes
-// "data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt" and
+// "data/jec/preliminary/<tag>_<cone>_abseta[_norm].txt" and
 // "..._<cone>_eta[_norm].txt".
 //
 // -triggered/-nontriggered: pass both for the merge (as above). Pass only
@@ -31,7 +31,7 @@
 //          alone means the dataset is not trigger-biased, so every pT_avg
 //          slice is used unconditionally, no threshold cut. At least one of
 //          the two is required.
-// -prefix: a plain filename prefix, NOT a path -- must not contain '/'.
+// -tag: a plain filename prefix, NOT a path -- must not contain '/'.
 //          Optional; defaults to "L2Residual" when omitted.
 // -method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
 // -norm:   true (default) uses the kFSR-normalized intercepts (the standard
@@ -60,14 +60,14 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
         "Usage: runTextFile -triggered trig.root -nontriggered notrig.root"
-        " -output out.root [-prefix name] [-method gauss] [-norm true] -config path\n"
+        " -output out.root [-tag name] [-method gauss] [-norm true] -config path\n"
         "       runTextFile -triggered trig.root -output out.root ... -config path\n"
         "       runTextFile -nontriggered notrig.root -output out.root ... -config path\n"
-        "       runTextFile -resolution response.root [-prefix name] -config path\n"
+        "       runTextFile -resolution response.root [-tag name] -config path\n"
         "       runTextFile args.config   # config file lines use: key = value\n"
         "  -resolution: write JER pT resolution text file from a runResponse output\n"
         "               (independent of -triggered/-nontriggered; can be combined)\n"
-        "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\" (JEC/JER SF)\n"
+        "  tag: plain filename prefix (no '/'), defaults to \"L2Residual\" (JEC/JER SF)\n"
         "          or \"JER_ptresolution\" (resolution-only run)\n";
 
     CommandLine cl;
@@ -85,7 +85,7 @@ int main( int argc, char* argv[] ){
     setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
 
     std::string output     = cl.getValue<std::string>( "output", std::string( "" ) );
-    std::string prefix     = cl.getValue<std::string>( "prefix", std::string( "" ) );
+    std::string tag        = cl.getValue<std::string>( "tag", std::string( "" ) );
     std::string method     = cl.getValue<std::string>( "method", std::string( Config().defaultMethod.Data() ) );
     bool useNorm            = cl.getValue<bool>( "norm", true );
     std::string trig       = cl.getValue<std::string>( "triggered", std::string( "" ) );
@@ -112,16 +112,16 @@ int main( int argc, char* argv[] ){
     }
 
     if( hasResolution ){
-        runTextFilePtResolution( resolution, prefix );
+        runTextFilePtResolution( resolution, tag );
     }
 
     if( hasTrig || hasNoTrig ){
         if( hasTrig && hasNoTrig ){
-            runTextFile( trig, noTrig, output, prefix, method, useNorm );
+            runTextFile( trig, noTrig, output, tag, method, useNorm );
         } else if( hasTrig ){
-            runTextFile( trig, SingleDatasetKind::Triggered, output, prefix, method, useNorm );
+            runTextFile( trig, SingleDatasetKind::Triggered, output, tag, method, useNorm );
         } else {
-            runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+            runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, tag, method, useNorm );
         }
     }
     return 0;

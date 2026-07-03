@@ -1,4 +1,4 @@
-// CMake:       ./build/bin/runPlotting -input residuals.root [-outdir dir] [-flags "..."] [-closure true] [-calibration JEC|JER] -config path
+// CMake:       ./build/bin/runPlotting -input residuals.root [-outdir dir] [-flags "..."] [-closure true] [-calibration JEC|JER] [-tag name] -config path
 //              ./build/bin/runPlotting args.config  (with lines like: flags = finals etasym)
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runPlotting.C("residuals.root")'
@@ -120,7 +120,7 @@ bool WantsFinalsByDefault( TFile* fIn, const TString& cone, const BinningConfig&
                            cone + "/" + gridName, gridName } );
 }
 
-void runPlotting( TString residualsFile, TString outDir = "", TString flags = "", bool isClosure = false, bool useJer = false ){
+void runPlotting( TString residualsFile, TString outDir = "", TString flags = "", bool isClosure = false, bool useJer = false, TString tag = "" ){
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
 
@@ -133,6 +133,13 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
     }
 
     if( outDir.IsNull() ) outDir = MakePlotDir( "plots_residuals" );
+    if( !tag.IsNull() ){
+        if( tag.Contains( "/" ) ){
+            std::cerr << "ERROR: -tag must not contain '/': " << tag << "\n";
+            return;
+        }
+        outDir = outDir + "/" + tag;
+    }
     if( gSystem->mkdir( outDir, true ) < 0 && gSystem->AccessPathName( outDir ) ){
         std::cerr << "Cannot create output directory: " << outDir << "\n";
         return;
@@ -213,7 +220,7 @@ void runPlotting( TString residualsFile, TString outDir = "", TString flags = ""
 #include <iostream>
 int main( int argc, char* argv[] ){
     static const char* const kUsage =
-        "Usage: runPlotting -input file.root [-outdir dir] [-flags \"...\"] [-closure true] [-calibration JEC|JER] -config path\n"
+        "Usage: runPlotting -input file.root [-outdir dir] [-flags \"...\"] [-closure true] [-calibration JEC|JER] [-tag name] -config path\n"
         "       runPlotting args.config   # config file lines use: key = value\n"
         "  -flags: omit for the curated smart default, \"all\" for every plot\n"
         "         unconditionally, or a space-separated list of:\n"
@@ -224,7 +231,10 @@ int main( int argc, char* argv[] ){
         "  -calibration JEC|JER (default JEC): switches etasym/methods/finals/normcomp/\n"
         "         roverlay/alpha between the mean-derived JEC output and the\n"
         "         stddev-derived JER SF output. No effect on adist/kinematics/event/\n"
-        "         ptfit/response.\n";
+        "         ptfit/response.\n"
+        "  -tag: optional, plain name (no '/'). Plots land in outdir/tag/ instead of\n"
+        "         outdir/ directly, so separate runs against the same outdir don't\n"
+        "         overwrite each other's PNGs.\n";
 
     CommandLine cl;
     if( !cl.parse( argc, argv ) ) return 1;
@@ -234,6 +244,7 @@ int main( int argc, char* argv[] ){
     std::string flags       = cl.getValue<std::string>( "flags", std::string( "" ) );
     bool isClosure          = cl.getValue<bool>( "closure", false );
     std::string calibration = cl.getValue<std::string>( "calibration", std::string( "JEC" ) );
+    std::string tag         = cl.getValue<std::string>( "tag", std::string( "" ) );
     std::string config      = cl.getValue<std::string>( "config" );
 
     if( !cl.check() ){
@@ -249,7 +260,7 @@ int main( int argc, char* argv[] ){
     }
     bool useJer = ( calibration == "JER" );
 
-    runPlotting( input, outDir, flags, isClosure, useJer );
+    runPlotting( input, outDir, flags, isClosure, useJer, tag );
     return 0;
 }
 #endif

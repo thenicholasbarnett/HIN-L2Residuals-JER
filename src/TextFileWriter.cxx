@@ -26,8 +26,8 @@
 // Minimum valid pT slices needed to attempt a 3-parameter fit.
 static constexpr int kMinSlices = 3;
 
-// outputTextPrefix default and fixed output location — see TextFileWriter.h.
-static const char* const kDefaultTextPrefix = "L2Residual";
+// outputTag default and fixed output location — see TextFileWriter.h.
+static const char* const kDefaultTag = "L2Residual";
 static const char* const kTextOutputSubdir = "data/jec/preliminary";
 
 static constexpr double kPtLo = 40.0;
@@ -268,13 +268,13 @@ static TFile* SelectSource( SourceMode mode, const RangeBin& ptSlice, double thr
 // both are non-null in Merge mode.
 static void RunTextFileImpl(
     SourceMode mode, TFile* fTrig, TFile* fNoTrig,
-    TString outputRootFile, TString outputTextPrefix,
+    TString outputRootFile, TString outputTag,
     TString method, bool useNorm ){
 
-    if( outputTextPrefix.IsNull() ) outputTextPrefix = kDefaultTextPrefix;
-    if( outputTextPrefix.Contains( "/" ) ){
-        std::cerr << "ERROR: PREFIX must be a plain name, not a path (it contains '/'): "
-                  << outputTextPrefix << "\n";
+    if( outputTag.IsNull() ) outputTag = kDefaultTag;
+    if( outputTag.Contains( "/" ) ){
+        std::cerr << "ERROR: TAG must be a plain name, not a path (it contains '/'): "
+                  << outputTag << "\n";
         return;
     }
 
@@ -298,7 +298,7 @@ static void RunTextFileImpl(
               << "Non-triggered residuals: " << ( fNoTrig ? fNoTrig->GetName() : "(none)" ) << "\n"
               << "Output ROOT:  " << outputRootFile   << "\n"
               << "Text output dir: " << textDir        << "\n"
-              << "Text prefix:  " << outputTextPrefix << "\n"
+              << "Tag:          " << outputTag << "\n"
               << "Method:       " << method           << "\n"
               << "Normalized:   " << ( useNorm ? "yes (kFSR-norm)" : "no (direct)" ) << "\n";
 
@@ -414,8 +414,8 @@ static void RunTextFileImpl(
             }
         }
 
-        TString absEtaTxt = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta" + suffix + ".txt";
-        TString etaTxt    = textDir + "/" + outputTextPrefix + "_" + cone + "_eta" + suffix + ".txt";
+        TString absEtaTxt = textDir + "/" + outputTag + "_" + cone + "_abseta" + suffix + ".txt";
+        TString etaTxt    = textDir + "/" + outputTag + "_" + cone + "_eta" + suffix + ".txt";
         if( wantAbsEta && !WriteAbsEtaTextFile( absEtaTxt, fitsAbsEta ) )
             std::cerr << "Cannot open output file " << absEtaTxt << "\n";
         if( wantFullEta && !WriteFullEtaTextFile( etaTxt, fitsFullEta ) )
@@ -427,8 +427,8 @@ static void RunTextFileImpl(
         if( wantFullEta ) std::cout << ( int )fitsFullEta.size() << " eta bins -> " << etaTxt;
         std::cout << "\n";
 
-        TString absEtaJerTxt = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta_jer" + suffix + ".txt";
-        TString etaJerTxt    = textDir + "/" + outputTextPrefix + "_" + cone + "_eta_jer" + suffix + ".txt";
+        TString absEtaJerTxt = textDir + "/" + outputTag + "_" + cone + "_abseta_jer" + suffix + ".txt";
+        TString etaJerTxt    = textDir + "/" + outputTag + "_" + cone + "_eta_jer" + suffix + ".txt";
         if( wantAbsEta && !WriteJerSfTextFile( absEtaJerTxt, false, bins.ptavgSlices, hSliceJerAbsEta ) )
             std::cerr << "Cannot write JER SF output file " << absEtaJerTxt << "\n";
         if( wantFullEta && !WriteJerSfTextFile( etaJerTxt, true, bins.ptavgSlices, hSliceJerFullEta ) )
@@ -447,28 +447,28 @@ static void RunTextFileImpl(
 }
 
 void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
-                 TString outputRootFile, TString outputTextPrefix,
+                 TString outputRootFile, TString outputTag,
                  TString method, bool useNorm ){
     TFile* fTrig = TFile::Open( triggeredResidualsFile, "read" );
     TFile* fNoTrig = TFile::Open( nonTriggeredResidualsFile, "read" );
     if( !fTrig || fTrig->IsZombie() ){ std::cerr << "Cannot open " << triggeredResidualsFile << "\n"; return; }
     if( !fNoTrig || fNoTrig->IsZombie() ){ std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n"; return; }
-    RunTextFileImpl( SourceMode::Merge, fTrig, fNoTrig, outputRootFile, outputTextPrefix, method, useNorm );
+    RunTextFileImpl( SourceMode::Merge, fTrig, fNoTrig, outputRootFile, outputTag, method, useNorm );
 }
 
 void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputRootFile,
-                 TString outputTextPrefix,
+                 TString outputTag,
                  TString method, bool useNorm ){
     TFile* f = TFile::Open( residualsFile, "read" );
     if( !f || f->IsZombie() ){ std::cerr << "Cannot open " << residualsFile << "\n"; return; }
     if( kind == SingleDatasetKind::Triggered ){
-        RunTextFileImpl( SourceMode::TriggeredOnly, f, nullptr, outputRootFile, outputTextPrefix, method, useNorm );
+        RunTextFileImpl( SourceMode::TriggeredOnly, f, nullptr, outputRootFile, outputTag, method, useNorm );
     } else {
-        RunTextFileImpl( SourceMode::NonTriggeredOnly, nullptr, f, outputRootFile, outputTextPrefix, method, useNorm );
+        RunTextFileImpl( SourceMode::NonTriggeredOnly, nullptr, f, outputRootFile, outputTag, method, useNorm );
     }
 }
 
-void runTextFilePtResolution( TString responseFile, TString outputTextPrefix ){
+void runTextFilePtResolution( TString responseFile, TString outputTag ){
     const AnalysisConfig& cfg = Config();
 
     TFile* fIn = TFile::Open( responseFile, "read" );
@@ -477,9 +477,9 @@ void runTextFilePtResolution( TString responseFile, TString outputTextPrefix ){
         return;
     }
 
-    if( outputTextPrefix.IsNull() ) outputTextPrefix = "JER_ptresolution";
-    if( outputTextPrefix.Contains( "/" ) ){
-        std::cerr << "ERROR: outputTextPrefix must not contain '/': " << outputTextPrefix << "\n";
+    if( outputTag.IsNull() ) outputTag = "JER_ptresolution";
+    if( outputTag.Contains( "/" ) ){
+        std::cerr << "ERROR: outputTag must not contain '/': " << outputTag << "\n";
         fIn->Close();
         return;
     }
@@ -538,7 +538,7 @@ void runTextFilePtResolution( TString responseFile, TString outputTextPrefix ){
 
         // Write abseta file (mirror |eta| bins onto both eta halves).
         if( wantAbsEta ){
-            TString path = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta_ptresolution.txt";
+            TString path = textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
             std::stringstream buf;
             buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
             for( int ieta = nEta - 1; ieta >= 0; ieta-- )
@@ -565,7 +565,7 @@ void runTextFilePtResolution( TString responseFile, TString outputTextPrefix ){
         // output is the same as abseta but written with explicit full-eta bin edges.
         // A future pass that extracts eta_reco > 0 and < 0 separately can replace this.
         if( wantFullEta ){
-            TString path = textDir + "/" + outputTextPrefix + "_" + cone + "_eta_ptresolution.txt";
+            TString path = textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";
             std::stringstream buf;
             buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
             // Use the |eta|-folded values mirrored across eta=0 -- same content as abseta file,

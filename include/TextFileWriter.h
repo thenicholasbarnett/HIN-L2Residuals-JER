@@ -15,7 +15,7 @@
 //                    TH2D (eta/|eta| vs pT_avg, z = final correction) and a
 //                    graphs/ dir of per-eta-bin pT-dependence fit TGraphErrors.
 //                    Path is caller-specified, same as any other Step output.
-// outputTextPrefix: a plain filename prefix, NOT a path — must not contain
+// outputTag:        a plain filename prefix, NOT a path — must not contain
 //                    '/' (rejected with an error otherwise). Empty/omitted
 //                    defaults to "L2Residual". The correction text files
 //                    themselves always go to a fixed location,
@@ -23,9 +23,9 @@
 //                    if missing) — that directory is gitignored, meant for
 //                    locally-generated/preliminary corrections, not a
 //                    caller-chosen path. Writes
-//                    "data/jec/preliminary/<prefix>_<cone>_abseta.txt"
+//                    "data/jec/preliminary/<tag>_<cone>_abseta.txt"
 //                    (mirrored |eta| fit) and/or
-//                    "data/jec/preliminary/<prefix>_<cone>_eta.txt"
+//                    "data/jec/preliminary/<tag>_<cone>_eta.txt"
 //                    (independent full-eta fit, no mirroring) per cone,
 //                    depending on [step3] eta_mode in the TOML ("both" |
 //                    "abseta" | "eta"; default "both"). When useNorm is true,
@@ -39,17 +39,17 @@
 //                    ptcorr graph names too (both get a "_norm" suffix when true).
 //
 // JER SF text output (added 2026-07-03): alongside the JEC text files above,
-// also writes "data/jec/preliminary/<prefix>_<cone>_abseta_jer[_norm].txt"
+// also writes "data/jec/preliminary/<tag>_<cone>_abseta_jer[_norm].txt"
 // and "..._<cone>_eta_jer[_norm].txt", using the same intercept_jer_* input
 // this repo's JER scale factors already come from (see CalibrationExtractor.cxx)
-// and the same eta_mode/useNorm/prefix rules as the JEC files. Unlike the JEC
+// and the same eta_mode/useNorm/tag rules as the JEC files. Unlike the JEC
 // writer, this is a direct binned grid (one flat value per eta-bin/pT_avg-slice
 // cell, no pT-dependence fit) written in the real, standard CMS JER text
 // format via the vendored JME::JetResolutionObject
 // (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) rather than a
 // hand-rolled format.
 void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
-                  TString outputRootFile, TString outputTextPrefix = "",
+                  TString outputRootFile, TString outputTag = "",
                   TString method = "gauss", bool useNorm = true );
 
 // A scoped enum, not a bool: a bare bool in this parameter slot collides with
@@ -78,7 +78,7 @@ enum class SingleDatasetKind { Triggered, NonTriggered };
 //            or any single min-bias-like sample). Every pT_avg slice is used
 //            unconditionally, no threshold cut applied.
 void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputRootFile,
-                  TString outputTextPrefix = "",
+                  TString outputTag = "",
                   TString method = "gauss", bool useNorm = true );
 
 // Reads a runResponse output file (produced by runResponse on a Step 1 MC
@@ -89,9 +89,9 @@ void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputR
 // "incl" collection. Output format is the same flat-grid format as the JER SF
 // file ({1 JetEta 1 JetPt [0] Resolution}), with resolution values in place
 // of scale factors. Files written to data/jec/preliminary/ as
-// "<prefix>_<cone>_abseta_ptresolution.txt". eta_mode from the TOML controls
+// "<tag>_<cone>_abseta_ptresolution.txt". eta_mode from the TOML controls
 // whether the abseta (mirrored) variant, the independent full-eta variant, or
 // both are written -- same rule as the JEC/JER SF writers.
-void runTextFilePtResolution( TString responseFile, TString outputTextPrefix = "" );
+void runTextFilePtResolution( TString responseFile, TString outputTag = "" );
 
 #endif
