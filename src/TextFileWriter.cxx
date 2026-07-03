@@ -14,9 +14,11 @@
 #include "Binning.h"
 #include "Naming.h"
 #include "AnalysisConfig.h"
+#include "jetmet_jer/JetResolutionObject.h"
 
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <string>
 #include <cmath>
@@ -139,6 +141,109 @@ static bool WriteFullEtaTextFile( const TString& path, const std::vector<FitResu
     return true;
 }
 
+// --- JER SF text output, via the vendored JME::JetResolutionObject
+// (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) ---
+//
+// Unlike the JEC writer above (which fits a continuous correction(pT_avg)
+// function per eta bin), the JER SF file is a direct binned grid: one flat
+// value per (eta bin, pT_avg slice) cell, no fit. This matches how real
+// official CMS JER SF text files are actually shaped -- a JetEta x JetPt
+// grid of flat scale factors, not a parametrized formula. Definition line:
+// "{1 JetEta 1 JetPt [0] Resolution}" -- 1 bin variable (JetEta), 1
+// structural variable (JetPt, using each pT_avg slice's own [lo,hi) edges
+// as its range -- required by the record format even though the formula
+// itself doesn't depend on it, since Step 2 only gives discretized pT_avg
+// slices, not a continuous fit vs pT), formula "[0]" (the record's first
+// parameter *is* the flat JER SF value, retrievable either via
+// evaluateFormula() or directly). A second parameter, unc -- the *fractional*
+// uncertainty on the SF, unc = error/value, not the raw absolute fit error --
+// rides along in every record, unused by evaluateFormula() but directly
+// retrievable via record.getParametersValues()[1]. Fractional, not absolute,
+// so it matches the standard JER-smearing convention directly (s_up/down =
+// sJER * (1 +/- unc), e.g. "Practical Application of JER Smearing") without
+// a consumer needing to divide by the SF value themselves.
+struct JerRecord {
+    double ptLo, ptHi, value, unc;
+};
+
+// This eta bin's per-pT-slice JER SF values, skipping slices with no data
+// (missing/excluded source, or a genuinely unfit bin left at the histogram's
+// zero/zero-error default -- same convention as FitPtSlices's point list above).
+static std::vector<JerRecord> CollectJerRecords( int ieta,
+    const std::vector<RangeBin>& ptSlices, const std::vector<TH1D*>& hSliceJer ){
+    std::vector<JerRecord> out;
+    for( size_t ip = 0; ip < hSliceJer.size(); ip++ ){
+        if( !hSliceJer[ip] ) continue;
+        double v = hSliceJer[ip]->GetBinContent( ieta + 1 );
+        double e = hSliceJer[ip]->GetBinError( ieta + 1 );
+        if( v == 0.0 && e == 0.0 ) continue;
+        double unc = ( v != 0.0 ) ? e / v : 0.0;
+        out.push_back( { ptSlices[ip].lo, ptSlices[ip].hi, v, unc } );
+    }
+    return out;
+}
+
+// One record line per JerRecord. The "4" token is 2*nVariables + nParameters
+// (2 for the JetPt range this record structurally carries, 2 for the actual
+// [value, unc] parameters) -- see JetResolutionObject::Record's own
+// parsing for why that combined count, not just nParameters, is what the
+// format's record header field means.
+static void AppendJerLines( std::stringstream& buf, double etaLo, double etaHi,
+    const std::vector<JerRecord>& recs ){
+    for( const auto& r : recs ){
+        buf << etaLo << " " << etaHi << " 4 " << r.ptLo << " " << r.ptHi
+            << " " << r.value << " " << r.unc << "\n";
+    }
+}
+
+// Assembles the JER SF text-format definition+records into a temp file, then
+// round-trips it through the real vendored JME::JetResolutionObject: parsed
+// via its file constructor, re-emitted via its own saveToFile(). The final
+// on-disk bytes are produced by the vendored code, not reimplemented here --
+// this function only assembles the input text and mirrors abseta cells onto
+// both eta halves, exactly like WriteAbsEtaTextFile does for JEC (both files
+// use "JetEta" binning even in "abseta" mode, for the same reason: the data
+// is |eta|-binned, but every record still needs one real eta range).
+static bool WriteJerSfTextFile( const TString& path, bool fullEta,
+    const std::vector<RangeBin>& ptSlices, const std::vector<TH1D*>& hSliceJer ){
+
+    std::stringstream buf;
+    buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+
+    if( fullEta ){
+        const int nEta = ( int )kEtaEdges.size() - 1;
+        for( int ieta = 0; ieta < nEta; ieta++ )
+            AppendJerLines( buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
+                CollectJerRecords( ieta, ptSlices, hSliceJer ) );
+    } else {
+        const int nEta = ( int )kAbsEtaEdges.size() - 1;
+        for( int ieta = nEta - 1; ieta >= 0; ieta-- )
+            AppendJerLines( buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
+                CollectJerRecords( ieta, ptSlices, hSliceJer ) );
+        for( int ieta = 0; ieta < nEta; ieta++ )
+            AppendJerLines( buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
+                CollectJerRecords( ieta, ptSlices, hSliceJer ) );
+    }
+
+    TString tmpPath = path + ".tmp";
+    {
+        std::ofstream tmp( tmpPath.Data() );
+        if( !tmp.is_open() ) return false;
+        tmp << buf.str();
+    }
+
+    bool ok = true;
+    try {
+        JME::JetResolutionObject obj( tmpPath.Data() );
+        obj.saveToFile( path.Data() );
+    } catch( const std::exception& e ){
+        std::cerr << "ERROR building JER SF text file " << path << ": " << e.what() << "\n";
+        ok = false;
+    }
+    gSystem->Unlink( tmpPath );
+    return ok;
+}
+
 // Which residuals file backs a given pT_avg slice. Merge is the original
 // triggered+non-triggered behavior; TriggeredOnly/NonTriggeredOnly back the
 // single-dataset overload -- they are NOT the same threshold branch with one
@@ -229,6 +334,7 @@ static void RunTextFileImpl(
 
         // filled below for abseta then fulleta, used to write the two text files afterward
         std::vector<FitResult> fitsAbsEta, fitsFullEta;
+        std::vector<TH1D*> hSliceJerAbsEta, hSliceJerFullEta;
 
         for( int em = 0; em < 2; em++ ){
             const bool fullEta = ( em == 1 );
@@ -242,6 +348,8 @@ static void RunTextFileImpl(
             // a null source (TriggeredOnly below threshold) means the slice is
             // intentionally excluded, not merely missing.
             std::vector<TH1D*> hSlice( nPt, nullptr );
+            std::vector<TH1D*>& hSliceJer = fullEta ? hSliceJerFullEta : hSliceJerAbsEta;
+            hSliceJer.assign( nPt, nullptr );
             int nMissingSlices = 0;
             for( int ip = 0; ip < nPt; ip++ ){
                 const auto& ptSlice = bins.ptavgSlices[ip];
@@ -250,6 +358,9 @@ static void RunTextFileImpl(
                     TString name = L2Name::ObjectName( cone, "intercept",
                         {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
                     hSlice[ip] = FetchIntercept( src, cone, name );
+                    TString nameJer = L2Name::ObjectName( cone, "intercept_jer",
+                        {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
+                    hSliceJer[ip] = FetchIntercept( src, cone, nameJer );
                 }
                 if( !hSlice[ip] ){ nMissingSlices++; }
             }
@@ -314,6 +425,19 @@ static void RunTextFileImpl(
         if( wantAbsEta )  std::cout << 2 * ( int )fitsAbsEta.size() << " eta bins -> " << absEtaTxt;
         if( wantAbsEta && wantFullEta ) std::cout << ", ";
         if( wantFullEta ) std::cout << ( int )fitsFullEta.size() << " eta bins -> " << etaTxt;
+        std::cout << "\n";
+
+        TString absEtaJerTxt = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta_jer" + suffix + ".txt";
+        TString etaJerTxt    = textDir + "/" + outputTextPrefix + "_" + cone + "_eta_jer" + suffix + ".txt";
+        if( wantAbsEta && !WriteJerSfTextFile( absEtaJerTxt, false, bins.ptavgSlices, hSliceJerAbsEta ) )
+            std::cerr << "Cannot write JER SF output file " << absEtaJerTxt << "\n";
+        if( wantFullEta && !WriteJerSfTextFile( etaJerTxt, true, bins.ptavgSlices, hSliceJerFullEta ) )
+            std::cerr << "Cannot write JER SF output file " << etaJerTxt << "\n";
+
+        std::cout << "Done (JER SF). " << cone << ": ";
+        if( wantAbsEta )  std::cout << "-> " << absEtaJerTxt;
+        if( wantAbsEta && wantFullEta ) std::cout << ", ";
+        if( wantFullEta ) std::cout << "-> " << etaJerTxt;
         std::cout << "\n";
     }
 

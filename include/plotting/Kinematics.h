@@ -16,6 +16,7 @@
 #include "plotting/Utilities.h"
 #include "Colors.h"
 #include "ProgressBar.h"
+#include "jetmet/Variables.h"   // JME-standard axis titles for reco jet pT/eta
 
 #include <algorithm>
 #include <cctype>
@@ -50,6 +51,14 @@ static const KinematicsCollection kKinematicsCollections[] = {
 
 static constexpr int kNKinematicsPtMins = 3;
 static const double kKinematicsPtMins[] = { 40.0, 100.0, 200.0 };
+
+// incl/tag/probe here are all genuinely reconstructed jets (Step 1's real
+// data/MC jet collections, not gen-matched), so JetMET's jtpt/jteta ("Reco")
+// convention is the honest equivalent for these two axes. phi has no JetMET
+// Variables.hh entry at all, so it and the eta-phi map (which pairs eta with
+// phi and would look inconsistent with only one axis relabeled) stay local.
+static const TString kRecoPtAxisTitle  = VARIABLES::getVariableAxisTitleString( VARIABLES::jtpt, true );
+static const TString kRecoEtaAxisTitle = VARIABLES::getVariableAxisTitleString( VARIABLES::jteta, false );
 
 inline TH1D* ProjectTH3D1D( TH3D* h3, const char* axis, const TString& name ){
     TDirectory::TContext nodir( nullptr );
@@ -136,7 +145,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
             TCanvas* c = new TCanvas( cvName, "", 800, 600 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
-            DrawKinematics1D( h, "p_{T} [GeV/c]", "1/N  dN/dp_{T}", true );
+            DrawKinematics1D( h, kRecoPtAxisTitle, "1/N  dN/dp_{T}", true );
             hPtAll[ic] = ( TH1D* )h->Clone( Form( "hPtAll_%d", ic ) ); hPtAll[ic]->SetDirectory( 0 );
             DrawCMSInternalHeader( 0.14, 0.90 );
             drawConeLabel( collPlot, 0.14 );
@@ -152,7 +161,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
             TCanvas* c = new TCanvas( cvName, "", 800, 600 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
-            DrawKinematics1D( h, "#eta", "1/N  dN/d#eta", false );
+            DrawKinematics1D( h, kRecoEtaAxisTitle, "1/N  dN/d#eta", false );
             hEtaAll[ic] = ( TH1D* )h->Clone( Form( "hEtaAll_%d", ic ) ); hEtaAll[ic]->SetDirectory( 0 );
             DrawCMSInternalHeader( 0.14, 0.90 );
             drawConeLabel( collPlot, 0.14 );
@@ -288,9 +297,9 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
         pb.Update();
     };
 
-    DrawOverview1D( hPtAll,  "p_{T} [GeV/c]", "1/N  dN/dp_{T}", "pt",  true );
-    DrawOverview1D( hEtaAll, "#eta",           "1/N  dN/d#eta",  "eta", false );
-    DrawOverview1D( hPhiAll, "#phi",           "1/N  dN/d#phi",  "phi", false );
+    DrawOverview1D( hPtAll,  kRecoPtAxisTitle,  "1/N  dN/dp_{T}", "pt",  true );
+    DrawOverview1D( hEtaAll, kRecoEtaAxisTitle, "1/N  dN/d#eta",  "eta", false );
+    DrawOverview1D( hPhiAll, "#phi",            "1/N  dN/d#phi",  "phi", false );
 
     for( int ic = 0; ic < kNKinematicsCollections; ic++ ){
         delete hPtAll[ic];

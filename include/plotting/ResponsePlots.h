@@ -17,6 +17,7 @@
 #include "Binning.h"
 #include "Naming.h"
 #include "ProgressBar.h"
+#include "jetmet/Variables.h"   // JME-standard axis titles for the pT_gen binning variable
 
 #include <algorithm>
 #include <vector>
@@ -58,6 +59,14 @@ static const char* const kResponseVariants[] = { "corr", "reco", "raw" };
 static const char* const kResponseVariantLabels[] = {
     "p_{T}^{corr}/p_{T}^{gen}", "p_{T}^{reco}/p_{T}^{gen}", "p_{T}^{raw}/p_{T}^{gen}" };
 static constexpr int kNResponseVariants = 3;
+
+// pT_gen is the binning variable for every JES/JER-vs-pT_gen plot below --
+// JetMET's own refpt ("reference"/gen-matched jet pT in JRA terminology) is
+// the closest honest equivalent, so its axis-title convention is used here
+// rather than a locally hardcoded string. The response-ratio axes above
+// (kResponseVariantLabels) have no such equivalent -- VARIABLES has no
+// "response ratio" concept -- and stay local.
+static const TString kPtGenAxisTitle = VARIABLES::getVariableAxisTitleString( VARIABLES::refpt, true );
 
 inline TF1* FitResponseGuide( TH1D* h, const TString& name, Color_t col, double halfWidth ){
     if( !h || h->GetEntries() < kMinEntriesPlot ) return nullptr;
@@ -214,7 +223,7 @@ inline void DrawVariantComparison( TFile* fIn, const TString& outDir, const TStr
     c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
 
     frame->SetTitle( "" );
-    frame->GetXaxis()->SetTitle( "p_{T}^{gen} [GeV]" );
+    frame->GetXaxis()->SetTitle( kPtGenAxisTitle );
     frame->GetYaxis()->SetTitle( quantity );
     frame->GetXaxis()->CenterTitle();
     frame->GetYaxis()->CenterTitle();
@@ -290,8 +299,8 @@ inline void PlotResponse( TFile* fIn, const TString& outDir, const TString& cone
     // ---- per-variant summary: 3 collections overlaid per canvas ----
     for( int iv = 0; iv < kNResponseVariants; iv++ ){
         const TString variant = kResponseVariants[iv];
-        DrawResponseSummary( fIn, outDir, cone, "JES", { variant, "vs_ptgen" }, "p_{T}^{gen} [GeV]", "JES_" + variant + "_vs_ptgen", pb );
-        DrawResponseSummary( fIn, outDir, cone, "JER", { variant, "vs_ptgen" }, "p_{T}^{gen} [GeV]", "JER_" + variant + "_vs_ptgen", pb );
+        DrawResponseSummary( fIn, outDir, cone, "JES", { variant, "vs_ptgen" }, kPtGenAxisTitle, "JES_" + variant + "_vs_ptgen", pb );
+        DrawResponseSummary( fIn, outDir, cone, "JER", { variant, "vs_ptgen" }, kPtGenAxisTitle, "JER_" + variant + "_vs_ptgen", pb );
     }
 
     // ---- variant comparison: corr/reco/raw overlaid per canvas, one per collection ----

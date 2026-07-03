@@ -15,6 +15,7 @@
 #include "Binning.h"
 #include "Naming.h"
 #include "TextFileWriter.h"
+#include "jetmet_jer/JetResolutionObject.h"
 
 static int nPass = 0;
 static int nFail = 0;
@@ -63,6 +64,41 @@ static TString MakeResiduals( const char* path, double corrValue, double corrErr
     return TString( path );
 }
 
+// Like MakeResiduals, but also writes intercept_jer_* histograms (both
+// abseta and fulleta) at jerValue ± jerErr in every bin -- used only by the
+// JER SF writer test below, kept separate from MakeResiduals so every other
+// existing test's residuals files stay exactly as before (no intercept_jer_*
+// objects, matching what a pre-JER-SF Step 2 file would have).
+static TString MakeResidualsWithJer( const char* path, double corrValue, double corrErr,
+                                     double jerValue, double jerErr,
+                                     const std::vector<int>& sliceIndices ){
+    MakeResiduals( path, corrValue, corrErr, sliceIndices, false, true );
+
+    TFile* f = new TFile( path, "update" );
+    BinningConfig bins;
+    TDirectory* coneDir = ( TDirectory* )f->Get( "ak4PF" );
+    coneDir->cd();
+    for( int ip : sliceIndices ){
+        for( int em = 0; em < 2; em++ ){
+            const bool fullEta = ( em == 1 );
+            const std::vector<Double_t>& edges = fullEta ? kEtaEdges : kAbsEtaEdges;
+            const int nEta = ( int )edges.size() - 1;
+            TString name = L2Name::ObjectName( "ak4PF", "intercept_jer",
+                { L2Name::EtaModeKey( fullEta ), L2Name::PtKey( bins.ptavgSlices[ip] ) }, { "gauss" } );
+            TH1D* h = new TH1D( name, "", nEta, edges.data() );
+            for( int ieta = 1; ieta <= nEta; ieta++ ){
+                h->SetBinContent( ieta, jerValue );
+                h->SetBinError( ieta, jerErr );
+            }
+            h->Write();
+            delete h;
+        }
+    }
+    f->Close();
+    delete f;
+    return TString( path );
+}
+
 // The real cfg.hltJ80Thresh (cfg/2024ppRef.toml) is 100.0: pT slices 0,1
 // (30-70, 70-100) fall below threshold -> NonTriggered; slices 2-5 (100-175 ... 500-1000)
 // are at/above -> Triggered. Build both files with full slice coverage, possibly at
@@ -90,6 +126,10 @@ static void CleanupFiles( const char* trigPath, const char* notrigPath,
     std::remove( TxtPath( prefix, "eta", false ).Data() );
     std::remove( TxtPath( prefix, "abseta", true ).Data() );
     std::remove( TxtPath( prefix, "eta", true ).Data() );
+    std::remove( TxtPath( prefix, "abseta_jer", false ).Data() );
+    std::remove( TxtPath( prefix, "eta_jer", false ).Data() );
+    std::remove( TxtPath( prefix, "abseta_jer", true ).Data() );
+    std::remove( TxtPath( prefix, "eta_jer", true ).Data() );
 }
 
 // Parse one data line from the JEC text file.
@@ -496,6 +536,82 @@ void TestEtaExtent(){
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
+// [9] JER SF text writer: round-trips the written file through the real
+// vendored JME::JetResolutionObject reader (not a hand-rolled parser here),
+// confirming the on-disk format is genuinely valid and the values it carries
+// match what was written. Note on getRecord(): since this writer emits one
+// record per (eta bin, pT slice) cell -- not one record per eta bin the way
+// a real functional-fit JER SF file would -- JetResolutionObject::getRecord()
+// (which matches on eta bins only, not pT) can return any of several
+// same-eta-bin records; this test instead scans getRecords() directly for
+// the one whose eta AND pT ranges both contain the target point, which is
+// what a caller wanting a specific pT slice's value needs to do with this
+// writer's output.
+void TestJerSfWriter(){
+    std::cout << "\n[9] JER SF text writer round-trip\n";
+
+    const char* trigPath = "/tmp/tw_trig9.root";
+    const char* notrigPath = "/tmp/tw_notrig9.root";
+    const char* rootPath = "/tmp/tw_out9.root";
+    const char* prefix = "test_tw9";
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
+
+    MakeResidualsWithJer( trigPath, 1.0, 0.001, 1.02, 0.01, {0, 1, 2, 3, 4, 5} );
+    MakeResidualsWithJer( notrigPath, 1.0, 0.001, 1.02, 0.01, {0, 1, 2, 3, 4, 5} );
+    runTextFile( trigPath, notrigPath, rootPath, prefix, "gauss", false );
+
+    TString jerAbsPath = TxtPath( prefix, "abseta_jer", false );
+    TString jerEtaPath = TxtPath( prefix, "eta_jer", false );
+
+    Check( std::ifstream( jerAbsPath.Data() ).good(), "abseta JER SF text file exists" );
+    Check( std::ifstream( jerEtaPath.Data() ).good(), "eta JER SF text file exists" );
+
+    bool threw = false;
+    JME::JetResolutionObject* obj = nullptr;
+    try {
+        obj = new JME::JetResolutionObject( jerAbsPath.Data() );
+    } catch( const std::exception& ){
+        threw = true;
+    }
+    Check( !threw && obj != nullptr, "vendored JetResolutionObject parses the abseta JER SF file without throwing" );
+
+    if( obj ){
+        Check( obj->getDefinition().getFormulaString() == "[0]", "definition formula is [0]" );
+        Check( obj->getDefinition().getBinsName().size() == 1
+            && obj->getDefinition().getBinsName()[0] == "JetEta", "definition bin variable is JetEta" );
+        // 18 abs-eta bins, mirrored onto 36 eta identities, x 6 populated pT slices
+        Check( obj->getRecords().size() == 36 * 6, "record count = 36 eta identities x 6 pT slices" );
+
+        const JME::JetResolutionObject::Record* found = nullptr;
+        for( const auto& r : obj->getRecords() ){
+            if( r.getBinsRange()[0].is_inside( 0.5f ) && r.getVariablesRange()[0].is_inside( 137.5f ) ){
+                found = &r;
+                break;
+            }
+        }
+        Check( found != nullptr, "a record's eta and pT ranges both contain (eta=0.5, pT=137.5)" );
+        if( found ){
+            Check( found->getParametersValues().size() == 2, "record carries 2 parameters (value, unc)" );
+            if( found->getParametersValues().size() == 2 ){
+                Check( std::fabs( found->getParametersValues()[0] - 1.02 ) < 1e-4,
+                    "first parameter is the JER SF value (1.02)" );
+                // unc = error/value = 0.01/1.02, not the raw absolute error --
+                // matches the standard s_up/down = sJER * (1 +/- unc) convention.
+                Check( std::fabs( found->getParametersValues()[1] - ( 0.01 / 1.02 ) ) < 1e-4,
+                    "second parameter is the fractional uncertainty unc = error/value" );
+            }
+
+            JME::JetParameters params;
+            params.setJetEta( 0.5f ).setJetPt( 137.5f );
+            float sf = obj->evaluateFormula( *found, params );
+            Check( std::fabs( sf - 1.02 ) < 1e-4, "evaluateFormula() recovers the JER SF value via the [0] formula" );
+        }
+        delete obj;
+    }
+
+    CleanupFiles( trigPath, notrigPath, rootPath, prefix );
+}
+
 // ---- main ----
 
 int main(){
@@ -514,6 +630,7 @@ int main(){
     TestUnityFallback_EmptyBins();
     TestFitRoundTrip();
     TestEtaExtent();
+    TestJerSfWriter();
 
     std::cout << "\n=== " << nPass << " passed, " << nFail << " failed ===\n";
     return nFail > 0 ? 1 : 0;

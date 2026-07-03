@@ -16,6 +16,8 @@
 #include "Binning.h"
 #include "Naming.h"
 #include "ProgressBar.h"
+#include "jetmet/RootStyle.h"
+#include "jetmet/Style.h"
 
 #include <vector>
 
@@ -26,11 +28,30 @@
 //   finals_{cone}_{method}_abseta  — R_data/R_MC at alpha→0 vs |eta|, all pT bins overlaid
 //   finals_{cone}_{method}_fulleta — same vs full eta
 // PlotEtaSym does the |eta|-vs-fulleta symmetry check per pT slice; this overlays pT slices.
+//
+// Style pilot (2026-07-03): this is the second of two plot families piloting
+// the vendored JetMET setTDRStyle()/CMS_lumi() (external/jetmet/RootStyle.h,
+// Style.h) instead of this repo's own SetupPlotStyle() -- deliberately picked
+// because, unlike every other plot family, PlotFinals never called
+// DrawCMSInternalHeader() at all (it substitutes its own descriptive
+// "cone | method | xTitle | JEC/JER" title instead) -- a real test of whether
+// CMS_lumi() composes cleanly alongside a plot that has no prior CMS-header
+// call site to swap out. Adds CMS_lumi() as a genuinely new label (closing
+// that gap) and nudges the existing custom title down slightly to avoid the
+// two overlapping -- see the exact y-position note at that call site.
+// setTDRStyle() replaces the *global* gStyle, so it's saved/restored around
+// this function the same way as EventQA.h's pilot, to avoid leaking into
+// every other (non-piloted) plot family drawn later in the same
+// runPlotting() call.
 // ============================================================
 
 inline void PlotFinals( TFile* fIn, const TString& outDir,
                        const TString& cone, const BinningConfig& bins,
                        ProgressBar& pb, bool isClosure = false, bool useJer = false ){
+    TStyle* prevStyle = gStyle;
+    setTDRStyle();
+    SetupPlotStyle();
+
     const TString calibKey = useJer ? "jer" : "jec";
     for( int m = 0; m < kNMethods; m++ ){
         for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
@@ -151,11 +172,18 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
 
             leg->Draw();
 
+            // CMS_lumi's two-line "CMS"/"Internal" block runs from about
+            // y=0.92 ("CMS" baseline) down to y=0.875 ("Internal" baseline)
+            // under tdrStyle's margins -- verified visually, an initial
+            // y=0.86 for the line below still collided with "Internal"'s
+            // own font extent. y=0.78 clears it with real margin.
+            CMS_lumi( c, 16, 11 );
+
             TLatex* tex = new TLatex();
             tex->SetNDC();
             tex->SetTextSize( 0.048 );
             tex->SetTextFont( 62 );
-            tex->DrawLatex( 0.14, 0.92, Form( "%s  |  %s  |  %s  |  %s",
+            tex->DrawLatex( 0.14, 0.78, Form( "%s  |  %s  |  %s  |  %s",
                 cone.Data(), kMethodLabels[m], xTitle.Data(), CalibTag( useJer ).Data() ) );
 
             SavePlot( c, outDir, cone, "finals", {calibKey, etaMode}, cvName );
@@ -164,6 +192,8 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
             delete c;   // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)
         }
     }
+
+    gStyle = prevStyle;
 }
 
 #endif

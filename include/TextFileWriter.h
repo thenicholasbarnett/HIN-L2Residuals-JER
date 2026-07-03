@@ -37,6 +37,17 @@
 //                    is the standard method). Pass false for the direct,
 //                    non-normalized variant. Affects the corrfinal grid and
 //                    ptcorr graph names too (both get a "_norm" suffix when true).
+//
+// JER SF text output (added 2026-07-03): alongside the JEC text files above,
+// also writes "data/jec/preliminary/<prefix>_<cone>_abseta_jer[_norm].txt"
+// and "..._<cone>_eta_jer[_norm].txt", using the same intercept_jer_* input
+// this repo's JER scale factors already come from (see CalibrationExtractor.cxx)
+// and the same eta_mode/useNorm/prefix rules as the JEC files. Unlike the JEC
+// writer, this is a direct binned grid (one flat value per eta-bin/pT_avg-slice
+// cell, no pT-dependence fit) written in the real, standard CMS JER text
+// format via the vendored JME::JetResolutionObject
+// (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) rather than a
+// hand-rolled format.
 void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
                   TString outputRootFile, TString outputTextPrefix = "",
                   TString method = "gauss", bool useNorm = true );

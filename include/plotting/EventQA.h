@@ -11,6 +11,8 @@
 #include "plotting/Style.h"
 #include "plotting/Utilities.h"
 #include "ProgressBar.h"
+#include "jetmet/RootStyle.h"
+#include "jetmet/Style.h"
 
 #include <algorithm>
 
@@ -27,7 +29,23 @@
 // histograms that are absent (e.g. hfilt/h_hlt_j80 on MC).
 // ============================================================
 
+// Style pilot (2026-07-03): this plot family uses the vendored JetMET
+// setTDRStyle()/CMS_lumi() (external/jetmet/RootStyle.h, Style.h) instead of
+// this repo's own SetupPlotStyle()/DrawCMSInternalHeader(), as a contained
+// trial before deciding whether to roll it out further -- see FinalCorrections.h
+// for the other piloted family and CLAUDE.md for the visual comparison.
+// setTDRStyle() replaces the *global* gStyle, so it's saved and restored
+// around this function's drawing calls rather than left to leak into every
+// other (non-piloted) plot family drawn later in the same runPlotting() call.
+// SetupPlotStyle() is re-applied immediately after setTDRStyle() to layer
+// this repo's own repo-specific overrides on top -- most importantly the
+// gray grid color, since tdrStyle's own SetGridColor(0) would otherwise
+// render an invisible (white-on-white) grid where c->SetGridx()/SetGridy()
+// are already called below.
 inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
+    TStyle* prevStyle = gStyle;
+    setTDRStyle();
+    SetupPlotStyle();
 
     // ---- vz: all events vs after cuts ----
     {
@@ -63,7 +81,7 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
             leg->AddEntry( hallc, Form( "All events (%s)", FormatEntriesText( ( Long64_t )hall->GetEntries() ).Data() ), "f" );
             leg->AddEntry( hvzc, Form( "After cuts  (%s)", FormatEntriesText( ( Long64_t )hvz->GetEntries() ).Data() ), "lp" );
             leg->Draw();
-            DrawCMSInternalHeader( 0.13, 0.90 );
+            CMS_lumi( c, 16, 11 );
 
             SavePlot( c, outDir, "", "event", {}, "event_vz" );
             delete c;
@@ -91,7 +109,7 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
             hfilt->SetMinimum( 0.5 );
             hfilt->SetMaximum( std::max( 1.0, hfilt->GetMaximum() ) * 10.0 );
             hfilt->Draw( "hist" );
-            DrawCMSInternalHeader( 0.15, 0.90 );
+            CMS_lumi( c, 16, 11 );
             DrawEntriesLabel( ( Long64_t )hfilt->GetEntries() );
             SavePlot( c, outDir, "", "event", {}, "event_ppvF" );
             delete c;
@@ -119,13 +137,15 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
             htrig->SetMinimum( 0.5 );
             htrig->SetMaximum( std::max( 1.0, htrig->GetMaximum() ) * 10.0 );
             htrig->Draw( "hist" );
-            DrawCMSInternalHeader( 0.15, 0.90 );
+            CMS_lumi( c, 16, 11 );
             DrawEntriesLabel( ( Long64_t )htrig->GetEntries() );
             SavePlot( c, outDir, "", "event", {}, "event_hlt_j80" );
             delete c;
             pb.Update();
         }
     }
+
+    gStyle = prevStyle;
 }
 
 #endif
