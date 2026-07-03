@@ -66,6 +66,8 @@ Compiled commands accept JetMET-style `-key value` options and optional config
 files whose contents use `key = value`. The older `KEY=value` shell-token form
 is still accepted for compatibility. `config` is required by every compiled
 entry point, and typos such as `-outpt ...` are rejected immediately.
+See `JME_COMPATIBILITY_NOTES.md` for the JetMET/JME compatibility decision log
+and code survey.
 
 ```bash
 # Step 1, usually on lxplus/Condor or from a SCRAM shell
@@ -104,7 +106,7 @@ config = cfg/2024ppRef.toml
 Build with SCRAM or with CMake under `cmsenv`, then submit Step 1 jobs (the CMSSW `src` directory used on worker nodes is derived automatically from the active `cmsenv`, no TOML setting needed):
 
 ```bash
-bash ./condor/make_condor.sh OUTPUT=<output_files_dir> FILELISTS=<input_HiForest_filelist.txt> CONFIG=cfg/2024ppRef.toml
+bash ./condor/make_condor.sh -output <output_files_dir> -filelists <input_HiForest_filelist.txt> -config cfg/2024ppRef.toml
 ```
 
 Merge Step 1 outputs before Step 2:
@@ -164,11 +166,11 @@ The arrays `cones.labels`, `trees.jets`, and `jec.files` are position-matched an
 
 To add a new C++ analysis config value, update three places: `cfg/2024ppRef.toml`, `include/AnalysisConfig.h`, and the assignment block in `src/AnalysisConfig.cxx`. Condor-only keys such as `[condor.filelist_modes]` are consumed by `condor/make_condor.sh` directly, not by the C++ config.
 
-Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and pass it explicitly with `CONFIG=path`.
+Porting to a different collision system or run period: copy `cfg/default.toml` (a commented scaffold, not runnable as-is — every `REQUIRED_SET_ME` placeholder needs filling in) to a new file and pass it explicitly with `-config path`.
 
-Every compiled entry point takes `CONFIG=path` as a **required** argument and prints the resolved TOML path at startup — there is no implicit default TOML. Which config gets loaded is a physics-affecting choice (e.g. the main run-period config vs. a closure config with different `residual_files`), so a missing `CONFIG=` is always a hard CLI error, never a silent fallback to `cfg/2024ppRef.toml`. Relative paths inside the TOML, such as `data/veto/...`, `data/json/...`, and `data/jec/...`, are resolved relative to the repo root — the compiled-in source directory, or `L2RESIDUALS_HOME` if set. `L2RESIDUALS_HOME` is a separate, narrower mechanism than `CONFIG`: it only affects *where relative paths inside an already-chosen TOML resolve from*, and does not itself select or default a TOML.
+Every compiled entry point takes `-config path` as a **required** argument and prints the resolved TOML path at startup — there is no implicit default TOML. The legacy `CONFIG=path` spelling is still accepted, but new examples use the JetMET-style form. Which config gets loaded is a physics-affecting choice (e.g. the main run-period config vs. a closure config with different `residual_files`), so a missing config argument is always a hard CLI error, never a silent fallback to `cfg/2024ppRef.toml`. Relative paths inside the TOML, such as `data/veto/...`, `data/json/...`, and `data/jec/...`, are resolved relative to the repo root — the compiled-in source directory, or `L2RESIDUALS_HOME` if set. `L2RESIDUALS_HOME` is a separate, narrower mechanism than the config argument: it only affects *where relative paths inside an already-chosen TOML resolve from*, and does not itself select or default a TOML.
 
-`L2RESIDUALS_CONFIG` is the environment-variable equivalent of `CONFIG=path` — set it once in a shell so interpreted-ROOT usage (which bypasses the compiled CLI entirely, see below) and repeated invocations don't need `CONFIG=...` retyped every time. A compiled binary's own `CONFIG=` token still takes precedence when both are present:
+`L2RESIDUALS_CONFIG` is the environment-variable equivalent of `-config path` — set it once in a shell so interpreted-ROOT usage (which bypasses the compiled CLI entirely, see below) and repeated invocations don't need `-config ...` retyped every time. A compiled binary's own `-config` option or legacy `CONFIG=` token still takes precedence when both are present:
 
 ```bash
 export L2RESIDUALS_CONFIG=/path/to/2024ppRef.toml   # required by every entry point, one way or another
@@ -188,8 +190,11 @@ Every compiled binary accepts three argument styles:
 The first two forms mirror JetMET's `CommandLine` convention: config files use
 `key = value`, and shell overrides use `-key value`. Command-line values
 override values loaded from earlier config files. Keys are case-insensitive,
-and unknown keys fail loud. `condor/make_condor.sh` is a bash helper and still
-uses the original `KEY=value` convention.
+and unknown keys fail loud. `condor/make_condor.sh` is a bash helper, not one
+of the compiled binaries, so it doesn't share `include/CliTokens.h` directly —
+but it follows the same `-key value` (plus bare `-flag` switches for booleans)
+convention natively in bash, for consistency across the whole CLI. It does not
+accept the legacy `KEY=value` form or config files.
 
 | Binary | Required options | Optional options |
 | :- | :- | :- |
@@ -199,6 +204,8 @@ uses the original `KEY=value` convention.
 | `runTextFile` single-dataset mode | `triggered` *or* `nontriggered` (exactly one), `output`, `config` | `prefix`, `method`, `norm` |
 | `runResponse` | `input`, `output`, `config` | none |
 | `runPlotting` | `input`, `config` | `outdir`, `flags`, `closure`, `calibration` |
+| `make_condor.sh` (all filelists) | `output`, `alltxt`, `config` | `nosubmit`, `tag` |
+| `make_condor.sh` (specific filelists) | `output`, `filelists`, `config` | `nosubmit`, `tag` |
 
 `mode` must be `triggered`, `non-triggered`, or `mc`. `prefix` for `runTextFile` is a plain filename prefix, not a path — it must not contain `/`, and defaults to `L2Residual` when omitted; see the Step 3 section below for where the resulting text files go. `method` may be `gauss`, `doubleGauss`, `trunc90`, or `trunc95`. `norm = false` selects the direct non-normalized Step 3 variant; omitted or any value other than `false` uses the normalized standard variant. `flags` for plotting can be passed as multiple shell words after `-flags`, e.g. `-flags finals etasym methods`, or as a config-file line `flags = finals etasym methods`. `closure = true` for `runPlotting` fixes the `finals` plot's y-axis to 0.95–1.05 with red dotted guide lines at 0.99/1.01, for checking a closure pass's R<sub>MC</sub>/R<sub>data</sub> ≈ 1 at a glance; omitted (or any other value) keeps the normal auto-scaled range used for the correction derivation itself. No effect on any flag other than `finals`. `calibration = JEC|JER` for `runPlotting` (default `JEC`) switches `etasym`/`methods`/`finals`/`normcomp`/`roverlay`/`alpha` between the mean-derived JEC output (the L2Residual correction) and the stddev-derived JER SF output; no effect on `adist`/`kinematics`/`event`/`ptfit`/`response`, which don't have a JEC/JER axis.
 
@@ -405,43 +412,43 @@ The runtime wrapper copied into each submission is stamped with `$CMSSW_BASE/src
 
 <strong> Submitting HTCondor Jobs </strong>
 
-Every argument is a `KEY=value` token, matching the compiled binaries' convention (`include/CliTokens.h`) — no positional arguments, order never matters, an unrecognized or malformed token is an immediate usage error. Keys are case-insensitive and tolerate surrounding whitespace on a quoted token (e.g. `"config = cfg/x.toml"` parses the same as `CONFIG=cfg/x.toml"`), matching `CliTokens.h`'s `SplitToken`.
+Every argument is a JetMET-style `-flag` — either `-flag value` or a bare boolean switch (`-alltxt`, `-nosubmit`) — matching the compiled binaries' `-key value` convention, just implemented natively in bash rather than through `include/CliTokens.h`. No positional arguments, no `KEY=value`, no config files; flag names are case-insensitive; an unrecognized flag, a value-taking flag with nothing after it, or any argument that isn't a `-flag` at all is an immediate usage error.
 
 ```bash
 # all filelists in data/txt/
-bash condor/make_condor.sh OUTPUT=/eos/cms/store/group/phys_heavyions/nbarnett/l2residuals ALLTXT=true CONFIG=cfg/2024ppRef.toml
+bash condor/make_condor.sh -output /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals -alltxt -config cfg/2024ppRef.toml
 
 # specific filelist
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt CONFIG=cfg/2024ppRef.toml
+bash condor/make_condor.sh -output /eos/.../l2residuals -filelists data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt -config cfg/2024ppRef.toml
 
-# multiple filelists — space-separated inside one quoted token
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals \
-    FILELISTS="data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt" \
-    CONFIG=cfg/2024ppRef.toml
+# multiple filelists — separate words after -filelists, no quoting needed
+bash condor/make_condor.sh -output /eos/.../l2residuals \
+    -filelists data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt \
+    -config cfg/2024ppRef.toml
 
 # a directory instead of individual files -- every *.txt directly inside it is submitted;
 # handy for staging a subset of filelists into their own directory (e.g. named after
 # today's date) without listing each one
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/2026-07-03 CONFIG=cfg/2024ppRef.toml
+bash condor/make_condor.sh -output /eos/.../l2residuals -filelists data/txt/2026-07-03 -config cfg/2024ppRef.toml
 
 # dry run
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals ALLTXT=true CONFIG=cfg/2024ppRef.toml NOSUBMIT=true
+bash condor/make_condor.sh -output /eos/.../l2residuals -alltxt -config cfg/2024ppRef.toml -nosubmit
 
 # tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
-    CONFIG=cfg/2024ppRef.toml TAG=clos_abseta
+bash condor/make_condor.sh -output /eos/.../l2residuals -filelists data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+    -config cfg/2024ppRef.toml -tag clos_abseta
 
-# a different TOML entirely — independent of TAG, mix and match freely;
+# a different TOML entirely — independent of -tag, mix and match freely;
 # useful for closure passes or a different run period/system
-bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
-    TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
+bash condor/make_condor.sh -output /eos/.../l2residuals -filelists data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+    -tag clos_abseta -config cfg/2024ppRef_clos_abseta.toml
 ```
 
-`ALLTXT=true` and `FILELISTS=` are mutually exclusive; exactly one is required. Both default to their "off" state (`ALLTXT=false`, no filelists) if omitted, same as `NOSUBMIT=false`. `FILELISTS=` entries can be files, directories (expanded to every `*.txt` directly inside, non-recursive), or a mix of both in the same quoted token. `[condor.filelist_modes]` keys off each filelist's basename only, never its path, so moving filelists into a dated subdirectory needs no TOML changes.
+`-alltxt` and `-filelists` are mutually exclusive; exactly one is required. Both default to their "off" state if omitted, same as `-nosubmit`. `-filelists` entries can be files, directories (expanded to every `*.txt` directly inside, non-recursive), or a mix of both — every word up to the next `-flag` is consumed. `[condor.filelist_modes]` keys off each filelist's basename only, never its path, so moving filelists into a dated subdirectory needs no TOML changes.
 
-Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
+Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `-tag value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 
-`CONFIG=path` picks which TOML gets submitted with the jobs — **required, no default**, since which TOML gets used is a physics-affecting choice (e.g. main run-period config vs. a closure config) — independent of `TAG`, mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`); for a different run period or collision system, point `CONFIG` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
+`-config path` picks which TOML gets submitted with the jobs — **required, no default**, since which TOML gets used is a physics-affecting choice (e.g. main run-period config vs. a closure config) — independent of `-tag`, mix and match freely. Whatever's selected is transferred to the sandbox under a fixed name (`analysis_config.toml`); for a different run period or collision system, point `-config` at that system's TOML (e.g. copied from `cfg/default.toml`) with no other changes needed. The config actually used is echoed at the end of the run and archived alongside the generated `.condor` submission files in `condor/submissions/<timestamp>/`.
 
 <h2> Hadd Many Files </h2>
 
