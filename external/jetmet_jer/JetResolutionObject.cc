@@ -3,6 +3,12 @@
 // See JetResolutionObject.h for context. Compiled with -DSTANDALONE (see
 // CMakeLists.txt) so the STANDALONE branches below are the ones taken.
 
+// Self-define STANDALONE so the correct branches are taken regardless of
+// whether the build system passes -DSTANDALONE on the command line.
+#ifndef STANDALONE
+#define STANDALONE
+#endif
+
 #ifndef STANDALONE
 #include <CondFormats/JetMETObjects/interface/JetResolutionObject.h>
 #include <CondFormats/JetMETObjects/interface/Utilities.h>
