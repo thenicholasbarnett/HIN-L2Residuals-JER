@@ -11,6 +11,7 @@ bin/*
 *.root
 *.png
 *.pdf
+!data/veto/*.root
 
 # closure/reprocessing inputs
 cfg/*clos*.toml
