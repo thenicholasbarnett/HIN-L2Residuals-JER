@@ -376,7 +376,10 @@ static void ExtractAndFit(
     const std::vector<Double_t>& etaEdges,
     const TString& nameSuffix,
     ResidualFitControls& controls,
+    CalibrationMode mode,
     ProgressBar& pb ){
+    const bool doJEC = ( mode == CalibrationMode::JEC );
+    const bool doJER = ( mode == CalibrationMode::JER );
     const int nPt = ( int )bins.ptavgSlices.size();
     const int nAlpha = ( int )bins.alphaSlices.size();
     const int nEta = hData->GetAxis( kEtaAxis )->GetNbins();
@@ -509,15 +512,18 @@ static void ExtractAndFit(
                     hRmOut[method][ialpha][ipt]->SetBinError( ieta + 1, eRm );
                 };
 
-                accumulate( rpts, hRd, hRm, "mean A", 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
-                accumulate( rpts, hRd, hRm, "mean A", 1, ddg.mean, ddg.meanErr, mdg.mean, mdg.meanErr, ddg.valid && mdg.valid );
-                accumulate( rpts, hRd, hRm, "mean A", 2, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
-                accumulate( rpts, hRd, hRm, "mean A", 3, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
-
-                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 0, gd.sigma, gd.sigmaErr, gm.sigma, gm.sigmaErr, gd.valid && gm.valid );
-                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 1, ddg.sigma, ddg.sigmaErr, mdg.sigma, mdg.sigmaErr, ddg.valid && mdg.valid );
-                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 2, td90.sigma, td90.sigmaErr, tm90.sigma, tm90.sigmaErr, td90.valid && tm90.valid );
-                accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 3, td95.sigma, td95.sigmaErr, tm95.sigma, tm95.sigmaErr, td95.valid && tm95.valid );
+                if( doJEC ){
+                    accumulate( rpts, hRd, hRm, "mean A", 0, gd.mean, gd.meanErr, gm.mean, gm.meanErr, gd.valid && gm.valid );
+                    accumulate( rpts, hRd, hRm, "mean A", 1, ddg.mean, ddg.meanErr, mdg.mean, mdg.meanErr, ddg.valid && mdg.valid );
+                    accumulate( rpts, hRd, hRm, "mean A", 2, td90.mean, td90.meanErr, tm90.mean, tm90.meanErr, td90.valid && tm90.valid );
+                    accumulate( rpts, hRd, hRm, "mean A", 3, td95.mean, td95.meanErr, tm95.mean, tm95.meanErr, td95.valid && tm95.valid );
+                }
+                if( doJER ){
+                    accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 0, gd.sigma, gd.sigmaErr, gm.sigma, gm.sigmaErr, gd.valid && gm.valid );
+                    accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 1, ddg.sigma, ddg.sigmaErr, mdg.sigma, mdg.sigmaErr, ddg.valid && mdg.valid );
+                    accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 2, td90.sigma, td90.sigmaErr, tm90.sigma, tm90.sigmaErr, td90.valid && tm90.valid );
+                    accumulate( rptsJer, hRdJer, hRmJer, "stddev A", 3, td95.sigma, td95.sigmaErr, tm95.sigma, tm95.sigmaErr, td95.valid && tm95.valid );
+                }
 
                 delete hAData;
                 delete hAMC;
@@ -541,14 +547,10 @@ static void ExtractAndFit(
     for( int m = 0; m < kNMethods; m++ ){
         for( int ia = 0; ia < nAlpha; ia++ ){
             for( int ip = 0; ip < nPt; ip++ ){
-                hRd[m][ia][ip]->Write();
-                hRm[m][ia][ip]->Write();
-                hRdJer[m][ia][ip]->Write();
-                hRmJer[m][ia][ip]->Write();
-                delete hRd[m][ia][ip];
-                delete hRm[m][ia][ip];
-                delete hRdJer[m][ia][ip];
-                delete hRmJer[m][ia][ip];
+                if( doJEC ){ hRd[m][ia][ip]->Write();    hRm[m][ia][ip]->Write(); }
+                if( doJER ){ hRdJer[m][ia][ip]->Write(); hRmJer[m][ia][ip]->Write(); }
+                delete hRd[m][ia][ip];    delete hRm[m][ia][ip];
+                delete hRdJer[m][ia][ip]; delete hRmJer[m][ia][ip];
             }
         }
     }
@@ -565,70 +567,70 @@ static void ExtractAndFit(
             TString corrNameJer = L2Name::ObjectName( cone, "intercept_jer",
                 { etaMode, ptKey }, { kMethodNames[method] } );
 
-            TH1D* hCorr = new TH1D( corrName, "",
-                ( int )etaEdges.size() - 1, etaEdges.data() );
-            hCorr->GetXaxis()->SetTitle( nameSuffix.IsNull() ? "|#eta|" : "#eta" );
-            hCorr->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha=0" );
+            const TString etaAxisTitle = nameSuffix.IsNull() ? "|#eta|" : "#eta";
+            const int nEtaBins = ( int )etaEdges.size() - 1;
 
-            TH1D* hCorrNorm = new TH1D( corrName + "_norm", "",
-                ( int )etaEdges.size() - 1, etaEdges.data() );
-            hCorrNorm->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
-            hCorrNorm->GetYaxis()->SetTitle( "k_{FSR} #cdot R_{MC}/R_{data}|_{fit range high edge}" );
+            TH1D* hCorr     = doJEC ? new TH1D( corrName,          "", nEtaBins, etaEdges.data() ) : nullptr;
+            TH1D* hCorrNorm = doJEC ? new TH1D( corrName + "_norm", "", nEtaBins, etaEdges.data() ) : nullptr;
+            TH1D* hCorrJer     = doJER ? new TH1D( corrNameJer,          "", nEtaBins, etaEdges.data() ) : nullptr;
+            TH1D* hCorrNormJer = doJER ? new TH1D( corrNameJer + "_norm", "", nEtaBins, etaEdges.data() ) : nullptr;
 
-            TH1D* hCorrJer = new TH1D( corrNameJer, "",
-                ( int )etaEdges.size() - 1, etaEdges.data() );
-            hCorrJer->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
-            hCorrJer->GetYaxis()->SetTitle( "JER SF: R_{MC}/R_{data} (stddev A) at #alpha=0" );
-
-            TH1D* hCorrNormJer = new TH1D( corrNameJer + "_norm", "",
-                ( int )etaEdges.size() - 1, etaEdges.data() );
-            hCorrNormJer->GetXaxis()->SetTitle( hCorr->GetXaxis()->GetTitle() );
-            hCorrNormJer->GetYaxis()->SetTitle( "k_{FSR} #cdot JER SF|_{fit range high edge}" );
+            if( hCorr ){
+                hCorr->GetXaxis()->SetTitle( etaAxisTitle );
+                hCorr->GetYaxis()->SetTitle( "R_{MC}/R_{data} at #alpha=0" );
+                hCorrNorm->GetXaxis()->SetTitle( etaAxisTitle );
+                hCorrNorm->GetYaxis()->SetTitle( "k_{FSR} #cdot R_{MC}/R_{data}|_{fit range high edge}" );
+            }
+            if( hCorrJer ){
+                hCorrJer->GetXaxis()->SetTitle( etaAxisTitle );
+                hCorrJer->GetYaxis()->SetTitle( "JER SF: R_{MC}/R_{data} (stddev A) at #alpha=0" );
+                hCorrNormJer->GetXaxis()->SetTitle( etaAxisTitle );
+                hCorrNormJer->GetYaxis()->SetTitle( "k_{FSR} #cdot JER SF|_{fit range high edge}" );
+            }
 
             for( int ieta = 0; ieta < nEta; ieta++ ){
                 TString etaKey = L2Name::EtaKey( ieta, fullEta );
 
-                TString gname = L2Name::ObjectName( cone, "R",
-                    { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
-                ExtrapResult jes = FitAndExtrapolate( rpts[method][ipt][ieta], gname, ptSlice.color, controls, dGraphs );
-                if( jes.valid ){
-                    hCorr->SetBinContent( ieta + 1, jes.c0 );
-                    hCorr->SetBinError( ieta + 1, jes.ec0 );
+                if( doJEC ){
+                    TString gname = L2Name::ObjectName( cone, "R",
+                        { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
+                    ExtrapResult jes = FitAndExtrapolate( rpts[method][ipt][ieta], gname, ptSlice.color, controls, dGraphs );
+                    if( jes.valid ){
+                        hCorr->SetBinContent( ieta + 1, jes.c0 );
+                        hCorr->SetBinError( ieta + 1, jes.ec0 );
+                    }
+                    if( jes.normValid ){
+                        hCorrNorm->SetBinContent( ieta + 1, jes.c0n );
+                        hCorrNorm->SetBinError( ieta + 1, jes.ec0n );
+                    }
                 }
-                if( jes.normValid ){
-                    hCorrNorm->SetBinContent( ieta + 1, jes.c0n );
-                    hCorrNorm->SetBinError( ieta + 1, jes.ec0n );
-                }
-
-                TString gnameJer = L2Name::ObjectName( cone, "R_jer",
-                    { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
-                ExtrapResult jer = FitAndExtrapolate( rptsJer[method][ipt][ieta], gnameJer, ptSlice.color, controls, dGraphs );
-                if( jer.valid ){
-                    hCorrJer->SetBinContent( ieta + 1, jer.c0 );
-                    hCorrJer->SetBinError( ieta + 1, jer.ec0 );
-                }
-                if( jer.normValid ){
-                    hCorrNormJer->SetBinContent( ieta + 1, jer.c0n );
-                    hCorrNormJer->SetBinError( ieta + 1, jer.ec0n );
+                if( doJER ){
+                    TString gnameJer = L2Name::ObjectName( cone, "R_jer",
+                        { etaMode, etaKey, ptKey }, { kMethodNames[method] } );
+                    ExtrapResult jer = FitAndExtrapolate( rptsJer[method][ipt][ieta], gnameJer, ptSlice.color, controls, dGraphs );
+                    if( jer.valid ){
+                        hCorrJer->SetBinContent( ieta + 1, jer.c0 );
+                        hCorrJer->SetBinError( ieta + 1, jer.ec0 );
+                    }
+                    if( jer.normValid ){
+                        hCorrNormJer->SetBinContent( ieta + 1, jer.c0n );
+                        hCorrNormJer->SetBinError( ieta + 1, jer.ec0n );
+                    }
                 }
             }
 
             dOut->cd();
-            hCorr->Write();
-            hCorrNorm->Write();
-            hCorrJer->Write();
-            hCorrNormJer->Write();
-            delete hCorr;
-            delete hCorrNorm;
-            delete hCorrJer;
-            delete hCorrNormJer;
+            if( hCorr ){ hCorr->Write(); hCorrNorm->Write(); }
+            if( hCorrJer ){ hCorrJer->Write(); hCorrNormJer->Write(); }
+            delete hCorr;     delete hCorrNorm;
+            delete hCorrJer;  delete hCorrNormJer;
         }
     }
 }
 
 // ============================================================
 
-void runCalibration( TString dataFile, TString mcFile, TString outputFile ){
+void runCalibration( TString dataFile, TString mcFile, TString outputFile, CalibrationMode mode ){
 
     const AnalysisConfig& cfg = Config();
     PrintConfigSummary( cfg );
@@ -681,11 +683,11 @@ void runCalibration( TString dataFile, TString mcFile, TString outputFile ){
 
         ExtractAndFit( hData, hMC, cone, bins,
                       dQA_data, dQA_mc, dGraphs, dRvals, coneDir,
-                      kAbsEtaEdges, "", controls, pb );
+                      kAbsEtaEdges, "", controls, mode, pb );
 
         ExtractAndFit( hRawData, hRawMC, cone, bins,
                       dQA_data_full, dQA_mc_full, dGraphs, dRvals_full, coneDir,
-                      kEtaEdges, "_fulleta", controls, pb );
+                      kEtaEdges, "_fulleta", controls, mode, pb );
 
         delete hData;
         delete hMC;

@@ -102,7 +102,11 @@ set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
-    target_include_directories(l2residuals PUBLIC include cfg ${NLOHMANN_JSON_INCLUDE_DIR})
+    target_include_directories(l2residuals PUBLIC
+        include cfg
+        ${NLOHMANN_JSON_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/jetmet
+        ${CMAKE_CURRENT_SOURCE_DIR}/external/jetmet_jer)
     target_compile_definitions(l2residuals PUBLIC L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(l2residuals PUBLIC STANDALONE)
     target_link_libraries(l2residuals ${ROOT_LIBRARIES})

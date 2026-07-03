@@ -61,9 +61,14 @@ int main( int argc, char* argv[] ){
     static const char* const kUsage =
         "Usage: runTextFile -triggered trig.root -nontriggered notrig.root"
         " -output out.root [-prefix name] [-method gauss] [-norm true] -config path\n"
+        "       runTextFile -triggered trig.root -output out.root ... -config path\n"
+        "       runTextFile -nontriggered notrig.root -output out.root ... -config path\n"
+        "       runTextFile -resolution response.root [-prefix name] -config path\n"
         "       runTextFile args.config   # config file lines use: key = value\n"
-        "       Pass -triggered, -nontriggered, or both.\n"
-        "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
+        "  -resolution: write JER pT resolution text file from a runResponse output\n"
+        "               (independent of -triggered/-nontriggered; can be combined)\n"
+        "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\" (JEC/JER SF)\n"
+        "          or \"JER_ptresolution\" (resolution-only run)\n";
 
     CommandLine cl;
     if( !cl.parse( argc, argv ) ) return 1;
@@ -79,35 +84,45 @@ int main( int argc, char* argv[] ){
     }
     setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
 
-    std::string output = cl.getValue<std::string>( "output" );
-    std::string prefix = cl.getValue<std::string>( "prefix", std::string( "" ) );
-    std::string method = cl.getValue<std::string>( "method", std::string( Config().defaultMethod.Data() ) );
-    bool useNorm        = cl.getValue<bool>( "norm", true );
-    std::string trig    = cl.getValue<std::string>( "triggered", std::string( "" ) );
-    std::string noTrig  = cl.getValue<std::string>( "nontriggered", std::string( "" ) );
+    std::string output     = cl.getValue<std::string>( "output", std::string( "" ) );
+    std::string prefix     = cl.getValue<std::string>( "prefix", std::string( "" ) );
+    std::string method     = cl.getValue<std::string>( "method", std::string( Config().defaultMethod.Data() ) );
+    bool useNorm            = cl.getValue<bool>( "norm", true );
+    std::string trig       = cl.getValue<std::string>( "triggered", std::string( "" ) );
+    std::string noTrig     = cl.getValue<std::string>( "nontriggered", std::string( "" ) );
+    std::string resolution = cl.getValue<std::string>( "resolution", std::string( "" ) );
 
     if( !cl.check() ){
         std::cerr << kUsage;
         return 1;
     }
 
-    const bool hasTrig   = !trig.empty();
-    const bool hasNoTrig = !noTrig.empty();
+    const bool hasTrig       = !trig.empty();
+    const bool hasNoTrig     = !noTrig.empty();
+    const bool hasResolution = !resolution.empty();
 
-    if( !hasTrig && !hasNoTrig ){
-        std::cerr << "ERROR: pass -triggered ..., -nontriggered ..., or both\n" << kUsage;
+    if( !hasTrig && !hasNoTrig && !hasResolution ){
+        std::cerr << "ERROR: pass -triggered ..., -nontriggered ..., -resolution ..., or a combination\n" << kUsage;
         return 1;
     }
 
-    if( hasTrig && hasNoTrig ){
-        runTextFile( trig, noTrig, output, prefix, method, useNorm );
-        return 0;
+    if( ( hasTrig || hasNoTrig ) && output.empty() ){
+        std::cerr << "ERROR: -output is required when using -triggered or -nontriggered\n" << kUsage;
+        return 1;
     }
 
-    if( hasTrig ){
-        runTextFile( trig, SingleDatasetKind::Triggered, output, prefix, method, useNorm );
-    } else {
-        runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+    if( hasResolution ){
+        runTextFilePtResolution( resolution, prefix );
+    }
+
+    if( hasTrig || hasNoTrig ){
+        if( hasTrig && hasNoTrig ){
+            runTextFile( trig, noTrig, output, prefix, method, useNorm );
+        } else if( hasTrig ){
+            runTextFile( trig, SingleDatasetKind::Triggered, output, prefix, method, useNorm );
+        } else {
+            runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+        }
     }
     return 0;
 }
