@@ -49,7 +49,7 @@ inline void PlotPtFit( TFile* fIn, const TString& outDir,
 
                 const TString cvName = Form( "ptfit_%s_%s_%s_%s",
                     cone.Data(), kMethodKeys[m], etaMode.Data(), etaKey.Data() );
-                TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+                TCanvas* c = new TCanvas( cvName, "", 800, 800 );
                 RealAspectRatio( c );
                 c->SetLeftMargin( 0.13 );
                 c->SetGridx(); c->SetGridy();

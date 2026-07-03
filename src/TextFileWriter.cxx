@@ -467,3 +467,131 @@ void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputR
         RunTextFileImpl( SourceMode::NonTriggeredOnly, nullptr, f, outputRootFile, outputTextPrefix, method, useNorm );
     }
 }
+
+void runTextFilePtResolution( TString responseFile, TString outputTextPrefix ){
+    const AnalysisConfig& cfg = Config();
+
+    TFile* fIn = TFile::Open( responseFile, "read" );
+    if( !fIn || fIn->IsZombie() ){
+        std::cerr << "Cannot open response file: " << responseFile << "\n";
+        return;
+    }
+
+    if( outputTextPrefix.IsNull() ) outputTextPrefix = "JER_ptresolution";
+    if( outputTextPrefix.Contains( "/" ) ){
+        std::cerr << "ERROR: outputTextPrefix must not contain '/': " << outputTextPrefix << "\n";
+        fIn->Close();
+        return;
+    }
+
+    TString textDir = TString( cfg.repoRoot.c_str() ) + "/" + kTextOutputSubdir;
+    if( gSystem->mkdir( textDir, kTRUE ) < 0 && gSystem->AccessPathName( textDir ) ){
+        std::cerr << "ERROR: cannot create text output directory: " << textDir << "\n";
+        fIn->Close();
+        return;
+    }
+
+    const bool wantAbsEta  = ( cfg.etaModeOutput != "eta" );
+    const bool wantFullEta = ( cfg.etaModeOutput != "abseta" );
+
+    const int nEta = ( int )kAbsEtaEdges.size() - 1;
+
+    // "corr" variant, "incl" collection -- these are the names written by
+    // ExtractPerAbsEtaVsPtGen in ResponseExtractor.cxx.
+    const TString variant = "corr";
+    const TString collection = "incl";
+
+    for( const TString& cone : cfg.coneLabels ){
+        TDirectory* dPerEta = ( TDirectory* )fIn->Get( cone + "/JER_per_abseta" );
+        if( !dPerEta ){
+            std::cerr << "No JER_per_abseta/ directory for " << cone
+                      << " -- was this file produced by runResponse?\n";
+            continue;
+        }
+
+        // Collect JER records per |eta| bin, reading the per-|eta| JER TH1Ds.
+        // Each TH1D has one bin per pT_gen interval; bin content = JER, error = JER uncertainty.
+        std::vector<std::vector<JerRecord>> etaRecords( nEta );
+        bool any = false;
+        for( int ieta = 0; ieta < nEta; ieta++ ){
+            TString etaKey = L2Name::EtaKey( ieta, false );
+            TString hName  = L2Name::ObjectName( cone, "JER",
+                { variant, "vs_ptgen", etaKey }, { collection } );
+            TH1D* h = ( TH1D* )dPerEta->Get( hName );
+            if( !h ) continue;
+            for( int ip = 1; ip <= h->GetNbinsX(); ip++ ){
+                const double v = h->GetBinContent( ip );
+                const double e = h->GetBinError( ip );
+                if( v == 0.0 && e == 0.0 ) continue;
+                const double ptLo = h->GetXaxis()->GetBinLowEdge( ip );
+                const double ptHi = h->GetXaxis()->GetBinUpEdge( ip );
+                const double unc  = ( v != 0.0 ) ? e / v : 0.0;
+                etaRecords[ieta].push_back( { ptLo, ptHi, v, unc } );
+                any = true;
+            }
+        }
+
+        if( !any ){
+            std::cerr << "No per-|eta| JER data found for " << cone << "\n";
+            continue;
+        }
+
+        // Write abseta file (mirror |eta| bins onto both eta halves).
+        if( wantAbsEta ){
+            TString path = textDir + "/" + outputTextPrefix + "_" + cone + "_abseta_ptresolution.txt";
+            std::stringstream buf;
+            buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+            for( int ieta = nEta - 1; ieta >= 0; ieta-- )
+                AppendJerLines( buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta], etaRecords[ieta] );
+            for( int ieta = 0; ieta < nEta; ieta++ )
+                AppendJerLines( buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1], etaRecords[ieta] );
+
+            TString tmpPath = path + ".tmp";
+            { std::ofstream tmp( tmpPath.Data() ); tmp << buf.str(); }
+            bool ok = true;
+            try {
+                JME::JetResolutionObject obj( tmpPath.Data() );
+                obj.saveToFile( path.Data() );
+            } catch( const std::exception& ex ){
+                std::cerr << "ERROR writing pT resolution file " << path << ": " << ex.what() << "\n";
+                ok = false;
+            }
+            gSystem->Unlink( tmpPath );
+            if( ok ) std::cout << "Done (pT resolution). " << cone << ": -> " << path << "\n";
+        }
+
+        // Write full-eta file (one record per eta bin using the positive-eta JER for each).
+        // Without per-bin negative-eta extraction (the folding sums both sides), full-eta
+        // output is the same as abseta but written with explicit full-eta bin edges.
+        // A future pass that extracts eta_reco > 0 and < 0 separately can replace this.
+        if( wantFullEta ){
+            TString path = textDir + "/" + outputTextPrefix + "_" + cone + "_eta_ptresolution.txt";
+            std::stringstream buf;
+            buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+            // Use the |eta|-folded values mirrored across eta=0 -- same content as abseta file,
+            // just written with full-eta JEC bin edges. Matches the convention for eta text files
+            // elsewhere in TextFileWriter.cxx.
+            const int nFullEta = ( int )kEtaEdges.size() - 1;
+            for( int ieta = 0; ieta < nFullEta; ieta++ ){
+                const int iAbs = ( ieta < nFullEta / 2 )
+                    ? ( nFullEta / 2 - 1 - ieta ) : ( ieta - nFullEta / 2 );
+                AppendJerLines( buf, kEtaEdges[ieta], kEtaEdges[ieta + 1], etaRecords[iAbs] );
+            }
+
+            TString tmpPath = path + ".tmp";
+            { std::ofstream tmp( tmpPath.Data() ); tmp << buf.str(); }
+            bool ok = true;
+            try {
+                JME::JetResolutionObject obj( tmpPath.Data() );
+                obj.saveToFile( path.Data() );
+            } catch( const std::exception& ex ){
+                std::cerr << "ERROR writing pT resolution file " << path << ": " << ex.what() << "\n";
+                ok = false;
+            }
+            gSystem->Unlink( tmpPath );
+            if( ok ) std::cout << "Done (pT resolution). " << cone << ": -> " << path << "\n";
+        }
+    }
+
+    fIn->Close();
+}

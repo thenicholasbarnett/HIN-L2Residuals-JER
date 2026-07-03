@@ -190,7 +190,7 @@ inline void PlotAsymDist( TFile* fIn, const TString& outDir,
                 auto drawTruncPlot = [&]( double fraction, const TString& tag, const TString& label ){
                     TString cvName = Form( "adist_%s_%s_%s_%s_%s",
                         cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data(), tag.Data() );
-                    TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+                    TCanvas* c = new TCanvas( cvName, "", 800, 800 );
                     RealAspectRatio( c );
                     c->SetLogy();
                     c->SetLeftMargin( 0.13 );
@@ -220,7 +220,7 @@ inline void PlotAsymDist( TFile* fIn, const TString& outDir,
                 {
                     TString cvName = Form( "adist_%s_%s_%s_%s_gauss",
                         cone.Data(), etaKey.Data(), ptKey.Data(), alphaKey.Data() );
-                    TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+                    TCanvas* c = new TCanvas( cvName, "", 800, 800 );
                     RealAspectRatio( c );
                     c->SetLogy();
                     c->SetLeftMargin( 0.13 );

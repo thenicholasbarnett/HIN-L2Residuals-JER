@@ -81,4 +81,17 @@ void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputR
                   TString outputTextPrefix = "",
                   TString method = "gauss", bool useNorm = true );
 
+// Reads a runResponse output file (produced by runResponse on a Step 1 MC
+// file) and writes a CMS JER pT resolution text file per cone. The resolution
+// values are JER = sigma/mean from the per-|eta|-bin Gaussian fits stored in
+// the "JER_per_abseta/" subdirectory of each cone directory. Uses the "corr"
+// variant (this framework's L2Relative+L2Residual-corrected pT) and the
+// "incl" collection. Output format is the same flat-grid format as the JER SF
+// file ({1 JetEta 1 JetPt [0] Resolution}), with resolution values in place
+// of scale factors. Files written to data/jec/preliminary/ as
+// "<prefix>_<cone>_abseta_ptresolution.txt". eta_mode from the TOML controls
+// whether the abseta (mirrored) variant, the independent full-eta variant, or
+// both are written -- same rule as the JEC/JER SF writers.
+void runTextFilePtResolution( TString responseFile, TString outputTextPrefix = "" );
+
 #endif

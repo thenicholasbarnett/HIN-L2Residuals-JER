@@ -141,6 +141,72 @@ static void ExtractVsPtGen(
     delete hJER;
 }
 
+// ---- Per-|eta|-bin JER (and JES) vs pT_gen. Used by runTextFilePtResolution
+// to write the CMS JER pT resolution text file.
+//
+// Takes a |eta|-folded response THnSparse (axis 0 = kAbsEtaEdges). For each
+// |eta| bin, restricts axis 0, then projects and fits per pT_gen bin exactly
+// as ExtractVsPtGen does for the inclusive case. Writes
+//   {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection}
+//   {cone}_JER_{variant}_vs_ptgen_{etaKey}_{collection}
+// to dOut. Only the "corr" variant is written (the one relevant for the
+// text file; corr = this framework's L2Relative+L2Residual-corrected pT).
+
+static void ExtractPerAbsEtaVsPtGen(
+    THnSparse* hFolded, const TString& cone, const TString& collection,
+    const ResponseVariant& variant, const AxisBins& ptBins,
+    TDirectory* dOut, double halfWidth, int minEntries ){
+
+    const int nEta = ( int )kAbsEtaEdges.size() - 1;
+    const int nPt = ptBins.nBins;
+    const double lo = ptBins.lo, hi = ptBins.hi;
+    const double width = ( hi - lo ) / nPt;
+
+    for( int ieta = 0; ieta < nEta; ieta++ ){
+        const TString etaKey = L2Name::EtaKey( ieta, false );
+
+        hFolded->GetAxis( kRespEtaRecoAxis )->SetRangeUser(
+            kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1] );
+
+        TString jesName = L2Name::ObjectName( cone, "JES",
+            { variant.tag, "vs_ptgen", etaKey }, { collection } );
+        TString jerName = L2Name::ObjectName( cone, "JER",
+            { variant.tag, "vs_ptgen", etaKey }, { collection } );
+        TH1D* hJES = new TH1D( jesName, "", nPt, lo, hi );
+        TH1D* hJER = new TH1D( jerName, "", nPt, lo, hi );
+        hJES->GetXaxis()->SetTitle( "p_{T}^{gen} [GeV]" );
+        hJES->GetYaxis()->SetTitle( Form( "JES = #LT %s #GT", variant.label ) );
+        hJER->GetXaxis()->SetTitle( hJES->GetXaxis()->GetTitle() );
+        hJER->GetYaxis()->SetTitle( Form( "JER = #sigma / #LT %s #GT", variant.label ) );
+
+        for( int ip = 0; ip < nPt; ip++ ){
+            const double ptLo = lo + ip * width;
+            const double ptHi = ptLo + width;
+
+            hFolded->GetAxis( kRespPtGenAxis )->SetRangeUser( ptLo, ptHi );
+            TH1D* hProj = ProjectTHnSparse1D( hFolded, variant.axis, {} );
+            hFolded->GetAxis( kRespPtGenAxis )->SetRange( 0, 0 );
+
+            ResponseFitResult fr = FitResponse( hProj, halfWidth, minEntries );
+            if( fr.valid ){
+                hJES->SetBinContent( ip + 1, fr.jes );
+                hJES->SetBinError( ip + 1, fr.jesErr );
+                hJER->SetBinContent( ip + 1, fr.jer );
+                hJER->SetBinError( ip + 1, fr.jerErr );
+            }
+            delete hProj;
+        }
+
+        hFolded->GetAxis( kRespEtaRecoAxis )->SetRange( 0, 0 );
+
+        dOut->cd();
+        hJES->Write();
+        hJER->Write();
+        delete hJES;
+        delete hJER;
+    }
+}
+
 // ============================================================
 
 void runResponse( TString inputFile, TString outputFile ){
@@ -184,6 +250,7 @@ void runResponse( TString inputFile, TString outputFile ){
 
         TDirectory* coneDirOut = fOut->mkdir( cone.Data() );
         TDirectory* dQA_ptgen = coneDirOut->mkdir( "QA_response_ptgen" );
+        TDirectory* dPerEta = coneDirOut->mkdir( "JER_per_abseta" );
 
         for( int ic = 0; ic < kNCollections; ic++ ){
             const TString collection = kCollectionKeys[ic];
@@ -197,6 +264,14 @@ void runResponse( TString inputFile, TString outputFile ){
                 ExtractVsPtGen( hRaw, cone, collection, kVariants[iv], bins.pt, dQA_ptgen, coneDirOut, halfWidth, minEntries );
                 pb.Update();
             }
+
+            // Per-|eta|-bin extraction for the corr variant only -- used by
+            // runTextFilePtResolution to write the CMS JER pT resolution text file.
+            THnSparse* hFolded = FoldEtaAxis( hRaw, kRespEtaRecoAxis,
+                cone + kCollectionSuffixes[ic] + "_abseta" );
+            ExtractPerAbsEtaVsPtGen( hFolded, cone, collection, kVariants[0],
+                bins.pt, dPerEta, halfWidth, minEntries );
+            delete hFolded;
         }
     }
 

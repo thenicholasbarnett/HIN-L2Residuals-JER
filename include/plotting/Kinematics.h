@@ -142,7 +142,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
         {
             TString cvName = Form( "kinematics_%s_%s_pt", cone.Data(), collPlot.Data() );
             TH1D* h = ProjectTH3D1D( h3, "z", cvName + "_h" );
-            TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
             DrawKinematics1D( h, kRecoPtAxisTitle, "1/N  dN/dp_{T}", true );
@@ -158,7 +158,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
         {
             TString cvName = Form( "kinematics_%s_%s_eta", cone.Data(), collPlot.Data() );
             TH1D* h = ProjectTH3D1D( h3, "x", cvName + "_h" );
-            TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
             DrawKinematics1D( h, kRecoEtaAxisTitle, "1/N  dN/d#eta", false );
@@ -174,7 +174,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
         {
             TString cvName = Form( "kinematics_%s_%s_phi", cone.Data(), collPlot.Data() );
             TH1D* h = ProjectTH3D1D( h3, "y", cvName + "_h" );
-            TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
             DrawKinematics1D( h, "#phi", "1/N  dN/d#phi", false );
@@ -196,7 +196,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
             TH2D* h = ProjectEtaPhi( h3, ptMin, cvName + "_h" );
             if( h->Integral( "width" ) > 0 ) h->Scale( 1.0 / h->Integral( "width" ) );
 
-            TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.12 );
             c->SetRightMargin( 0.16 );
@@ -272,7 +272,7 @@ inline void PlotKinematics( TFile* fIn, const TString& outDir,
         if( logy ) hFrame->SetMinimum( 1e-6 );
 
         TString cvName = Form( "kinematics_%s_overview_%s", cone.Data(), varName.Data() );
-        TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+        TCanvas* c = new TCanvas( cvName, "", 800, 800 );
         RealAspectRatio( c );
         c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
         hFrame->Draw( "hist" );

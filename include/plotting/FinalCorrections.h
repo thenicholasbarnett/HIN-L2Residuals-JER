@@ -107,7 +107,7 @@ inline void PlotFinals( TFile* fIn, const TString& outDir,
 
             const TString cvName = Form( "finals_%s_%s_%s_%s",
                 cone.Data(), calibKey.Data(), kMethodKeys[m], etaMode.Data() );
-            TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.13 );
             c->SetGridx();

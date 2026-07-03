@@ -3,18 +3,18 @@
 
 #include "TString.h"
 
-// Reads hadded Step 1 output (one data file, one MC file) and, for each
-// (alpha threshold, pT_avg slice, eta bin), extracts both:
-//   JEC    -- the mean of the asymmetry distribution, R = (1+<A>)/(1-<A>),
-//             ratio R_MC/R_data, linear fit vs alpha, extrapolate to alpha=0
-//             (the L2Residual correction; not to be confused with runResponse's
-//             MC-only JES, a different quantity).
-//   JER SF -- the same procedure, fed the *stddev* of the asymmetry
-//             distribution instead of the mean: R = (1+stddev_A)/(1-stddev_A),
-//             same ratio/fit/extrapolation machinery, same 4 methods
-//             (Gauss, double-Gauss, trunc90, trunc95), same kFSR-normalized
-//             variant. Both ride the same per-bin A-distribution projection
-//             and fits -- JER SF is not a separate pass over the input.
-void runCalibration( TString dataFile, TString mcFile, TString outputFile );
+// Controls which output a runCalibration pass produces.
+//   JEC  -- mean of the asymmetry distribution → L2Residual correction.
+//   JER  -- stddev of the asymmetry distribution → JER scale factor.
+// Both modes run the same per-bin A-distribution projection and fitting
+// (Gaussian fit yields mean and sigma together), but only the requested
+// quantity's R(alpha) points, R_data/R_mc histograms, and intercept TH1Ds
+// are accumulated and written. Mode is required -- there is no default.
+enum class CalibrationMode { JEC, JER };
+
+// Reads hadded Step 1 output (one data file, one MC file). For each
+// (alpha threshold, pT_avg slice, eta bin), runs the full extraction loop
+// for the selected mode and writes intercept TH1Ds + R(alpha) graphs.
+void runCalibration( TString dataFile, TString mcFile, TString outputFile, CalibrationMode mode );
 
 #endif
