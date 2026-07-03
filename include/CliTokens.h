@@ -41,20 +41,43 @@ struct Tokens {
     }
 };
 
+inline std::string Trim( const std::string& s ){
+    const size_t b = s.find_first_not_of( " \t" );
+    if( b == std::string::npos ) return "";
+    const size_t e = s.find_last_not_of( " \t" );
+    return s.substr( b, e - b + 1 );
+}
+
+inline std::string ToUpper( const std::string& s ){
+    std::string r = s;
+    for( char& c : r ) c = ( char )std::toupper( ( unsigned char )c );
+    return r;
+}
+
 // Splits "KEY=value" on the first '='. The value may itself contain '='
 // (e.g. a path never would, but this keeps the split unambiguous either
-// way). Returns false if there's no '=', or the key part isn't a valid
-// identifier ([A-Za-z_][A-Za-z0-9_]*) — that's what flags an argument as
-// not being a token at all, rather than silently misparsing it.
+// way). Returns false if there's no '=', or the key part (after trimming
+// whitespace) isn't a valid identifier ([A-Za-z_][A-Za-z0-9_]*) — that's
+// what flags an argument as not being a token at all, rather than silently
+// misparsing it. The key is case-normalized to uppercase and both key and
+// value have surrounding whitespace trimmed, so "config = cfg/x.toml" and
+// "CONFIG=cfg/x.toml" parse identically -- this is about tolerating
+// formatting, not about accepting a misspelled key: "COFNIG=" still fails,
+// exactly as it should. Note a genuinely *unquoted* "KEY = value" typed at
+// a shell is three separate argv words ("KEY", "=", "value"), which this
+// can't reassemble -- only a single already-quoted argument benefits from
+// the whitespace tolerance.
 inline bool SplitToken( const std::string& arg, std::string& key, std::string& value ){
     const size_t eq = arg.find( '=' );
     if( eq == std::string::npos || eq == 0 ) return false;
-    key = arg.substr( 0, eq );
+    key = Trim( arg.substr( 0, eq ) );
+    if( key.empty() ) return false;
     if( std::isdigit( ( unsigned char )key[0] ) ) return false;
     for( char c : key ){
         if( !( std::isalnum( ( unsigned char )c ) || c == '_' ) ) return false;
     }
-    value = arg.substr( eq + 1 );
+    key = ToUpper( key );
+    value = Trim( arg.substr( eq + 1 ) );
     return true;
 }
 

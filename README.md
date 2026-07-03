@@ -89,7 +89,7 @@ runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=tri
 Build with SCRAM or with CMake under `cmsenv`, set `[condor].cmssw_src` in the selected TOML, then submit Step 1 jobs:
 
 ```bash
-bash ./condor/make_condor.sh <output_files_dir> <input_HiForest_filelist.txt> CONFIG=cfg/2024ppRef.toml
+bash ./condor/make_condor.sh OUTPUT=<output_files_dir> FILELISTS=<input_HiForest_filelist.txt> CONFIG=cfg/2024ppRef.toml
 ```
 
 Merge Step 1 outputs before Step 2:
@@ -162,7 +162,7 @@ export L2RESIDUALS_HOME=/path/to/repo                # relative-path resolution 
 
 <h3> Command-Line Convention </h3>
 
-Every compiled binary's arguments are `KEY=value` tokens — there are no positional arguments anywhere in this CLI, and argument order never matters. This removes an entire class of silent argument-order bugs (e.g. swapping `DATA=`/`MC=`, or `TRIGGERED=`/`NONTRIGGERED=`), since every value is self-identifying regardless of where it appears on the command line. Required tokens — `CONFIG=` on every binary, plus whichever input/output tokens that binary needs — are validated immediately: a missing required token, an unrecognized token (e.g. a typo like `OUTPT=`), or any bare argument that isn't a valid `KEY=value` token at all is an immediate usage error, never something silently ignored or defaulted. See `include/CliTokens.h` for the parser shared by every entry point.
+Every compiled binary's arguments — and `condor/make_condor.sh`'s — are `KEY=value` tokens — there are no positional arguments anywhere in this CLI, and argument order never matters. This removes an entire class of silent argument-order bugs (e.g. swapping `DATA=`/`MC=`, or `TRIGGERED=`/`NONTRIGGERED=`), since every value is self-identifying regardless of where it appears on the command line. Required tokens — `CONFIG=` on every binary, plus whichever input/output tokens that binary needs — are validated immediately: a missing required token, an unrecognized token (e.g. a typo like `OUTPT=`), or any bare argument that isn't a valid `KEY=value` token at all is an immediate usage error, never something silently ignored or defaulted. Keys are case-insensitive and tolerate surrounding whitespace on a quoted token (`config = cfg/x.toml` parses identically to `CONFIG=cfg/x.toml`) — this is about tolerating formatting, not typos, so a misspelled key (`COFNIG=`) still fails loud. See `include/CliTokens.h` for the parser shared by every compiled entry point; `make_condor.sh` implements the same rules natively in bash since it isn't one of the compiled binaries.
 
 | Binary | Required tokens | Optional tokens |
 | :- | :- | :- |
@@ -379,31 +379,34 @@ The runtime wrapper copied into each submission is stamped with the TOML's `cmss
 
 <strong> Submitting HTCondor Jobs </strong>
 
+Every argument is a `KEY=value` token, matching the compiled binaries' convention (`include/CliTokens.h`) — no positional arguments, order never matters, an unrecognized or malformed token is an immediate usage error. Keys are case-insensitive and tolerate surrounding whitespace on a quoted token (e.g. `"config = cfg/x.toml"` parses the same as `CONFIG=cfg/x.toml"`), matching `CliTokens.h`'s `SplitToken`.
+
 ```bash
 # all filelists in data/txt/
-bash condor/make_condor.sh /eos/cms/store/group/phys_heavyions/nbarnett/l2residuals --all-txt CONFIG=cfg/2024ppRef.toml
+bash condor/make_condor.sh OUTPUT=/eos/cms/store/group/phys_heavyions/nbarnett/l2residuals ALLTXT=true CONFIG=cfg/2024ppRef.toml
 
 # specific filelist
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt CONFIG=cfg/2024ppRef.toml
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt CONFIG=cfg/2024ppRef.toml
 
-# multiple filelists
-bash condor/make_condor.sh /eos/.../l2residuals \
-    data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
-    data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt \
+# multiple filelists — space-separated inside one quoted token
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals \
+    FILELISTS="data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt data/txt/filelist_HiForest_2024ppref_DATA_ZB0.txt" \
     CONFIG=cfg/2024ppRef.toml
 
 # dry run
-bash condor/make_condor.sh /eos/.../l2residuals --all-txt CONFIG=cfg/2024ppRef.toml -n
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals ALLTXT=true CONFIG=cfg/2024ppRef.toml NOSUBMIT=true
 
 # tagged pass — e.g. a closure rerun using an abs-eta-derived residual file
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
     CONFIG=cfg/2024ppRef.toml TAG=clos_abseta
 
 # a different TOML entirely — independent of TAG, mix and match freely;
 # useful for closure passes or a different run period/system
-bash condor/make_condor.sh /eos/.../l2residuals data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
+bash condor/make_condor.sh OUTPUT=/eos/.../l2residuals FILELISTS=data/txt/filelist_HiForest_2024ppref_DATA_HP0.txt \
     TAG=clos_abseta CONFIG=cfg/2024ppRef_clos_abseta.toml
 ```
+
+`ALLTXT=true` and `FILELISTS=` are mutually exclusive; exactly one is required. Both default to their "off" state (`ALLTXT=false`, no filelists) if omitted, same as `NOSUBMIT=false`.
 
 Mode for each filelist is looked up from `[condor.filelist_modes]` in the selected TOML, keyed by the filelist's basename (no `.txt`) — e.g. `filelist_HiForest_2024ppref_DATA_HP0 = "triggered"`. The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form; only the mapped value (`triggered` | `non-triggered` | `mc`) matters, so this generalizes across run periods/collision systems without touching the script. Comment out (or omit) a filelist's entry in the TOML to skip submitting jobs for it without moving or renaming the file — `make_condor.sh` reports it as `SKIP` and moves on. Output is found in `OUTPUT_DIR/condor/asymmetry/<timestamp>/<LABEL>/output_N.root` — or `OUTPUT_DIR/condor/asymmetry_<TAG>/<timestamp>/...` if `TAG=value` is given, so separate reprocessing/closure passes don't land in the same output tree. Passing `OUTPUT_DIR/condor` or `OUTPUT_DIR/condor/asymmetry[_<TAG>]` is safe — the script normalizes them to the same path. Working directories and logs go to `condor/submissions/<timestamp>/`. A colored progress bar is displayed as each submission file is generated.
 

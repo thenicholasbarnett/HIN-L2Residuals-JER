@@ -1,29 +1,39 @@
 #!/bin/bash
 # Submit one runAsymmetry job per input HiForest file.
 #
-# Usage:
-#   bash condor/make_condor.sh OUTPUT_DIR -a|--all-txt CONFIG=path [--no-submit|-n] [TAG=value]
-#   bash condor/make_condor.sh OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] CONFIG=path [--no-submit|-n] [TAG=value]
+# Every argument is a KEY=value token, matching the compiled binaries'
+# convention (include/CliTokens.h) -- no positional arguments, order never
+# matters, an unrecognized or malformed token is an immediate usage error.
+# Keys are case-insensitive and surrounding whitespace is trimmed on a
+# quoted token (e.g. "config = cfg/x.toml" and "CONFIG=cfg/x.toml" parse
+# identically) -- see include/CliTokens.h's SplitToken for the same
+# tolerance on the C++ side. A genuinely misspelled key still fails loud.
 #
-# OUTPUT_DIR    — absolute EOS/AFS path where output ROOT files are written
-# -a/--all-txt  — submit every .txt filelist found in data/txt/
-# FILELIST.txt  — one or more specific filelists to submit
-# --no-submit/-n — generate submission files without submitting
-# TAG=value     — optional label for this pass (e.g. TAG=abs_eta, TAG=clos_dir_eta).
-#                 Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
-#                 instead of OUTPUT_DIR/condor/asymmetry/<timestamp> — use this to
-#                 keep separate closure/reprocessing passes from landing in the
-#                 same output tree. No slashes allowed in value. Independent of
-#                 CONFIG below — mix and match freely, neither implies the other.
-# CONFIG=path   — required; TOML to submit with. Which TOML gets submitted is a
-#                 physics-affecting choice (e.g. main run-period config vs. a
-#                 closure config with different residual_files), so there is no
-#                 implicit default — pass CONFIG=cfg/2024ppRef.toml explicitly
-#                 for the standard run-period config. Whatever is selected is
-#                 transferred to the sandbox under a fixed name
-#                 (analysis_config.toml), so runtime_wrapper.sh never needs to
-#                 know the source filename — pointing this at a different run
-#                 period/collision system's TOML needs no other change here.
+# Usage:
+#   bash condor/make_condor.sh OUTPUT=dir ALLTXT=true CONFIG=path [NOSUBMIT=true] [TAG=value]
+#   bash condor/make_condor.sh OUTPUT=dir FILELISTS="a.txt b.txt ..." CONFIG=path [NOSUBMIT=true] [TAG=value]
+#
+# OUTPUT=dir       — required; absolute EOS/AFS path where output ROOT files are written
+# ALLTXT=true      — submit every .txt filelist found in data/txt/ (default false)
+# FILELISTS="..."  — space-separated list of specific filelists to submit, quoted
+#                     as one token (e.g. FILELISTS="a.txt b.txt"). Mutually
+#                     exclusive with ALLTXT=true; exactly one of the two is required.
+# NOSUBMIT=true    — generate submission files without submitting (default false)
+# TAG=value        — optional label for this pass (e.g. TAG=abs_eta, TAG=clos_dir_eta).
+#                     Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
+#                     instead of OUTPUT_DIR/condor/asymmetry/<timestamp> — use this to
+#                     keep separate closure/reprocessing passes from landing in the
+#                     same output tree. No slashes allowed in value. Independent of
+#                     CONFIG below — mix and match freely, neither implies the other.
+# CONFIG=path      — required; TOML to submit with. Which TOML gets submitted is a
+#                     physics-affecting choice (e.g. main run-period config vs. a
+#                     closure config with different residual_files), so there is no
+#                     implicit default — pass CONFIG=cfg/2024ppRef.toml explicitly
+#                     for the standard run-period config. Whatever is selected is
+#                     transferred to the sandbox under a fixed name
+#                     (analysis_config.toml), so runtime_wrapper.sh never needs to
+#                     know the source filename — pointing this at a different run
+#                     period/collision system's TOML needs no other change here.
 #
 # Mode for each filelist is looked up from [condor.filelist_modes] in the
 # selected TOML, keyed by the filelist's basename (without .txt):
@@ -36,6 +46,12 @@
 # The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form —
 # only the mapped mode value matters; the key just has to match the filelist's
 # basename exactly.
+#
+# Note: the condor Arguments= line generated later in this script (runAsymmetry
+# INPUT OUTPUT MODE) stays positional on purpose -- it's an internal,
+# script-generated contract consumed by runtime_wrapper.sh, never hand-typed,
+# so there's no typo risk to guard against. Only this script's own top-level
+# CLI (what a human actually types) needs to be KEY=value.
 #
 # Prerequisites:
 #   - On lxplus, run cmsenv before configuring/building this repo:
@@ -50,40 +66,68 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 OUTPUT_DIR -a|--all-txt CONFIG=path [--no-submit|-n] [TAG=value]" >&2
-    echo "       $0 OUTPUT_DIR FILELIST.txt [FILELIST.txt ...] CONFIG=path [--no-submit|-n] [TAG=value]" >&2
+    echo "Usage: $0 OUTPUT=dir ALLTXT=true CONFIG=path [NOSUBMIT=true] [TAG=value]" >&2
+    echo "       $0 OUTPUT=dir FILELISTS=\"a.txt b.txt ...\" CONFIG=path [NOSUBMIT=true] [TAG=value]" >&2
     exit 1
 }
 
-if [[ $# -lt 2 ]]; then usage; fi
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "${s}"
+}
 
-OUTPUT_DIR="$1"
-shift
+if [[ $# -lt 1 ]]; then usage; fi
 
+OUTPUT_DIR=""
 USE_ALL=false
 NO_SUBMIT=false
-EXPLICIT_FILELISTS=()
+FILELISTS_STR=""
 RUN_TAG=""
 CONFIG_PATH=""
 
 for arg in "$@"; do
-    case "${arg}" in
-        -a|--all-txt)   USE_ALL=true ;;
-        --no-submit|-n) NO_SUBMIT=true ;;
-        TAG=*)          RUN_TAG="${arg#TAG=}" ;;
-        CONFIG=*)       CONFIG_PATH="${arg#CONFIG=}" ;;
-        *.txt)          EXPLICIT_FILELISTS+=("${arg}") ;;
-        *) echo "Unknown argument: ${arg}" >&2; usage ;;
+    if [[ "${arg}" != *"="* ]]; then
+        echo "ERROR: argument \"${arg}\" is not a KEY=value token" >&2
+        usage
+    fi
+    key="$(trim "${arg%%=*}")"
+    value="$(trim "${arg#*=}")"
+    key="$(printf '%s' "${key}" | tr '[:lower:]' '[:upper:]')"
+    case "${key}" in
+        OUTPUT)     OUTPUT_DIR="${value}" ;;
+        ALLTXT)     USE_ALL="${value}" ;;
+        NOSUBMIT)   NO_SUBMIT="${value}" ;;
+        TAG)        RUN_TAG="${value}" ;;
+        CONFIG)     CONFIG_PATH="${value}" ;;
+        FILELISTS)  FILELISTS_STR="${value}" ;;
+        *) echo "ERROR: unrecognized token \"${key}=\"" >&2; usage ;;
     esac
 done
+
+if [[ -z "${OUTPUT_DIR}" ]]; then
+    echo "ERROR: OUTPUT=dir is required" >&2
+    usage
+fi
 
 if [[ "${RUN_TAG}" == */* ]]; then
     echo "ERROR: TAG must not contain '/': ${RUN_TAG}" >&2
     exit 1
 fi
 
+EXPLICIT_FILELISTS=()
+if [[ -n "${FILELISTS_STR}" ]]; then
+    read -ra EXPLICIT_FILELISTS <<< "${FILELISTS_STR}"
+fi
+
+if [[ "${USE_ALL}" == true && ${#EXPLICIT_FILELISTS[@]} -gt 0 ]]; then
+    echo "ERROR: pass either ALLTXT=true or FILELISTS=..., not both" >&2
+    usage
+fi
+
 if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
-    echo "ERROR: specify -a/--all-txt or one or more filelist.txt arguments" >&2
+    echo "ERROR: specify ALLTXT=true or FILELISTS=\"a.txt b.txt ...\"" >&2
     usage
 fi
 
