@@ -100,7 +100,7 @@ inline void DrawResponseDist( TFile* fIn, const TString& outDir, const TString& 
     h->GetXaxis()->SetTitleOffset( 1.25 );
 
     TString cvName = "response_" + objName;
-    TCanvas* c = new TCanvas( cvName, "", 800, 600 );
+    TCanvas* c = new TCanvas( cvName, "", 800, 800 );
     RealAspectRatio( c );
     c->SetLeftMargin( 0.13 );
 
@@ -150,7 +150,7 @@ inline void DrawResponseSummary( TFile* fIn, const TString& outDir, const TStrin
     const double xMin = frame->GetXaxis()->GetXmin();
     const double xMax = frame->GetXaxis()->GetXmax();
 
-    TCanvas* c = new TCanvas( "response_summary_" + cone + "_" + tag, "", 800, 600 );
+    TCanvas* c = new TCanvas( "response_summary_" + cone + "_" + tag, "", 800, 800 );
     RealAspectRatio( c );
     c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
 
@@ -218,7 +218,7 @@ inline void DrawVariantComparison( TFile* fIn, const TString& outDir, const TStr
     const double xMin = frame->GetXaxis()->GetXmin();
     const double xMax = frame->GetXaxis()->GetXmax();
 
-    TCanvas* c = new TCanvas( "response_variants_" + cone + "_" + collection + "_" + quantity, "", 800, 600 );
+    TCanvas* c = new TCanvas( "response_variants_" + cone + "_" + collection + "_" + quantity, "", 800, 800 );
     RealAspectRatio( c );
     c->SetLeftMargin( 0.14 ); c->SetGridx(); c->SetGridy();
 

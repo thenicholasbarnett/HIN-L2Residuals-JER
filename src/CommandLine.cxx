@@ -1,1 +1,2 @@
-#include "../external/jetmet/CommandLine.cc"
+#include "jetmet/CommandLine.h"
+#include "../external/src/jetmet/CommandLine.cc"

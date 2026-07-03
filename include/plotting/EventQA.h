@@ -70,7 +70,7 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
             hallc->GetYaxis()->CenterTitle();
             hallc->GetXaxis()->SetTitleOffset( 1.25 );
 
-            TCanvas* c = new TCanvas( "event_vz", "", 800, 600 );
+            TCanvas* c = new TCanvas( "event_vz", "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.13 ); c->SetGridx(); c->SetGridy();
             hallc->Draw( "hist" );
@@ -93,7 +93,7 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
     {
         TH1I* hfilt = ( TH1I* )fIn->Get( "hfilt" );
         if( hfilt ){
-            TCanvas* c = new TCanvas( "event_ppvF", "", 800, 600 );
+            TCanvas* c = new TCanvas( "event_ppvF", "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.15 );
             c->SetLogy();
@@ -121,7 +121,7 @@ inline void PlotEvent( TFile* fIn, const TString& outDir, ProgressBar& pb ){
     {
         TH1I* htrig = ( TH1I* )fIn->Get( "h_hlt_j80" );
         if( htrig ){
-            TCanvas* c = new TCanvas( "event_hlt", "", 800, 600 );
+            TCanvas* c = new TCanvas( "event_hlt", "", 800, 800 );
             RealAspectRatio( c );
             c->SetLeftMargin( 0.15 );
             c->SetLogy();

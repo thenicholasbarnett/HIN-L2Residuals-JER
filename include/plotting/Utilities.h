@@ -29,9 +29,8 @@
 // Canvas / pad helpers
 // ============================================================
 
-static constexpr Float_t kAspectRatio = 4.0f / 3.0f;
 inline void RealAspectRatio( TCanvas* c ){
-    if( !gROOT->IsBatch() ) c->SetRealAspectRatio( kAspectRatio );
+    if( !gROOT->IsBatch() ) c->SetRealAspectRatio();
 }
 
 struct TwoPad {
@@ -44,7 +43,7 @@ struct TwoPad {
 // Pads are added to the canvas's primitive list; delete canvas to cascade-delete both.
 inline TwoPad MakeTwoPad( const TString& name ){
     TwoPad cv;
-    cv.c = new TCanvas( name, "", 800, 600 );
+    cv.c = new TCanvas( name, "", 800, 800 );
     RealAspectRatio( cv.c );
     cv.c->cd();
 
