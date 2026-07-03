@@ -366,7 +366,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 Transfer_Output_Files   = ""
 
-Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry,$(pwd)/libl2residuals.so,$(pwd)/data,$(pwd)/analysis_config.toml
+Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry${LIBRARY:+,$(pwd)/libl2residuals.so},$(pwd)/data,$(pwd)/analysis_config.toml
 
 request_cpus            = 1
 
