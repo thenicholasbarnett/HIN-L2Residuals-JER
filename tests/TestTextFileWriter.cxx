@@ -221,10 +221,12 @@ void TestNormSelection(){
     CleanupFiles( trigPath, notrigPath, rootPath, prefix );
 }
 
-// [2c] Single-file overload: no Triggered/NonTriggered split, every pT slice reads from the
-// one residuals file regardless of cfg.hltJ80Thresh.
+// [2c] Single-file overload, non-triggered-only (SingleDatasetKind::NonTriggered):
+// no Triggered/NonTriggered split, every pT slice reads from the one residuals
+// file regardless of cfg.hltJ80Thresh -- correct because an unbiased dataset
+// has nothing to gate on.
 void TestSingleFileMode(){
-    std::cout << "\n[2c] Single-file mode (no Triggered/NonTriggered split)\n";
+    std::cout << "\n[2c] Single-file mode, non-triggered-only\n";
 
     const char* resPath = "/tmp/tw_single.root";
     const char* rootPath = "/tmp/tw_out_single.root";
@@ -232,7 +234,7 @@ void TestSingleFileMode(){
     CleanupFiles( resPath, resPath, rootPath, prefix );
 
     MakeResiduals( resPath, 3.0, 0.001, {0, 1, 2, 3, 4, 5} );
-    runTextFile( resPath, rootPath, prefix, "gauss", false );
+    runTextFile( resPath, SingleDatasetKind::NonTriggered, rootPath, prefix, "gauss", false );
 
     Check( std::ifstream( TxtPath( prefix, "abseta", false ).Data() ).good(),
         "single-file run writes the abseta text file" );
@@ -248,6 +250,37 @@ void TestSingleFileMode(){
             "low-pT slice reads from the single file" );
         Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 3.0 ) < 1e-6,
             "high-pT slice also reads from the single file" );
+    }
+    if( fOut ) fOut->Close();
+
+    CleanupFiles( resPath, resPath, rootPath, prefix );
+}
+
+// [2d] Single-file overload, triggered-only (SingleDatasetKind::Triggered): pT
+// slices below cfg.hltJ80Thresh must be dropped entirely (no fallback source
+// exists), not silently pulled from the same trigger-biased file.
+void TestSingleTriggeredMode(){
+    std::cout << "\n[2d] Single-file mode, triggered-only\n";
+
+    const char* resPath = "/tmp/tw_single_trig.root";
+    const char* rootPath = "/tmp/tw_out_single_trig.root";
+    const char* prefix = "test_tw_single_trig";
+    CleanupFiles( resPath, resPath, rootPath, prefix );
+
+    MakeResiduals( resPath, 5.0, 0.001, {0, 1, 2, 3, 4, 5} );
+    runTextFile( resPath, SingleDatasetKind::Triggered, rootPath, prefix, "gauss", false );
+
+    TFile* fOut = TFile::Open( rootPath, "read" );
+    TH2D* hGrid = fOut ? ( TH2D* )fOut->Get( "ak4PF/ak4PF_corrfinal_abseta_gauss" ) : nullptr;
+    Check( hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output" );
+    if( hGrid ){
+        // y-bin 1 = ptavg_30_70 (below threshold) -- must be dropped, left at the
+        // TH2D's default zero, not pulled from the triggered file anyway.
+        // y-bin 3 = ptavg_100_175 (at/above threshold) -- must read from the file.
+        Check( std::fabs( hGrid->GetBinContent( 1, 1 ) - 0.0 ) < 1e-6,
+            "below-threshold slice is dropped (stays at the TH2D default), not read from the triggered file" );
+        Check( std::fabs( hGrid->GetBinContent( 1, 3 ) - 5.0 ) < 1e-6,
+            "at/above-threshold slice reads from the triggered file" );
     }
     if( fOut ) fOut->Close();
 
@@ -474,6 +507,7 @@ int main(){
     TestMergeSourceSelection();
     TestNormSelection();
     TestSingleFileMode();
+    TestSingleTriggeredMode();
     TestEtaOrdering();
     TestEtaFileOrdering();
     TestUnityFallback_TooFewSlices();

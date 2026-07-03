@@ -139,9 +139,32 @@ static bool WriteFullEtaTextFile( const TString& path, const std::vector<FitResu
     return true;
 }
 
-void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
-                 TString outputRootFile, TString outputTextPrefix,
-                 TString method, bool useNorm ){
+// Which residuals file backs a given pT_avg slice. Merge is the original
+// triggered+non-triggered behavior; TriggeredOnly/NonTriggeredOnly back the
+// single-dataset overload -- they are NOT the same threshold branch with one
+// side nulled out, because NonTriggeredOnly must ignore the threshold
+// entirely (an unbiased dataset has nothing to gate), while TriggeredOnly
+// must drop (not fall back on) slices below threshold.
+enum class SourceMode { Merge, TriggeredOnly, NonTriggeredOnly };
+
+static TFile* SelectSource( SourceMode mode, const RangeBin& ptSlice, double threshold,
+                            TFile* fTrig, TFile* fNoTrig ){
+    switch( mode ){
+        case SourceMode::Merge:            return ( ptSlice.lo >= threshold ) ? fTrig : fNoTrig;
+        case SourceMode::TriggeredOnly:    return ( ptSlice.lo >= threshold ) ? fTrig : nullptr;
+        case SourceMode::NonTriggeredOnly: return fNoTrig;
+    }
+    return nullptr;
+}
+
+// Shared implementation for all three public entry points below. fTrig/fNoTrig
+// are already-open files; exactly one is null in single-dataset mode
+// (TriggeredOnly leaves fNoTrig null, NonTriggeredOnly leaves fTrig null) and
+// both are non-null in Merge mode.
+static void RunTextFileImpl(
+    SourceMode mode, TFile* fTrig, TFile* fNoTrig,
+    TString outputRootFile, TString outputTextPrefix,
+    TString method, bool useNorm ){
 
     if( outputTextPrefix.IsNull() ) outputTextPrefix = kDefaultTextPrefix;
     if( outputTextPrefix.Contains( "/" ) ){
@@ -163,18 +186,16 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
         return;
     }
 
-    std::cout << "Triggered residuals:     " << triggeredResidualsFile    << "\n"
-              << "Non-triggered residuals: " << nonTriggeredResidualsFile << "\n"
+    static const char* const kModeLabel[] = {
+        "merge (triggered + non-triggered)", "single (triggered-only)", "single (non-triggered-only)" };
+    std::cout << "Mode: " << kModeLabel[( int )mode] << "\n"
+              << "Triggered residuals:     " << ( fTrig ? fTrig->GetName() : "(none)" ) << "\n"
+              << "Non-triggered residuals: " << ( fNoTrig ? fNoTrig->GetName() : "(none)" ) << "\n"
               << "Output ROOT:  " << outputRootFile   << "\n"
               << "Text output dir: " << textDir        << "\n"
               << "Text prefix:  " << outputTextPrefix << "\n"
               << "Method:       " << method           << "\n"
               << "Normalized:   " << ( useNorm ? "yes (kFSR-norm)" : "no (direct)" ) << "\n";
-
-    TFile* fTrig = TFile::Open( triggeredResidualsFile, "read" );
-    TFile* fNoTrig = TFile::Open( nonTriggeredResidualsFile, "read" );
-    if( !fTrig || fTrig->IsZombie() ){ std::cerr << "Cannot open " << triggeredResidualsFile << "\n"; return; }
-    if( !fNoTrig || fNoTrig->IsZombie() ){ std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n"; return; }
 
     { Ssiz_t sl = outputRootFile.Last( '/' ); if( sl != kNPOS ){ gSystem->mkdir( TString( outputRootFile( 0, sl ) ), kTRUE ); } }
 
@@ -195,10 +216,10 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
 
     for( const TString& cone : cfg.coneLabels ){
 
-        TDirectory* trigConeDir = ( TDirectory* )fTrig->Get( cone );
-        TDirectory* notrigConeDir = ( TDirectory* )fNoTrig->Get( cone );
-        if( !trigConeDir || !notrigConeDir ){
-            std::cerr << "Missing " << cone << " directory in triggered or non-triggered residuals file, skipping\n";
+        TDirectory* trigConeDir = fTrig ? ( TDirectory* )fTrig->Get( cone ) : nullptr;
+        TDirectory* notrigConeDir = fNoTrig ? ( TDirectory* )fNoTrig->Get( cone ) : nullptr;
+        if( ( fTrig && !trigConeDir ) || ( fNoTrig && !notrigConeDir ) ){
+            std::cerr << "Missing " << cone << " directory in a residuals file, skipping\n";
             continue;
         }
 
@@ -217,21 +238,25 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
             const int nEta = ( int )etaEdges.size() - 1;
             const TString etaMode = L2Name::EtaModeKey( fullEta );
 
-            // one intercept histogram per pT slice, chosen from the triggered or
-            // non-triggered file by the trigger threshold
+            // one intercept histogram per pT slice, chosen per SelectSource() --
+            // a null source (TriggeredOnly below threshold) means the slice is
+            // intentionally excluded, not merely missing.
             std::vector<TH1D*> hSlice( nPt, nullptr );
             int nMissingSlices = 0;
             for( int ip = 0; ip < nPt; ip++ ){
                 const auto& ptSlice = bins.ptavgSlices[ip];
-                TFile* src = ( ptSlice.lo >= cfg.hltJ80Thresh ) ? fTrig : fNoTrig;
-                TString name = L2Name::ObjectName( cone, "intercept",
-                    {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
-                hSlice[ip] = FetchIntercept( src, cone, name );
+                TFile* src = SelectSource( mode, ptSlice, cfg.hltJ80Thresh, fTrig, fNoTrig );
+                if( src ){
+                    TString name = L2Name::ObjectName( cone, "intercept",
+                        {etaMode, L2Name::PtKey( ptSlice )}, {method} ) + suffix;
+                    hSlice[ip] = FetchIntercept( src, cone, name );
+                }
                 if( !hSlice[ip] ){ nMissingSlices++; }
             }
             if( nMissingSlices > 0 ){
                 std::cerr << cone << " " << etaMode << ": " << nMissingSlices << "/" << nPt
-                          << " pT slices missing (intercept histogram not found)\n";
+                          << " pT slices missing or excluded (below trigger threshold in"
+                          << " triggered-only mode, or intercept histogram not found)\n";
             }
 
             // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
@@ -293,14 +318,28 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
     }
 
     fOut->Close();
-    fTrig->Close();
-    fNoTrig->Close();
+    if( fTrig )   fTrig->Close();
+    if( fNoTrig ) fNoTrig->Close();
 }
 
-void runTextFile( TString residualsFile, TString outputRootFile,
+void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
+                 TString outputRootFile, TString outputTextPrefix,
+                 TString method, bool useNorm ){
+    TFile* fTrig = TFile::Open( triggeredResidualsFile, "read" );
+    TFile* fNoTrig = TFile::Open( nonTriggeredResidualsFile, "read" );
+    if( !fTrig || fTrig->IsZombie() ){ std::cerr << "Cannot open " << triggeredResidualsFile << "\n"; return; }
+    if( !fNoTrig || fNoTrig->IsZombie() ){ std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n"; return; }
+    RunTextFileImpl( SourceMode::Merge, fTrig, fNoTrig, outputRootFile, outputTextPrefix, method, useNorm );
+}
+
+void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputRootFile,
                  TString outputTextPrefix,
                  TString method, bool useNorm ){
-    std::cout << "Single dataset mode (no triggered/non-triggered merge) — using " << residualsFile
-              << " for every pT_avg slice\n";
-    runTextFile( residualsFile, residualsFile, outputRootFile, outputTextPrefix, method, useNorm );
+    TFile* f = TFile::Open( residualsFile, "read" );
+    if( !f || f->IsZombie() ){ std::cerr << "Cannot open " << residualsFile << "\n"; return; }
+    if( kind == SingleDatasetKind::Triggered ){
+        RunTextFileImpl( SourceMode::TriggeredOnly, f, nullptr, outputRootFile, outputTextPrefix, method, useNorm );
+    } else {
+        RunTextFileImpl( SourceMode::NonTriggeredOnly, nullptr, f, outputRootFile, outputTextPrefix, method, useNorm );
+    }
 }

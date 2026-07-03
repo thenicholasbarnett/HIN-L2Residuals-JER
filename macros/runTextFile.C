@@ -1,5 +1,6 @@
 // CMake:       ./build/bin/runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
-//              ./build/bin/runTextFile SINGLE=residuals.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
+//              ./build/bin/runTextFile TRIGGERED=trig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
+//              ./build/bin/runTextFile NONTRIGGERED=notrig.root OUTPUT=out.root [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path
 // Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
 //              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root")'
 //              (build the library first: cmake --build build)
@@ -19,9 +20,14 @@
 // "data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt" and
 // "..._<cone>_eta[_norm].txt".
 //
-// SINGLE=: for a dataset with no triggered/non-triggered split (e.g. one
-//          min-bias or single-trigger sample) -- every pT slice reads from
-//          the one file. Mutually exclusive with TRIGGERED=/NONTRIGGERED=.
+// TRIGGERED=/NONTRIGGERED=: pass both for the merge (as above). Pass only
+//          one for single-dataset mode -- the two are NOT interchangeable:
+//          TRIGGERED= alone means this one dataset is itself trigger-biased,
+//          so pT_avg slices below cfg.hltJ80Thresh are dropped entirely (no
+//          non-triggered fallback exists to fill them in). NONTRIGGERED=
+//          alone means the dataset is not trigger-biased, so every pT_avg
+//          slice is used unconditionally, no threshold cut. At least one of
+//          the two is required.
 // PREFIX=: a plain filename prefix, NOT a path -- must not contain '/'.
 //          Optional; defaults to "L2Residual" when omitted.
 // METHOD=: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
@@ -51,12 +57,14 @@ int main( int argc, char* argv[] ){
     static const char* const kUsage =
         "Usage: runTextFile TRIGGERED=trig.root NONTRIGGERED=notrig.root OUTPUT=out.root"
         " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path\n"
-        "       runTextFile SINGLE=residuals.root OUTPUT=out.root"
-        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path\n"
+        "       runTextFile TRIGGERED=trig.root OUTPUT=out.root"
+        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path   (single, trigger-biased dataset)\n"
+        "       runTextFile NONTRIGGERED=notrig.root OUTPUT=out.root"
+        " [PREFIX=name] [METHOD=gauss] [NORM=true] CONFIG=path   (single, unbiased dataset)\n"
         "  PREFIX: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
 
     const std::set<std::string> kKnownKeys = {
-        "TRIGGERED", "NONTRIGGERED", "SINGLE", "OUTPUT", "PREFIX", "METHOD", "NORM", "CONFIG"
+        "TRIGGERED", "NONTRIGGERED", "OUTPUT", "PREFIX", "METHOD", "NORM", "CONFIG"
     };
     L2Cli::Tokens t = L2Cli::ParseTokens( argc, argv, kKnownKeys, kUsage );
 
@@ -67,22 +75,24 @@ int main( int argc, char* argv[] ){
     TString method = t.Has( "METHOD" ) ? TString( t.Get( "METHOD" ) ) : Config().defaultMethod;
     bool useNorm = t.Get( "NORM", "true" ) != "false";
 
-    const bool hasSingle = t.Has( "SINGLE" );
-    const bool hasSplit  = t.Has( "TRIGGERED" ) || t.Has( "NONTRIGGERED" );
+    const bool hasTrig   = t.Has( "TRIGGERED" );
+    const bool hasNoTrig = t.Has( "NONTRIGGERED" );
 
-    if( hasSingle && hasSplit ){
-        std::cerr << "ERROR: pass either SINGLE=... or TRIGGERED=.../NONTRIGGERED=..., not both\n" << kUsage;
+    if( !hasTrig && !hasNoTrig ){
+        std::cerr << "ERROR: pass TRIGGERED=..., NONTRIGGERED=..., or both\n" << kUsage;
         return 1;
     }
 
-    if( hasSingle ){
-        runTextFile( t.Get( "SINGLE" ), output, prefix, method, useNorm );
+    if( hasTrig && hasNoTrig ){
+        runTextFile( t.Get( "TRIGGERED" ), t.Get( "NONTRIGGERED" ), output, prefix, method, useNorm );
         return 0;
     }
 
-    TString triggered    = t.Require( "TRIGGERED", kUsage );
-    TString nontriggered = t.Require( "NONTRIGGERED", kUsage );
-    runTextFile( triggered, nontriggered, output, prefix, method, useNorm );
+    if( hasTrig ){
+        runTextFile( t.Get( "TRIGGERED" ), SingleDatasetKind::Triggered, output, prefix, method, useNorm );
+    } else {
+        runTextFile( t.Get( "NONTRIGGERED" ), SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+    }
     return 0;
 }
 #endif

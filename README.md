@@ -74,8 +74,8 @@ runAsymmetry INPUT=<input_HiForest.root> OUTPUT=<output_asymmetry.root> MODE=tri
 # Step 3, split triggered/non-triggered residuals
 ./build/bin/runTextFile TRIGGERED=<triggered_residuals.root> NONTRIGGERED=<nontriggered_residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
 
-# Step 3, one residual file for every pT slice
-./build/bin/runTextFile SINGLE=<residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
+# Step 3, single dataset (only one of TRIGGERED=/NONTRIGGERED=)
+./build/bin/runTextFile NONTRIGGERED=<residuals.root> OUTPUT=<corrections.root> [PREFIX=<name>] CONFIG=cfg/2024ppRef.toml
 
 # JES/JER extraction, on a hadded Step 1 MC file (independent of Steps 2/3)
 ./build/bin/runResponse INPUT=<mc_asymmetry.root> OUTPUT=<response.root> CONFIG=cfg/2024ppRef.toml
@@ -168,8 +168,8 @@ Every compiled binary's arguments are `KEY=value` tokens — there are no positi
 | :- | :- | :- |
 | `runAsymmetry` | `INPUT=`, `OUTPUT=`, `MODE=`, `CONFIG=` | `MAXEVENTS=` |
 | `runCalibration` | `DATA=`, `MC=`, `OUTPUT=`, `CONFIG=` | none |
-| `runTextFile` split mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
-| `runTextFile` single-file mode | `SINGLE=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
+| `runTextFile` merge mode | `TRIGGERED=`, `NONTRIGGERED=`, `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
+| `runTextFile` single-dataset mode | `TRIGGERED=` *or* `NONTRIGGERED=` (exactly one), `OUTPUT=`, `CONFIG=` | `PREFIX=`, `METHOD=`, `NORM=` |
 | `runResponse` | `INPUT=`, `OUTPUT=`, `CONFIG=` | none |
 | `runPlotting` | `INPUT=`, `CONFIG=` | `OUTDIR=`, `FLAGS=`, `CLOSURE=`, `CALIBRATION=` |
 
@@ -286,10 +286,17 @@ Merges the triggered and non-triggered <b>Step 2</b> outputs (e.g. HardProbes an
 #         NORM=false uses the direct, non-normalized variant instead
 ```
 
-For a dataset with no triggered/non-triggered split (e.g. one min-bias or single-trigger sample — every pT slice reads from the same file regardless of the trigger threshold), pass `SINGLE=` instead of `TRIGGERED=`/`NONTRIGGERED=` (mutually exclusive with them):
+For a single dataset with no triggered/non-triggered split, pass only one of `TRIGGERED=`/`NONTRIGGERED=` — the two are **not** interchangeable, since only one of them is trigger-biased:
 
 ```
-./build/bin/runTextFile SINGLE=<residuals-file.root> OUTPUT=<output_corrections-file.root> [PREFIX=<name>] [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+# single, trigger-biased dataset (e.g. HardProbes-only, no ZeroBias/MinBias companion) --
+# pT_avg slices below the trigger threshold are dropped entirely, since there's no
+# non-triggered fallback to fill them in
+./build/bin/runTextFile TRIGGERED=<residuals-file.root> OUTPUT=<output_corrections-file.root> [PREFIX=<name>] [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
+
+# single, unbiased dataset (e.g. ZeroBias/MinBias-only) -- every pT_avg slice is used
+# unconditionally, no threshold cut
+./build/bin/runTextFile NONTRIGGERED=<residuals-file.root> OUTPUT=<output_corrections-file.root> [PREFIX=<name>] [METHOD=gauss] [NORM=true] CONFIG=cfg/2024ppRef.toml
 ```
 
 For each cone, in |η<sup>probe</sup>| or η<sup>probe</sup> ranges, fits correction factors vs p<sub>T</sub><sup>avg</sup> with a 3-parameter function and writes two plain text files per cone that can be parsed with a header. These always go to `data/jec/preliminary/` (relative to the repo root, created automatically if missing) — a gitignored directory reserved for locally-generated/preliminary corrections, not a caller-chosen path. `PREFIX=` is a plain filename prefix, not a path (it must not contain `/`); it defaults to `L2Residual` when omitted. Since the normalized variant is the default, both filenames get a `_norm` suffix unless `NORM=false` is passed:

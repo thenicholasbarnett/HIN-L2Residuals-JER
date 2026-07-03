@@ -41,14 +41,32 @@ void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsF
                   TString outputRootFile, TString outputTextPrefix = "",
                   TString method = "gauss", bool useNorm = true );
 
-// Single-dataset convenience overload, for systems with no triggered/non-triggered
-// split (e.g. a single min-bias or single-trigger sample — everything above
-// threshold is unbiased, everything isn't, or there's simply only one dataset
-// to use). Equivalent to calling the two-file version with the same file for
-// both triggeredResidualsFile and nonTriggeredResidualsFile: every pT slice
-// reads from this one file regardless of cfg.hltJ80Thresh, so the merge
-// becomes a no-op.
-void runTextFile( TString residualsFile, TString outputRootFile,
+// A scoped enum, not a bool: a bare bool in this parameter slot collides with
+// the two-file overload above under C++ overload resolution -- a TString/
+// const char* argument implicitly converts to bool (pointer-to-bool, a
+// built-in conversion), which ranks *better* than the const char*->TString
+// user-defined conversion the two-file overload needs at that same
+// position. That silently sent every two-file call to this overload instead
+// (verified: it's not a hypothetical, it actually happened). A scoped enum
+// has no implicit conversion from a string type at all, so it can only ever
+// bind to this overload -- the ambiguity is a compile error, not a runtime
+// footgun, if it's ever reintroduced.
+enum class SingleDatasetKind { Triggered, NonTriggered };
+
+// Single-dataset mode: only one dataset available, no triggered/non-triggered
+// merge. kind selects which behavior applies -- the two cases are NOT
+// interchangeable, since only one of them is trigger-biased:
+//   Triggered    -- residualsFile is itself a trigger-biased dataset (e.g. a
+//            HardProbes-only sample with no ZeroBias/MinBias companion). pT_avg
+//            slices below cfg.hltJ80Thresh are dropped entirely (left missing
+//            in the output, same as any other unfilled slice) -- there is no
+//            non-triggered fallback to fill them in, and using the triggered
+//            dataset there anyway would silently bake trigger-efficiency bias
+//            into the correction.
+//   NonTriggered -- residualsFile is not trigger-biased (e.g. ZeroBias/MinBias-only,
+//            or any single min-bias-like sample). Every pT_avg slice is used
+//            unconditionally, no threshold cut applied.
+void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputRootFile,
                   TString outputTextPrefix = "",
                   TString method = "gauss", bool useNorm = true );
 
