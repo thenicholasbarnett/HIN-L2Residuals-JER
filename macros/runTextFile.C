@@ -1,33 +1,114 @@
-// Compiled:    ./bin/runTextFile <residuals.root> <output.txt> [method] [cone]
-// Interpreted: root -l -b -q 'macros/runTextFile.C("residuals.root","out.txt")'
+// CMake:       ./build/bin/runTextFile -triggered trig.root -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -triggered trig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile -nontriggered notrig.root -output out.root [-prefix name] [-method gauss] [-norm true] -config path
+//              ./build/bin/runTextFile args.config  (with lines like: triggered = trig.root)
+// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
+//              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root")'
 //              (build the library first: cmake --build build)
-//              (run from the repo root so relative paths resolve correctly)
+//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// method: gauss (default) | trunc90 | trunc95
-// cone:   ak4PF (default) | ak2PF | ak3PF | ak5PF | ak6PF
+// Compiled arguments use JetMET's own CommandLine parser (vendored under
+// external/jetmet/): "-key value" on the shell, or a leading params.config
+// file with "key = value" lines. Unknown/unused options and missing required
+// values are immediate CLI errors, reported together by CommandLine::check().
+// config is always required; there is no default TOML. Keys are matched
+// exactly as written below (case-sensitive).
+//
+// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the
+// triggered residuals if the slice starts at or above cfg.hltJ80Thresh,
+// otherwise the non-triggered residuals.
+// Correction text files always go to data/jec/preliminary/ (relative to the
+// repo root, created automatically) -- gitignored, meant for locally
+// generated/preliminary corrections. Writes
+// "data/jec/preliminary/<prefix>_<cone>_abseta[_norm].txt" and
+// "..._<cone>_eta[_norm].txt".
+//
+// -triggered/-nontriggered: pass both for the merge (as above). Pass only
+//          one for single-dataset mode -- the two are NOT interchangeable:
+//          -triggered alone means this one dataset is itself trigger-biased,
+//          so pT_avg slices below cfg.hltJ80Thresh are dropped entirely (no
+//          non-triggered fallback exists to fill them in). -nontriggered
+//          alone means the dataset is not trigger-biased, so every pT_avg
+//          slice is used unconditionally, no threshold cut. At least one of
+//          the two is required.
+// -prefix: a plain filename prefix, NOT a path -- must not contain '/'.
+//          Optional; defaults to "L2Residual" when omitted.
+// -method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
+// -norm:   true (default) uses the kFSR-normalized intercepts (the standard
+//          method); false uses the direct, non-normalized variant instead.
+// [step3] eta_mode in the TOML ("both" | "abseta" | "eta") controls which of
+// the two text files (per cone) actually get written; see TextFileWriter.cxx.
 
 #ifdef __CLING__
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
+R__ADD_INCLUDE_PATH(external)
 #if defined(__APPLE__)
-R__LOAD_LIBRARY(lib/libl2residuals.dylib)
+R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
-R__LOAD_LIBRARY(lib/libl2residuals.so)
+R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
 #endif
 
 #include "TextFileWriter.h"
+#include "jetmet/CommandLine.h"
+#include "AnalysisConfig.h"
 
 #ifndef __CLING__
+#include <cstdlib>
 #include <iostream>
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: runTextFile <residuals.root> <output.txt> [method] [cone]\n";
+int main( int argc, char* argv[] ){
+    static const char* const kUsage =
+        "Usage: runTextFile -triggered trig.root -nontriggered notrig.root"
+        " -output out.root [-prefix name] [-method gauss] [-norm true] -config path\n"
+        "       runTextFile args.config   # config file lines use: key = value\n"
+        "       Pass -triggered, -nontriggered, or both.\n"
+        "  prefix: plain filename prefix (no '/'), defaults to \"L2Residual\"\n";
+
+    CommandLine cl;
+    if( !cl.parse( argc, argv ) ) return 1;
+
+    // config is queried and exported first, ahead of check()'s aggregate
+    // report: Config() (called just below for -method's default) is a
+    // process-wide singleton that reads L2RESIDUALS_CONFIG, so it must be
+    // set before any other default-value expression can safely touch it.
+    std::string config = cl.getValue<std::string>( "config" );
+    if( config.empty() ){
+        std::cerr << "ERROR: missing required config=... argument\n" << kUsage;
         return 1;
     }
-    TString method = (argc > 3) ? argv[3] : "gauss";
-    TString cone   = (argc > 4) ? argv[4] : "ak4PF";
-    runTextFile(argv[1], argv[2], method, cone);
+    setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
+
+    std::string output = cl.getValue<std::string>( "output" );
+    std::string prefix = cl.getValue<std::string>( "prefix", std::string( "" ) );
+    std::string method = cl.getValue<std::string>( "method", std::string( Config().defaultMethod.Data() ) );
+    bool useNorm        = cl.getValue<bool>( "norm", true );
+    std::string trig    = cl.getValue<std::string>( "triggered", std::string( "" ) );
+    std::string noTrig  = cl.getValue<std::string>( "nontriggered", std::string( "" ) );
+
+    if( !cl.check() ){
+        std::cerr << kUsage;
+        return 1;
+    }
+
+    const bool hasTrig   = !trig.empty();
+    const bool hasNoTrig = !noTrig.empty();
+
+    if( !hasTrig && !hasNoTrig ){
+        std::cerr << "ERROR: pass -triggered ..., -nontriggered ..., or both\n" << kUsage;
+        return 1;
+    }
+
+    if( hasTrig && hasNoTrig ){
+        runTextFile( trig, noTrig, output, prefix, method, useNorm );
+        return 0;
+    }
+
+    if( hasTrig ){
+        runTextFile( trig, SingleDatasetKind::Triggered, output, prefix, method, useNorm );
+    } else {
+        runTextFile( noTrig, SingleDatasetKind::NonTriggered, output, prefix, method, useNorm );
+    }
     return 0;
 }
 #endif

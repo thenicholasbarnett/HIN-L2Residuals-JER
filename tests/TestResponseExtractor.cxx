@@ -1,0 +1,129 @@
+#include <iostream>
+#include <cmath>
+#include <cstdio>
+
+#include "TROOT.h"
+#include "TFile.h"
+#include "TDirectory.h"
+#include "TH1D.h"
+
+#include "Binning.h"
+#include "DijetHistograms.h"
+#include "ResponseExtractor.h"
+
+static int nPass = 0;
+static int nFail = 0;
+static constexpr double kEps = 1e-6;
+
+void Check( bool cond, const char* msg ){
+    if( cond ){ std::cout << "  PASS  " << msg << std::endl; nPass++; }
+    else { std::cout << "  FAIL  " << msg << std::endl; nFail++; }
+}
+
+// Response values chosen symmetric around 1.0 so the expected fitted mean
+// (JES) is exactly 1.0 regardless of fit-window/binning details; the spread
+// gives FitResponse something real to measure for JER.
+static const double kResponseValues[] = { 0.90, 0.93, 0.96, 0.99, 1.00, 1.01, 1.04, 1.07, 1.10 };
+static constexpr int kNResponseValues = 9;
+static constexpr int kRepeatsPerValue = 20;  // 180 total entries, well above min_entries_per_bin=100
+
+int main(){
+    gROOT->SetBatch( true );
+
+    std::cout << "=== TestResponseExtractor ===" << std::endl;
+
+    const char* inputPath = "/tmp/tre_input.root";
+    const char* outputPath = "/tmp/tre_output.root";
+    std::remove( inputPath );
+    std::remove( outputPath );
+
+    // ---- build a synthetic Step 1 MC output file (ak4PF, incl collection only) ----
+    // corrPt, rawPt, and jtPt all use the same symmetric response values so
+    // JES(corr)=JES(reco)=JES(raw)~1.0 by construction -- this test checks
+    // the extraction plumbing (all three variants, entry-count guard), not
+    // that the three variants differ, which is a real-data property.
+    {
+        BinningConfig bins;
+        ConeHistograms h;
+        h.Init( "ak4PF", bins, true );
+
+        // eta=0.13 -> eta_reco bin covering [0,0.261]
+        // refPt=105 -> pt_gen bin [100,110)
+        const float eta = 0.13f;
+        const float refPt = 105.0f;
+        for( int iv = 0; iv < kNResponseValues; iv++ ){
+            const float pt = ( float )( kResponseValues[iv] * refPt );
+            for( int r = 0; r < kRepeatsPerValue; r++ ){
+                h.FillInclJetResp( pt, pt, pt, eta, refPt, 1.0f );
+            }
+        }
+
+        // a deliberately under-filled pt_gen bin (only 5 entries, well below
+        // min_entries_per_bin=100) -- should NOT produce a valid fit.
+        for( int r = 0; r < 5; r++ ){
+            h.FillInclJetResp( 300.0f, 300.0f, 300.0f, eta, 300.0f, 1.0f );
+        }
+
+        TFile* fo = new TFile( inputPath, "recreate" );
+        TDirectory* dir = fo->mkdir( "ak4PF" );
+        h.Write( dir );
+        fo->Close();
+        delete fo;
+    }
+
+    // ---- run the real extraction ----
+    runResponse( inputPath, outputPath );
+
+    // ---- verify output ----
+    TFile* fIn = TFile::Open( outputPath, "read" );
+    Check( fIn && !fIn->IsZombie(), "output file opens" );
+    if( !fIn || fIn->IsZombie() ){
+        std::cout << "\n=== " << nPass << " passed, " << nFail << " failed ===" << std::endl;
+        return 1;
+    }
+
+    std::cout << "\n[1] vs pt_gen, all three variants" << std::endl;
+    {
+        static const char* const kVariantTags[3] = { "corr", "reco", "raw" };
+        for( const char* tag : kVariantTags ){
+            TH1D* hJES = ( TH1D* )fIn->Get( Form( "ak4PF/ak4PF_JES_%s_vs_ptgen_incl", tag ) );
+            TH1D* hJER = ( TH1D* )fIn->Get( Form( "ak4PF/ak4PF_JER_%s_vs_ptgen_incl", tag ) );
+            Check( hJES != nullptr, Form( "JES_%s_vs_ptgen_incl exists", tag ) );
+            Check( hJER != nullptr, Form( "JER_%s_vs_ptgen_incl exists", tag ) );
+            if( hJES && hJER ){
+                const int bin = hJES->GetXaxis()->FindBin( 105.0 );  // pt_gen=105 -> [100,110) bin
+                const double jes = hJES->GetBinContent( bin );
+                const double jer = hJER->GetBinContent( bin );
+                Check( std::fabs( jes - 1.0 ) < 0.02, Form( "JES_%s(pt_gen~105) close to 1.0 (symmetric synthetic response)", tag ) );
+                Check( jer > 0.01 && jer < 0.20, Form( "JER_%s(pt_gen~105) in a sane positive range", tag ) );
+
+                const int emptyBin = hJES->GetXaxis()->FindBin( 305.0 );  // under-filled bin
+                Check( std::fabs( hJES->GetBinContent( emptyBin ) ) < kEps,
+                    Form( "under-filled pt_gen bin (5 entries < min_entries_per_bin) stays at 0, no fit (%s)", tag ) );
+            }
+        }
+    }
+
+    std::cout << "\n[2] tag/probe collections were never filled -> objects exist but bins stay zero" << std::endl;
+    {
+        // ConeHistograms::Init always constructs all three response sparses
+        // when isMC -- unfilled ones are empty, not absent, so extraction
+        // still writes JES/JER TH1Ds for them (matching the unity/zero
+        // fallback convention used elsewhere, e.g. TextFileWriter.cxx).
+        TH1D* hJESTag = ( TH1D* )fIn->Get( "ak4PF/ak4PF_JES_corr_vs_ptgen_tag" );
+        Check( hJESTag != nullptr, "JES_corr_vs_ptgen_tag object still written (unfilled, not absent)" );
+        if( hJESTag ){
+            bool allZero = true;
+            for( int b = 1; b <= hJESTag->GetNbinsX(); b++ )
+                if( std::fabs( hJESTag->GetBinContent( b ) ) > kEps ) allZero = false;
+            Check( allZero, "tag collection (never filled) has no valid fits anywhere -> all bins zero" );
+        }
+    }
+
+    fIn->Close();
+    std::remove( inputPath );
+    std::remove( outputPath );
+
+    std::cout << "\n=== " << nPass << " passed, " << nFail << " failed ===" << std::endl;
+    return nFail > 0 ? 1 : 0;
+}

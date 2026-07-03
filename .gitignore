@@ -1,9 +1,21 @@
+# build outputs
 build/
-bin/
 lib/
-.noannobin.specs
 
-readme/
-plots/
-data/sample/
-condor/submissions/
+# bin/ is SCRAM source; ignore only accidental local executables there.
+bin/*
+!bin/BuildFile.xml
+!bin/*.cc
+
+# analysis outputs
+*.root
+*.png
+*.pdf
+
+# closure/reprocessing inputs
+cfg/*clos*.toml
+data/jec/preliminary/
+
+# editor / OS
+*.swp
+.DS_Store

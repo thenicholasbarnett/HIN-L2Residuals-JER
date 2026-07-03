@@ -1,0 +1,76 @@
+# Template for a new collision system / dataset.
+#
+# This is a scaffold, not a runnable config — copy it to a new file
+# (e.g. cfg/2025OO.toml) and fill in every REQUIRED_* placeholder before
+# pointing L2RESIDUALS_CONFIG at it. 
+
+[paths]
+# Jet veto map and golden JSON are entirely per-run-period. No default exists.
+veto_map = "REQUIRED_SET_ME/path/to/veto_map.root"
+golden_json = "REQUIRED_SET_ME/path/to/golden.json"
+
+[condor]
+# Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
+# triggered | non-triggered | mc. make_condor.sh looks up each filelist it
+# would submit here; comment out (or omit) an entry to skip submitting jobs
+# for that filelist without moving or renaming the file. The physical dataset
+# name is free-form (e.g. a triggered jet dataset, a MinBias/ZeroBias
+# non-triggered dataset) — only the mapped mode matters.
+[condor.filelist_modes]
+# REQUIRED_SET_ME_filelist_basename = "triggered"
+# REQUIRED_SET_ME_filelist_basename = "non-triggered"
+# REQUIRED_SET_ME_filelist_basename = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+filter = "pprimaryVertexFilter"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+branch = "REQUIRED_SET_ME"
+threshold = 0.0
+cone = "REQUIRED_SET_ME"
+
+[jet_id]
+veto_map_histogram = "jetvetomap_all"
+
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+files = [
+    [ "REQUIRED_SET_ME/AK2PF.txt" ],
+    [ "REQUIRED_SET_ME/AK3PF.txt" ],
+    [ "REQUIRED_SET_ME/AK4PF.txt" ],
+    [ "REQUIRED_SET_ME/AK5PF.txt" ],
+    [ "REQUIRED_SET_ME/AK6PF.txt" ],
+]
+
+[cuts]
+min_jet_pt = 10.0
+dphi = 2.7
+max_abs_a = 0.7
+min_entries_per_bin = 100
+residual_gaus_fit_half_width = 0.5
+residual_alpha_fit_hi = 0.31
+# Gaussian fit window for runResponse's JES/JER extraction: [1-x, 1+x] around
+# the pT_reco/pT_gen response, analogous to residual_gaus_fit_half_width above
+# (which is centered at 0, not 1).
+response_gaus_fit_half_width = 0.3
+
+[binning]
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
+
+[step3]
+default_method = "gauss"
+# other options currently available: doubleGauss | trunc90 | trunc95
+eta_mode = "both"
+# other options currently available: abseta | eta

@@ -1,5 +1,22 @@
 cmake_minimum_required(VERSION 3.10)
 
+execute_process(COMMAND hostname
+    OUTPUT_VARIABLE L2RESIDUALS_HOSTNAME
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+if(L2RESIDUALS_HOSTNAME MATCHES "lxplus" AND NOT DEFINED ENV{CMSSW_BASE})
+    message(FATAL_ERROR
+        "This looks like lxplus (${L2RESIDUALS_HOSTNAME}), but cmsenv is not active.\n"
+        "Builds intended for HTCondor must use CMSSW GCC + CMSSW ROOT.\n"
+        "Run something like:\n"
+        "  source /cvmfs/cms.cern.ch/cmsset_default.sh\n"
+        "  cd <CMSSW_RELEASE>/src\n"
+        "  cmsenv\n"
+        "  cd /path/to/L2Residuals-2024ppref\n"
+        "  cmake -S . -B build\n"
+        "  cmake --build build")
+endif()
+
 # Must be before project(): CMSSW GCC has a broken annobin plugin and
 # system ROOT on lxplus lacks libCling.so — both fixed with CMSSW GCC + CMSSW ROOT.
 if(DEFINED ENV{CMSSW_BASE})
@@ -50,8 +67,8 @@ endif()
 project(L2Residuals)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Arch ROOT 6.40.02 declares a Vdt CMake dependency that isn't installed.
 # Prepend our cmake/ stub so it takes precedence over ROOT's FindVdt.cmake.
@@ -68,35 +85,43 @@ include(${ROOT_USE_FILE})
 set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
 
 # nlohmann-json (required by JSON_handler.h for golden JSON support)
-find_package(nlohmann_json QUIET)
-if(NOT nlohmann_json_FOUND)
-    # Fall back to pkg-config on systems where the CMake package isn't registered
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(NLOHMANN_JSON REQUIRED nlohmann_json)
-    set(NLOHMANN_JSON_INCLUDE_DIR ${NLOHMANN_JSON_INCLUDE_DIRS})
-else()
-    set(NLOHMANN_JSON_INCLUDE_DIR "")  # header-only; imported target carries it
-endif()
+# Vendored single header takes priority — no network dependency
+set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
-# shared library from src/
-file(GLOB SOURCES src/*.cxx)
+# shared library from src/, plus vendored external/ sources that need compiling
+# (header-only vendored deps like toml++/nlohmann-json need nothing here)
+file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
+file(GLOB EXTERNAL_SOURCES CONFIGURE_DEPENDS external/jetmet/*.cc)
+list(APPEND SOURCES ${EXTERNAL_SOURCES})
+# external/jetmet_jer/ (vendored CMSSW CondFormats/JetMETObjects JER SF
+# reader/writer) needs -DSTANDALONE. This can't be scoped to just its own
+# two translation units via set_source_files_properties: JetResolutionObject.h
+# switches its declared member types (TFormula vs. CMSSW's
+# reco::FormulaEvaluator) on that macro, so every translation unit that
+# includes the header -- src/TextFileWriter.cxx, not just the vendored .cc
+# files themselves -- needs the same definition, or declarations disagree.
+# Applied PUBLIC (not just to l2residuals's own sources): tests/*.cxx also
+# include this header directly (e.g. TestTextFileWriter.cxx round-tripping
+# the JER SF writer through it) and link against l2residuals, so they need
+# the same definition propagated to them, not just the library's own sources.
+file(GLOB JETMET_JER_SOURCES CONFIGURE_DEPENDS external/jetmet_jer/*.cc)
+list(APPEND SOURCES ${JETMET_JER_SOURCES})
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
     target_include_directories(l2residuals PUBLIC include cfg ${NLOHMANN_JSON_INCLUDE_DIR})
-    if(nlohmann_json_FOUND)
-        target_link_libraries(l2residuals ${ROOT_LIBRARIES} nlohmann_json::nlohmann_json)
-    else()
-        target_link_libraries(l2residuals ${ROOT_LIBRARIES})
-    endif()
+    target_compile_definitions(l2residuals PUBLIC L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(l2residuals PUBLIC STANDALONE)
+    target_link_libraries(l2residuals ${ROOT_LIBRARIES})
 else()
     # header-only placeholder until src/ is populated
     add_library(l2residuals INTERFACE)
     target_include_directories(l2residuals INTERFACE include cfg)
+    target_compile_definitions(l2residuals INTERFACE L2RESIDUALS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(l2residuals INTERFACE ${ROOT_LIBRARIES})
 endif()
 
-# build each entry-point in macros/ as an executable, output to bin/
-file(GLOB MACROS macros/*.C macros/*.cxx)
+# build each entry-point in macros/ as a standalone executable
+file(GLOB MACROS CONFIGURE_DEPENDS macros/*.C macros/*.cxx)
 foreach(macro ${MACROS})
     get_filename_component(name ${macro} NAME_WE)
     add_executable(${name} ${macro})
@@ -110,7 +135,7 @@ endforeach()
 
 # tests
 enable_testing()
-file(GLOB TESTS tests/*.cxx)
+file(GLOB TESTS CONFIGURE_DEPENDS tests/*.cxx)
 foreach(test ${TESTS})
     get_filename_component(name ${test} NAME_WE)
     add_executable(${name} ${test})
@@ -121,6 +146,13 @@ foreach(test ${TESTS})
         target_link_libraries(${name} ${ROOT_LIBRARIES})
     endif()
     add_test(NAME ${name} COMMAND ${name})
+    # Keep test CWD at the repo root so any test-created output paths stay
+    # predictable. CONFIG no longer has an implicit fallback (see
+    # AnalysisConfig.cxx), so tests must set L2RESIDUALS_CONFIG explicitly
+    # rather than relying on one.
+    set_tests_properties(${name} PROPERTIES
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/2024ppRef.toml")
 endforeach()
 
 add_test(NAME TestBuild

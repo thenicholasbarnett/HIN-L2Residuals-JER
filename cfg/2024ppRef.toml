@@ -1,0 +1,69 @@
+[paths]
+veto_map = "data/veto/Winter25Prompt25_RunCDE.root"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[condor]
+# Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
+# triggered | non-triggered | mc. make_condor.sh looks up each filelist it
+# would submit here; comment out (or omit) an entry to skip submitting jobs
+# for that filelist without moving or renaming the file. The physical dataset
+# name (HP0, ZB0, ...) is free-form — only the mapped mode matters.
+[condor.filelist_modes]
+filelist_HiForest_2024ppref_DATA_HP0 = "triggered"
+filelist_HiForest_2024ppref_DATA_ZB0 = "non-triggered"
+filelist_HiForest_2024ppref_MC = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+# Primary vertex filter branch, read from the skim tree (data only).
+filter = "pprimaryVertexFilter"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[jet_id]
+veto_map_histogram = "jetvetomap_all"
+
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+files = [
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK2PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK3PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK4PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
+    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
+]
+
+[cuts]
+min_jet_pt = 10.0
+dphi = 2.7
+max_abs_a = 0.7
+min_entries_per_bin = 100
+residual_gaus_fit_half_width = 0.5
+residual_alpha_fit_hi = 0.31
+# Gaussian fit window for runResponse's JES/JER extraction: [1-x, 1+x] around
+# the pT_reco/pT_gen response, analogous to residual_gaus_fit_half_width above
+# (which is centered at 0, not 1).
+response_gaus_fit_half_width = 0.3
+
+[binning]
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
+
+[step3]
+default_method = "gauss"
+# other options currently available: doubleGauss | trunc90 | trunc95
+eta_mode = "both"
+# other options currently available: abseta | eta

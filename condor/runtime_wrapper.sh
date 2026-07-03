@@ -18,12 +18,10 @@ OUTPUT="$3"
 MODE="$4"
 START_DIR="$(pwd)"
 
-# Set this to your CMSSW src directory on AFS, e.g.:
-# /afs/cern.ch/user/n/nbarnett/public/condor/workArea/CMSSW_13_2_4/src
-CMSSW_SRC=""
+CMSSW_SRC="@CMSSW_SRC@"
 
-if [[ -z "${CMSSW_SRC}" ]]; then
-    echo "ERROR: CMSSW_SRC is not set in condor/runtime_wrapper.sh" >&2
+if [[ -z "${CMSSW_SRC}" || "${CMSSW_SRC}" == "@CMSSW_SRC@" ]]; then
+    echo "ERROR: CMSSW_SRC was not stamped into runtime_wrapper.sh by make_condor.sh" >&2
     exit 1
 fi
 
@@ -32,6 +30,7 @@ source /cvmfs/cms.cern.ch/cmsset_default.sh
 cd "${CMSSW_SRC}"
 eval "$(scramv1 runtime -sh)"
 cd "${START_DIR}"
+export L2RESIDUALS_CONFIG="${START_DIR}/analysis_config.toml"
 
 # Binary is compiled against CMSSW ROOT (which has libCling).
 # Prepend . for libl2residuals.so transferred to the sandbox.
@@ -42,4 +41,5 @@ echo "Output: ${OUTPUT}"
 echo "Mode:   ${MODE}"
 
 chmod +x "${EXECUTABLE}"
-./"${EXECUTABLE}" "${INPUT}" "${OUTPUT}" "${MODE}"
+# The compiled binary's CLI is JetMET's own "-key value" CommandLine parser.
+./"${EXECUTABLE}" -input "${INPUT}" -output "${OUTPUT}" -mode "${MODE}" -config "${START_DIR}/analysis_config.toml"
