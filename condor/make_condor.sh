@@ -79,118 +79,113 @@ usage() {
   exit 1
 }
 
-if [[ $# -lt 1 ]]; then usage; fi
+# Parses "$@" into the OUTPUT_DIR/USE_ALL/NO_SUBMIT/EXPLICIT_FILELISTS/
+# RUN_TAG/CONFIG_PATH globals, and validates the flag combination (exactly
+# one of -alltxt/-filelists, -output and -config both present, -tag has no
+# slash). Exits via usage() on any error.
+parse_args() {
+  if [[ $# -lt 1 ]]; then usage; fi
 
-OUTPUT_DIR=""
-USE_ALL=false
-NO_SUBMIT=false
-EXPLICIT_FILELISTS=()
-RUN_TAG=""
-CONFIG_PATH=""
+  OUTPUT_DIR=""
+  USE_ALL=false
+  NO_SUBMIT=false
+  EXPLICIT_FILELISTS=()
+  RUN_TAG=""
+  CONFIG_PATH=""
 
-while [[ $# -gt 0 ]]; do
-  arg="$1"
-  if [[ "${arg}" != -?* ]]; then
-    echo "ERROR: argument \"${arg}\" is not a -flag (this script only accepts JetMET-style -flag arguments)" >&2
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    if [[ "${arg}" != -?* ]]; then
+      echo "ERROR: argument \"${arg}\" is not a -flag (this script only accepts JetMET-style -flag arguments)" >&2
+      usage
+    fi
+    flag="$(printf '%s' "${arg#-}" | tr '[:lower:]' '[:upper:]')"
+    shift
+    case "${flag}" in
+      OUTPUT)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -output requires a value" >&2
+          usage
+        fi
+        OUTPUT_DIR="$1"
+        shift
+        ;;
+      ALLTXT)
+        USE_ALL=true
+        ;;
+      NOSUBMIT)
+        NO_SUBMIT=true
+        ;;
+      TAG)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -tag requires a value" >&2
+          usage
+        fi
+        RUN_TAG="$1"
+        shift
+        ;;
+      CONFIG)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -config requires a value" >&2
+          usage
+        fi
+        CONFIG_PATH="$1"
+        shift
+        ;;
+      FILELISTS)
+        EXPLICIT_FILELISTS=()
+        while [[ $# -gt 0 && "$1" != -?* ]]; do
+          EXPLICIT_FILELISTS+=("$1")
+          shift
+        done
+        if [[ ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
+          echo "ERROR: -filelists requires at least one value" >&2
+          usage
+        fi
+        ;;
+      *)
+        echo "ERROR: unrecognized argument \"-${flag}\"" >&2
+        usage
+        ;;
+    esac
+  done
+
+  if [[ -z "${OUTPUT_DIR}" ]]; then
+    echo "ERROR: -output dir is required" >&2
     usage
   fi
-  flag="$(printf '%s' "${arg#-}" | tr '[:lower:]' '[:upper:]')"
-  shift
-  case "${flag}" in
-    OUTPUT)
-      if [[ $# -eq 0 ]]; then
-        echo "ERROR: -output requires a value" >&2
-        usage
-      fi
-      OUTPUT_DIR="$1"
-      shift
-      ;;
-    ALLTXT)
-      USE_ALL=true
-      ;;
-    NOSUBMIT)
-      NO_SUBMIT=true
-      ;;
-    TAG)
-      if [[ $# -eq 0 ]]; then
-        echo "ERROR: -tag requires a value" >&2
-        usage
-      fi
-      RUN_TAG="$1"
-      shift
-      ;;
-    CONFIG)
-      if [[ $# -eq 0 ]]; then
-        echo "ERROR: -config requires a value" >&2
-        usage
-      fi
-      CONFIG_PATH="$1"
-      shift
-      ;;
-    FILELISTS)
-      EXPLICIT_FILELISTS=()
-      while [[ $# -gt 0 && "$1" != -?* ]]; do
-        EXPLICIT_FILELISTS+=("$1")
-        shift
-      done
-      if [[ ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
-        echo "ERROR: -filelists requires at least one value" >&2
-        usage
-      fi
-      ;;
-    *)
-      echo "ERROR: unrecognized argument \"-${flag}\"" >&2
-      usage
-      ;;
-  esac
-done
 
-if [[ -z "${OUTPUT_DIR}" ]]; then
-  echo "ERROR: -output dir is required" >&2
-  usage
-fi
+  if [[ "${RUN_TAG}" == */* ]]; then
+    echo "ERROR: -tag must not contain '/': ${RUN_TAG}" >&2
+    exit 1
+  fi
 
-if [[ "${RUN_TAG}" == */* ]]; then
-  echo "ERROR: -tag must not contain '/': ${RUN_TAG}" >&2
-  exit 1
-fi
+  if [[ "${USE_ALL}" == true && ${#EXPLICIT_FILELISTS[@]} -gt 0 ]]; then
+    echo "ERROR: pass either -alltxt or -filelists, not both" >&2
+    usage
+  fi
 
-if [[ "${USE_ALL}" == true && ${#EXPLICIT_FILELISTS[@]} -gt 0 ]]; then
-  echo "ERROR: pass either -alltxt or -filelists, not both" >&2
-  usage
-fi
+  if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
+    echo "ERROR: specify -alltxt or -filelists a.txt b.txt ..." >&2
+    usage
+  fi
+}
 
-if [[ "${USE_ALL}" == false && ${#EXPLICIT_FILELISTS[@]} -eq 0 ]]; then
-  echo "ERROR: specify -alltxt or -filelists a.txt b.txt ..." >&2
-  usage
-fi
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONDOR_DIR="${REPO_ROOT}/condor"
-CMAKE_BINARY="${REPO_ROOT}/build/bin/runAsymmetry"
-CMAKE_LIBRARY="${REPO_ROOT}/build/lib/libl2residuals.so"
-SCRAM_BINARY=""
-BINARY="${CMAKE_BINARY}"
-LIBRARY="${CMAKE_LIBRARY}"
-if [[ -n "${CMSSW_BASE:-}" && -n "${SCRAM_ARCH:-}" && -x "${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry" ]]; then
-  SCRAM_BINARY="${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry"
-  BINARY="${SCRAM_BINARY}"
-  LIBRARY=""
-fi
-DATA_DIR="${REPO_ROOT}/data"
-FILELIST_DIR="${REPO_ROOT}/data/txt"
-
-if [[ -z "${CONFIG_PATH}" ]]; then
-  echo "ERROR: -config path is required -- which TOML gets submitted is a physics-affecting" >&2
-  echo "       choice (e.g. main run-period config vs. a closure config), so there is no" >&2
-  echo "       implicit default. Pass -config cfg/2024ppRef.toml explicitly if that's what you want." >&2
-  exit 1
-fi
-if [[ ! -f "${CONFIG_PATH}" ]]; then
-  echo "ERROR: CONFIG file not found: ${CONFIG_PATH}" >&2
-  exit 1
-fi
-CONFIG_PATH="$(cd "$(dirname "${CONFIG_PATH}")" && pwd)/$(basename "${CONFIG_PATH}")"
+# Validates CONFIG_PATH is set and exists, then resolves it to an absolute
+# path (needed before the cd into WORKDIR later).
+require_config() {
+  if [[ -z "${CONFIG_PATH}" ]]; then
+    echo "ERROR: -config path is required -- which TOML gets submitted is a physics-affecting" >&2
+    echo "       choice (e.g. main run-period config vs. a closure config), so there is no" >&2
+    echo "       implicit default. Pass -config cfg/2024ppRef.toml explicitly if that's what you want." >&2
+    exit 1
+  fi
+  if [[ ! -f "${CONFIG_PATH}" ]]; then
+    echo "ERROR: CONFIG file not found: ${CONFIG_PATH}" >&2
+    exit 1
+  fi
+  CONFIG_PATH="$(cd "$(dirname "${CONFIG_PATH}")" && pwd)/$(basename "${CONFIG_PATH}")"
+}
 
 # Look up the run mode for a filelist basename from [condor.filelist_modes] in
 # the selected TOML. Prints "triggered", "non-triggered", "mc", or nothing if
@@ -216,107 +211,127 @@ lookup_filelist_mode() {
     ' "${CONFIG_PATH}"
 }
 
-if [[ -z "${CMSSW_BASE:-}" ]]; then
-  echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
-  echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
-  echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
-  echo "       cd /path/to/L2Residuals-2024ppref" >&2
-  echo "       cmake -S . -B build && cmake --build build" >&2
-  echo "       or build the SCRAM executable with: scram b -j4" >&2
-  exit 1
-fi
-
-# The CMSSW src directory used for worker jobs is derived from the active
-# cmsenv, not a TOML setting -- CMSSW_BASE (set by cmsenv, already required
-# above) is the release area, so CMSSW_BASE/src is exactly the src directory
-# a worker job needs to `scramv1 runtime -sh` from. This always reflects
-# whichever CMSSW release the submitter actually has set up, so there's
-# nothing to keep in sync in the TOML and nothing to get stale.
-CMSSW_SRC_FROM_CONFIG="${CMSSW_BASE}/src"
-if [[ ! -d "${CMSSW_SRC_FROM_CONFIG}" ]]; then
-  echo "ERROR: CMSSW_BASE/src does not exist: ${CMSSW_SRC_FROM_CONFIG}" >&2
-  exit 1
-fi
-
-if [[ ! -f "${BINARY}" ]]; then
-  echo "ERROR: no runAsymmetry executable found." >&2
-  echo "       For CMake, run: cmake --build build" >&2
-  echo "       For SCRAM, put the repo at $CMSSW_BASE/src/Analysis/L2Residuals and run: scram b -j4" >&2
-  exit 1
-fi
-if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
-  echo "ERROR: ${LIBRARY} not found — run: cmake --build build" >&2
-  exit 1
-fi
-
-# Belt-and-suspenders: verify the binary's embedded RPATH points to cvmfs.
-# Catches the case where cmsenv was sourced after the binary was built without it.
-BINARY_RPATH="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
-if [[ -z "${SCRAM_BINARY}" && -n "${BINARY_RPATH}" ]] && ! echo "${BINARY_RPATH}" | grep -q '/cvmfs/'; then
-  echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${BINARY_RPATH}" >&2
-  echo "       Binary was built without cmsenv. Reconfigure and rebuild after cmsenv:" >&2
-  echo "       cmake -S . -B build && cmake --build build" >&2
-  echo "       or build the SCRAM executable with: scram b -j4" >&2
-  exit 1
-fi
-
-if [[ "${USE_ALL}" == true ]]; then
-  if [[ ! -d "${FILELIST_DIR}" ]]; then
-    echo "ERROR: ${FILELIST_DIR} not found" >&2
+# Confirms cmsenv is active and derives CMSSW_SRC_FROM_CONFIG from it -- see
+# the "Prerequisites" header comment for why this isn't a TOML setting.
+require_cmssw() {
+  if [[ -z "${CMSSW_BASE:-}" ]]; then
+    echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
+    echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
+    echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
+    echo "       cd /path/to/L2Residuals-2024ppref" >&2
+    echo "       cmake -S . -B build && cmake --build build" >&2
+    echo "       or build the SCRAM executable with: scram b -j4" >&2
     exit 1
   fi
-  FILELISTS=("${FILELIST_DIR}"/*.txt)
-  if [[ ! -f "${FILELISTS[0]}" ]]; then
-    echo "ERROR: no .txt filelists found in ${FILELIST_DIR}" >&2
+
+  CMSSW_SRC_FROM_CONFIG="${CMSSW_BASE}/src"
+  if [[ ! -d "${CMSSW_SRC_FROM_CONFIG}" ]]; then
+    echo "ERROR: CMSSW_BASE/src does not exist: ${CMSSW_SRC_FROM_CONFIG}" >&2
     exit 1
   fi
-else
-  FILELISTS=()
-  for f in "${EXPLICIT_FILELISTS[@]}"; do
-    if [[ -d "${f}" ]]; then
-      DIR_TXT=("${f}"/*.txt)
-      if [[ ! -f "${DIR_TXT[0]}" ]]; then
-        echo "ERROR: no .txt filelists found in directory: ${f}" >&2
-        exit 1
-      fi
-      FILELISTS+=("${DIR_TXT[@]}")
-    elif [[ -f "${f}" ]]; then
-      FILELISTS+=("${f}")
-    else
-      echo "ERROR: filelist not found (not a file or directory): ${f}" >&2
+}
+
+# Picks the SCRAM-built binary if one exists, else falls back to the CMake
+# one; sets BINARY/LIBRARY/SCRAM_BINARY, then verifies the chosen binary
+# actually exists and (belt-and-suspenders) that its RPATH points to cvmfs,
+# catching a binary built without cmsenv active.
+choose_binary() {
+  CMAKE_BINARY="${REPO_ROOT}/build/bin/runAsymmetry"
+  CMAKE_LIBRARY="${REPO_ROOT}/build/lib/libl2residuals.so"
+  SCRAM_BINARY=""
+  BINARY="${CMAKE_BINARY}"
+  LIBRARY="${CMAKE_LIBRARY}"
+  if [[ -n "${CMSSW_BASE:-}" && -n "${SCRAM_ARCH:-}" && -x "${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry" ]]; then
+    SCRAM_BINARY="${CMSSW_BASE}/bin/${SCRAM_ARCH}/runAsymmetry"
+    BINARY="${SCRAM_BINARY}"
+    LIBRARY=""
+  fi
+
+  if [[ ! -f "${BINARY}" ]]; then
+    echo "ERROR: no runAsymmetry executable found." >&2
+    echo "       For CMake, run: cmake --build build" >&2
+    echo "       For SCRAM, put the repo at \$CMSSW_BASE/src/Analysis/L2Residuals and run: scram b -j4" >&2
+    exit 1
+  fi
+  if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
+    echo "ERROR: ${LIBRARY} not found — run: cmake --build build" >&2
+    exit 1
+  fi
+
+  local binary_rpath
+  binary_rpath="$(readelf -d "${BINARY}" 2>/dev/null | grep -E 'RPATH|RUNPATH' | grep -o '\[.*\]' | tr -d '[]' || true)"
+  if [[ -z "${SCRAM_BINARY}" && -n "${binary_rpath}" ]] && ! echo "${binary_rpath}" | grep -q '/cvmfs/'; then
+    echo "ERROR: ${BINARY} RPATH does not point to cvmfs: ${binary_rpath}" >&2
+    echo "       Binary was built without cmsenv. Reconfigure and rebuild after cmsenv:" >&2
+    echo "       cmake -S . -B build && cmake --build build" >&2
+    echo "       or build the SCRAM executable with: scram b -j4" >&2
+    exit 1
+  fi
+}
+
+# Builds the FILELISTS array from -alltxt or -filelists (files and/or
+# directories, expanded non-recursively), then resolves every entry to an
+# absolute path -- must happen before the cd into WORKDIR below, since
+# filelists are read from their original location, never copied into the
+# sandbox (see the data/ staging comment in prepare_submission_sandbox for
+# why data/txt/ specifically isn't part of that copy).
+resolve_filelists() {
+  if [[ "${USE_ALL}" == true ]]; then
+    if [[ ! -d "${FILELIST_DIR}" ]]; then
+      echo "ERROR: ${FILELIST_DIR} not found" >&2
       exit 1
     fi
+    FILELISTS=("${FILELIST_DIR}"/*.txt)
+    if [[ ! -f "${FILELISTS[0]}" ]]; then
+      echo "ERROR: no .txt filelists found in ${FILELIST_DIR}" >&2
+      exit 1
+    fi
+  else
+    FILELISTS=()
+    for f in "${EXPLICIT_FILELISTS[@]}"; do
+      if [[ -d "${f}" ]]; then
+        DIR_TXT=("${f}"/*.txt)
+        if [[ ! -f "${DIR_TXT[0]}" ]]; then
+          echo "ERROR: no .txt filelists found in directory: ${f}" >&2
+          exit 1
+        fi
+        FILELISTS+=("${DIR_TXT[@]}")
+      elif [[ -f "${f}" ]]; then
+        FILELISTS+=("${f}")
+      else
+        echo "ERROR: filelist not found (not a file or directory): ${f}" >&2
+        exit 1
+      fi
+    done
+  fi
+
+  for i in "${!FILELISTS[@]}"; do
+    FILELISTS[i]="$(cd "$(dirname "${FILELISTS[i]}")" && pwd)/$(basename "${FILELISTS[i]}")"
   done
-fi
+}
 
-# Resolve to absolute paths now, before cd-ing into WORKDIR below --
-# filelists are read directly from their original location (never copied
-# into the submission sandbox; see the data/ staging comment further down
-# for why data/txt/ specifically isn't part of that copy).
-for i in "${!FILELISTS[@]}"; do
-  FILELISTS[i]="$(cd "$(dirname "${FILELISTS[i]}")" && pwd)/$(basename "${FILELISTS[i]}")"
-done
+# Strips a trailing /condor/<asym_dir_name> or /condor from OUTPUT_DIR (so
+# the user can pass any of outdir, outdir/condor, or
+# outdir/condor/<asym_dir_name> and land in the same place), then rebuilds
+# it as outdir/condor/<asym_dir_name>/<TODAY>. asymmetry_<TAG> keeps
+# separate passes (e.g. -tag abs_eta vs -tag clos_dir_eta) from landing in
+# the same output tree; plain "asymmetry" when no -tag is given.
+normalize_output_dir() {
+  ASYM_DIR_NAME="asymmetry"
+  if [[ -n "${RUN_TAG}" ]]; then ASYM_DIR_NAME="asymmetry_${RUN_TAG}"; fi
 
-TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
-SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
-mkdir -p "${SUBMISSIONS_DIR}"
-WORKDIR="${SUBMISSIONS_DIR}/${TODAY}"
-mkdir -p "${WORKDIR}"
-# asymmetry_<TAG> keeps separate passes (e.g. -tag abs_eta vs -tag clos_dir_eta)
-# from landing in the same output tree; plain "asymmetry" when no -tag is given.
-ASYM_DIR_NAME="asymmetry"
-if [[ -n "${RUN_TAG}" ]]; then ASYM_DIR_NAME="asymmetry_${RUN_TAG}"; fi
+  OUTPUT_DIR="${OUTPUT_DIR%/}"
+  OUTPUT_DIR="${OUTPUT_DIR%/condor/"${ASYM_DIR_NAME}"}"
+  OUTPUT_DIR="${OUTPUT_DIR%/condor}"
+  OUTPUT_DIR="${OUTPUT_DIR}/condor/${ASYM_DIR_NAME}/${TODAY}"
+}
 
-# Normalize: strip trailing /condor/<asym_dir_name> or /condor so the user can pass
-# any of outdir, outdir/condor, or outdir/condor/<asym_dir_name> and land in the same place.
-OUTPUT_DIR="${OUTPUT_DIR%/}"
-OUTPUT_DIR="${OUTPUT_DIR%/condor/"${ASYM_DIR_NAME}"}"
-OUTPUT_DIR="${OUTPUT_DIR%/condor}"
-OUTPUT_DIR="${OUTPUT_DIR}/condor/${ASYM_DIR_NAME}/${TODAY}"
-
-source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
-
-(
+# Creates WORKDIR and populates it with everything every job in this
+# submission shares: the runtime wrapper, binary/library, jec/veto/json
+# data, and the resolved config -- once, not per filelist.
+prepare_submission_sandbox() {
+  mkdir -p "${SUBMISSIONS_DIR}"
+  mkdir -p "${WORKDIR}"
   cd "${WORKDIR}"
 
   # CMSSW_SRC is passed to runtime_wrapper.sh as a plain Arguments= value
@@ -343,44 +358,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
   chmod +x runtime_wrapper.sh runAsymmetry
 
   mkdir -p "${OUTPUT_DIR}"
+}
 
-  TOTAL_JOBS=0
-  TOTAL_LISTS=0
-
-  for FILELIST_PATH in "${FILELISTS[@]}"; do
-    BASENAME=$(basename "${FILELIST_PATH}" .txt)
-
-    FILELIST_MODE="$(lookup_filelist_mode "${BASENAME}")"
-    case "${FILELIST_MODE}" in
-      triggered | non-triggered | mc)
-        MODE="${FILELIST_MODE}"
-        ;;
-      "")
-        echo "  SKIP  ${BASENAME} — no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
-        continue
-        ;;
-      *)
-        echo "  SKIP  ${BASENAME} — unknown mode \"${FILELIST_MODE}\" in [condor.filelist_modes] (expected triggered|non-triggered|mc)" >&2
-        continue
-        ;;
-    esac
-
-    # Label: last _-separated token (HP0, ZB3, MC, …)
-    LABEL=$(echo "${BASENAME}" | rev | cut -d_ -f1 | rev)
-
-    mkdir -p "logs/${LABEL}/out" "logs/${LABEL}/err" "logs/${LABEL}/log"
-
-    FILELIST_FILE="${FILELIST_PATH}"
-    TOTAL=$(grep -c . "${FILELIST_FILE}" || echo 0)
-    SUBMIT_FILE="submit_${LABEL}.condor"
-    COUNT=0
-
-    cat >"${SUBMIT_FILE}" <<EOF
+# Writes the per-filelist submit file's static header (Universe, Executable,
+# Transfer_Input_Files, ...) -- shared by every job in this filelist, unlike
+# the per-input-file Arguments/Output/Error/Log block appended later.
+write_submit_header() {
+  local submit_file="$1" label="$2"
+  cat >"${submit_file}" <<EOF
 Universe                = vanilla
 Executable              = $(pwd)/runtime_wrapper.sh
 
 +JobFlavour             = "longlunch"
-JobBatchName            = "${LABEL}"
+JobBatchName            = "${label}"
 
 should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
@@ -391,40 +381,113 @@ Transfer_Input_Files    = $(pwd)/runAsymmetry${LIBRARY:+,$(pwd)/libl2residuals.s
 request_cpus            = 1
 
 EOF
+}
 
-    pick_bar_color
-    start_bar_timer
-    draw_bar "${BAR_COLOR}" "${LABEL}:" 0 "${TOTAL}"
-
-    while IFS= read -r INPUT_FILE; do
-      [[ -z "${INPUT_FILE}" ]] && continue
-
-      OUTPUT_FILE="${OUTPUT_DIR}/${LABEL}/output_${COUNT}.root"
-      mkdir -p "${OUTPUT_DIR}/${LABEL}"
-
-      cat >>"${SUBMIT_FILE}" <<EOF
-Arguments = runAsymmetry ${INPUT_FILE} ${OUTPUT_FILE} ${MODE} ${CMSSW_SRC_FROM_CONFIG}
-Output    = $(pwd)/logs/${LABEL}/out/job_${COUNT}.out
-Error     = $(pwd)/logs/${LABEL}/err/job_${COUNT}.err
-Log       = $(pwd)/logs/${LABEL}/log/job_${COUNT}.log
+# Appends one job's Arguments/Output/Error/Log/Queue block to the submit
+# file, for a single input HiForest file.
+append_job_to_submit_file() {
+  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6"
+  cat >>"${submit_file}" <<EOF
+Arguments = runAsymmetry ${input_file} ${output_file} ${mode} ${CMSSW_SRC_FROM_CONFIG}
+Output    = $(pwd)/logs/${label}/out/job_${count}.out
+Error     = $(pwd)/logs/${label}/err/job_${count}.err
+Log       = $(pwd)/logs/${label}/log/job_${count}.log
 Queue
 
 EOF
-      COUNT=$((COUNT + 1))
-      draw_bar "${BAR_COLOR}" "${LABEL}:" "${COUNT}" "${TOTAL}"
-    done <"${FILELIST_FILE}"
+}
 
-    printf "\n\n"
+# Generates (and, unless -nosubmit, submits) the .condor file for one
+# filelist: looks up its mode, writes one job per input file, prints a
+# progress bar, and adds to the caller's TOTAL_JOBS/TOTAL_LISTS globals --
+# only for a filelist actually processed, matching a skip's original
+# behavior of not counting toward either total.
+submit_filelist() {
+  local filelist_path="$1"
+  local basename label filelist_mode mode total submit_file count=0
 
-    if [[ "${NO_SUBMIT}" == true ]]; then
-      echo "  ${LABEL} (${MODE}): ${COUNT} jobs → $(pwd)/${SUBMIT_FILE}"
-    else
-      echo "  Submitting ${LABEL} (${MODE}): ${COUNT} jobs..."
-      condor_submit "${SUBMIT_FILE}"
-    fi
+  basename=$(basename "${filelist_path}" .txt)
 
-    TOTAL_JOBS=$((TOTAL_JOBS + COUNT))
-    TOTAL_LISTS=$((TOTAL_LISTS + 1))
+  filelist_mode="$(lookup_filelist_mode "${basename}")"
+  case "${filelist_mode}" in
+    triggered | non-triggered | mc)
+      mode="${filelist_mode}"
+      ;;
+    "")
+      echo "  SKIP  ${basename} — no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
+      return
+      ;;
+    *)
+      echo "  SKIP  ${basename} — unknown mode \"${filelist_mode}\" in [condor.filelist_modes] (expected triggered|non-triggered|mc)" >&2
+      return
+      ;;
+  esac
+
+  # Label: last _-separated token (HP0, ZB3, MC, …)
+  label=$(echo "${basename}" | rev | cut -d_ -f1 | rev)
+
+  mkdir -p "logs/${label}/out" "logs/${label}/err" "logs/${label}/log"
+
+  total=$(grep -c . "${filelist_path}" || echo 0)
+  submit_file="submit_${label}.condor"
+
+  write_submit_header "${submit_file}" "${label}"
+
+  pick_bar_color
+  start_bar_timer
+  draw_bar "${BAR_COLOR}" "${label}:" 0 "${total}"
+
+  while IFS= read -r input_file; do
+    [[ -z "${input_file}" ]] && continue
+
+    local output_file="${OUTPUT_DIR}/${label}/output_${count}.root"
+    mkdir -p "${OUTPUT_DIR}/${label}"
+
+    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}"
+    count=$((count + 1))
+    draw_bar "${BAR_COLOR}" "${label}:" "${count}" "${total}"
+  done <"${filelist_path}"
+
+  printf "\n\n"
+
+  if [[ "${NO_SUBMIT}" == true ]]; then
+    echo "  ${label} (${mode}): ${count} jobs → $(pwd)/${submit_file}"
+  else
+    echo "  Submitting ${label} (${mode}): ${count} jobs..."
+    condor_submit "${submit_file}"
+  fi
+
+  TOTAL_JOBS=$((TOTAL_JOBS + count))
+  TOTAL_LISTS=$((TOTAL_LISTS + 1))
+}
+
+parse_args "$@"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONDOR_DIR="${REPO_ROOT}/condor"
+DATA_DIR="${REPO_ROOT}/data"
+FILELIST_DIR="${REPO_ROOT}/data/txt"
+
+require_config
+require_cmssw
+choose_binary
+resolve_filelists
+
+TODAY=$(date +"%Y-%m-%d_%H-%M-%S")
+SUBMISSIONS_DIR="${CONDOR_DIR}/submissions"
+WORKDIR="${SUBMISSIONS_DIR}/${TODAY}"
+normalize_output_dir
+
+source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
+
+(
+  prepare_submission_sandbox
+
+  TOTAL_JOBS=0
+  TOTAL_LISTS=0
+
+  for FILELIST_PATH in "${FILELISTS[@]}"; do
+    submit_filelist "${FILELIST_PATH}"
   done
 
   echo ""
