@@ -259,12 +259,11 @@ static bool WriteJerSfTextFile(const TString &path, bool fullEta,
   return ok;
 }
 
-// Which residuals file backs a given pT_avg slice. Merge is the original
-// triggered+non-triggered behavior; TriggeredOnly/NonTriggeredOnly back the
-// single-dataset overload -- they are NOT the same threshold branch with one
-// side nulled out, because NonTriggeredOnly must ignore the threshold
+// Which residuals file backs a given pT_avg slice. TriggeredOnly/
+// NonTriggeredOnly back the single-dataset overload and aren't just Merge
+// with one side nulled out -- NonTriggeredOnly ignores the threshold
 // entirely (an unbiased dataset has nothing to gate), while TriggeredOnly
-// must drop (not fall back on) slices below threshold.
+// drops (doesn't fall back on) slices below it.
 enum class SourceMode { Merge, TriggeredOnly, NonTriggeredOnly };
 
 static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
@@ -657,18 +656,15 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
                   << "\n";
     }
 
-    // Write full-eta file (one record per eta bin using the positive-eta JER for each).
-    // Without per-bin negative-eta extraction (the folding sums both sides), full-eta
-    // output is the same as abseta but written with explicit full-eta bin edges.
-    // A future pass that extracts eta_reco > 0 and < 0 separately can replace this.
+    // Full-eta file: no per-bin negative-eta extraction (folding sums both
+    // sides), so this mirrors the |eta|-folded values across eta=0 -- same
+    // content as the abseta file, just written with full-eta bin edges. A
+    // future pass extracting eta_reco > 0 and < 0 separately can replace this.
     if (wantFullEta) {
       TString path =
           textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";
       std::stringstream buf;
       buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
-      // Use the |eta|-folded values mirrored across eta=0 -- same content as abseta file,
-      // just written with full-eta JEC bin edges. Matches the convention for eta text files
-      // elsewhere in TextFileWriter.cxx.
       const int nFullEta = (int)kEtaEdges.size() - 1;
       for (int ieta = 0; ieta < nFullEta; ieta++) {
         const int iAbs = (ieta < nFullEta / 2) ? (nFullEta / 2 - 1 - ieta)

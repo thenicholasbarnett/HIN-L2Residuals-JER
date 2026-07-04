@@ -596,16 +596,12 @@ void TestEtaExtent() {
 }
 
 // [9] JER SF text writer: round-trips the written file through the real
-// vendored JME::JetResolutionObject reader (not a hand-rolled parser here),
-// confirming the on-disk format is genuinely valid and the values it carries
-// match what was written. Note on getRecord(): since this writer emits one
-// record per (eta bin, pT slice) cell -- not one record per eta bin the way
-// a real functional-fit JER SF file would -- JetResolutionObject::getRecord()
-// (which matches on eta bins only, not pT) can return any of several
-// same-eta-bin records; this test instead scans getRecords() directly for
-// the one whose eta AND pT ranges both contain the target point, which is
-// what a caller wanting a specific pT slice's value needs to do with this
-// writer's output.
+// vendored JME::JetResolutionObject reader, confirming the on-disk format is
+// valid and the values match what was written. Uses getRecords() directly
+// rather than getRecord() -- this writer emits one record per (eta bin, pT
+// slice) cell, so getRecord() (eta-only matching) could return any of
+// several same-eta-bin records; the test scans for the one whose eta AND
+// pT ranges both contain the target point.
 void TestJerSfWriter() {
   std::cout << "\n[9] JER SF text writer round-trip\n";
 

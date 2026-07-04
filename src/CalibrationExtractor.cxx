@@ -55,7 +55,7 @@ struct ResidualFitControls {
   int outOfRangeMeanWarnings = 0;
 };
 
-// One R(alpha) point -- JES (mean-derived) and JER (stddev-derived) both
+// One R(alpha) point -- JEC (mean-derived) and JER (stddev-derived) both
 // accumulate these, just fed different underlying fit quantities.
 struct RPoint {
   double alpha, val, err;
@@ -220,7 +220,7 @@ WarnOutOfRangeValue(ResidualFitControls &controls, const TString &cone,
                     const TString &etaMode, const TString &etaKey,
                     const TString &ptKey, const TString &alphaKey,
                     const char *method, const char *sample,
-                    const char *quantity, // "mean A" (JES) or "stddev A" (JER)
+                    const char *quantity, // "mean A" (JEC) or "stddev A" (JER)
                     double value) {
   if (controls.outOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings) {
     std::cerr << "WARNING: residual " << method << " " << sample << " "
@@ -238,7 +238,7 @@ WarnOutOfRangeValue(ResidualFitControls &controls, const TString &cone,
 
 // ---- R(alpha) -> alpha=0 intercept, direct and kFSR-normalized ----
 //
-// Shared by both JES (fed mean-derived R points) and JER (fed stddev-derived
+// Shared by both JEC (fed mean-derived R points) and JER (fed stddev-derived
 // R points) -- the linear-fit-and-extrapolate machinery, including the
 // kFSR-style normalization (divide by the value at the fit range's high
 // edge, fit, multiply back), doesn't care what physical quantity the R
@@ -292,9 +292,9 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   out.ec0 = fitFn->GetParError(0);
   out.valid = true;
 
-  // ---- normalized variant: divide each point by the value at the high end of the fit range,
-  //      fit, then multiply the intercept back. Errors differ from direct
-  //      method because the normalization changes the fit input distribution. ----
+  // normalized variant: divide each point by the value at the high end of
+  // the fit range, fit, then multiply the intercept back. Errors differ from
+  // the direct method since normalization changes the fit input distribution.
   double normVal = 0, normErr = 0;
   for (int k = n - 1; k >= 0; k--) {
     if (pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6) {
@@ -359,42 +359,23 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   return out;
 }
 
-// ============================================================
-// ExtractAndFit — runs the full extraction loop for one set of sparses.
+// Runs the full extraction loop for one eta mode. etaEdges: kAbsEtaEdges
+// (18 bins) or kEtaEdges (36 bins). nameSuffix: "" for |eta|, "_fulleta" for
+// full eta. pb: progress bar updated once per pT slice. Output names follow
+// the global key order: cone, object kind, eta mode/bin, ptavg, alpha,
+// method/detail.
 //
-// etaEdges:   kAbsEtaEdges (18 bins) or kEtaEdges (36 bins)
-// nameSuffix: "" for |eta|, "_fulleta" for full eta
-// pb:         progress bar updated once per pT slice
+// Every (alpha, ptSlice, etaBin) fit already returns both the mean and the
+// width of the A distribution as a side effect -- JEC uses the mean, JER SF
+// uses the width through the same R=(1+x)/(1-x) transform and the same
+// linear-fit-and-extrapolate machinery, so both ride one pass instead of
+// fitting twice.
 //
-// Output names follow the global key order:
-//   cone, object kind, eta mode/bin, ptavg, alpha, method/detail.
-//
-// Every (alpha, ptSlice, etaBin) fit -- Gauss, double-Gauss, trunc90, trunc95
-// -- already returns both the mean and the width (sigma / truncated RMS) of
-// the A distribution as a side effect. JES uses the mean (as before); JER SF
-// uses the width, fed through the exact same R=(1+x)/(1-x) transform and the
-// same linear-fit-and-extrapolate-to-alpha=0 machinery (Nicky's explicit
-// call -- R is literally (1+stddev_A)/(1-stddev_A), same formula as the mean
-// case, not a different resolution-specific transform). Riding both through
-// one pass avoids re-projecting/re-fitting the same per-bin A distributions
-// twice.
-//
-// Outputs per (method, ptSlice):
-//   {cone}_intercept_{etaMode}_{ptSlice}_{method}          (JES, mean-derived)
-//   {cone}_intercept_{etaMode}_{ptSlice}_{method}_norm
-//   {cone}_intercept_jer_{etaMode}_{ptSlice}_{method}       (JER SF, stddev-derived)
-//   {cone}_intercept_jer_{etaMode}_{ptSlice}_{method}_norm
-//
-// Outputs in dRvals per (method, alphaSlice, ptSlice):
-//   {cone}_R_data_{etaMode}_{ptSlice}_{alphaSlice}_{method}
-//   {cone}_R_mc_{etaMode}_{ptSlice}_{alphaSlice}_{method}
-//   {cone}_R_data_jer_{etaMode}_{ptSlice}_{alphaSlice}_{method}
-//   {cone}_R_mc_jer_{etaMode}_{ptSlice}_{alphaSlice}_{method}
-//
-// Outputs in dGraphs per (method, ptSlice, etaBin):
-//   TGraphErrors of R_MC/R_data vs alpha (all bins), with the configured fit range embedded
-//   ("R_jer" kind for the JER SF companion graph)
-// ============================================================
+// Outputs per (method, ptSlice): {cone}_intercept[_jer]_{etaMode}_{ptSlice}_
+// {method}[_norm]. Outputs in dRvals per (method, alphaSlice, ptSlice):
+// {cone}_R_data[_jer]/_mc[_jer]_{etaMode}_{ptSlice}_{alphaSlice}_{method}.
+// Outputs in dGraphs per (method, ptSlice, etaBin): a TGraphErrors of
+// R_MC/R_data vs alpha ("R_jer" for the JER SF companion).
 
 static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
                           const BinningConfig &bins, TDirectory *dQA_data,
@@ -517,7 +498,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         double alphaX = aSlice.hi;
 
         // Accumulate all alpha bins; "QR" fit later selects only those within the configured fit range.
-        // Shared by JES (fed mean/meanErr) and JER SF (fed sigma/sigmaErr) --
+        // Shared by JEC (fed mean/meanErr) and JER SF (fed sigma/sigmaErr) --
         // same R=(1+x)/(1-x) transform either way, just a different rptsOut/hRdOut/hRmOut target.
         auto accumulate =
             [&](std::vector<std::vector<std::vector<std::vector<RPoint>>>>
@@ -595,7 +576,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
     pb.Update();
   }
 
-  // ---- write R_data and R_mc histograms (JES and JER SF) ----
+  // ---- write R_data and R_mc histograms (JEC and JER SF) ----
 
   dRvals->cd();
   for (int m = 0; m < kNMethods; m++) {
@@ -617,7 +598,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
     }
   }
 
-  // ---- build TGraphErrors and fit R_ratio vs alpha (JES, then JER SF) ----
+  // ---- build TGraphErrors and fit R_ratio vs alpha (JEC, then JER SF) ----
 
   for (int method = 0; method < kNMethods; method++) {
     for (int ipt = 0; ipt < nPt; ipt++) {

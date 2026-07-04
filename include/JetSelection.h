@@ -53,7 +53,7 @@ public:
     Int_t m = CHM + NHM + CEM + NEM + MUM;
     // charged multiplicity
     Int_t cm = CHM + CEM + MUM;
-    // nuetral multiplicity
+    // neutral multiplicity
     Int_t nm = NHM + NEM;
 
     // suggested requirements by eta range

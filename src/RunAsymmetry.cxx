@@ -52,7 +52,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
              modeFlag.Data()));
   }
 
-  // checking configuration
+  // validate cone config
   const size_t nCones = cfg.coneLabels.size();
   if (cfg.jecFilesPerCone.size() != nCones ||
       cfg.jetTreePaths.size() != nCones) {
@@ -89,7 +89,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     jecs.emplace_back(chain);
   }
 
-  // loading jet ID, jet veto map, and golden json
+  // jet ID, veto map, golden json
   JetSelect js(cfg.vetoMapPath, cfg.vetoMapHist);
   std::unique_ptr<JSON_handler> dcs;
   if (mode != RunMode::MC) {
@@ -227,7 +227,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
 
     const float weight = event.w;
 
-    // JEC: fill corrPt[c][j] for every cone and jet
+    // JEC
     for (size_t c = 0; c < nCones; c++) {
       for (int j = 0; j < jets[c].reco.nref; j++) {
         jecs[c].SetJetPT(jets[c].reco.rawpt[j]);
@@ -253,10 +253,10 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       }
     }
 
-    // per-cone: jet ID → dijet → |A| → fill
+    // jet ID -> dijet -> |A| -> fill
     for (size_t c = 0; c < nCones; c++) {
 
-      // incl jets: all corrected jets in this cone passing cfg.minJetPt
+      // inclusive jets
       for (int j = 0; j < jets[c].reco.nref; j++) {
         if (corrPt[c][j] >= cfg.minJetPt) {
           cones[c].FillInclJet(corrPt[c][j], jets[c].reco.eta[j],
@@ -316,7 +316,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
         continue;
       }
 
-      // dijet-level |A| acceptance cut
+      // |A| cut
       if (TMath::Abs(dijet.A) > cfg.maxAbsA) {
         continue;
       }

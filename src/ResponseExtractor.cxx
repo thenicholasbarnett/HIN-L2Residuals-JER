@@ -21,7 +21,7 @@
 
 // axis order within {cone}_incl_resp/_tag_resp/_probe_resp -- matches
 // DijetHistograms.h's ConeHistograms exactly (kept as a local redefinition,
-// not a DijetHistograms.h include, the same decoupling ResidualsExtractor.cxx
+// not a DijetHistograms.h include, the same decoupling CalibrationExtractor.cxx
 // already uses for the main asymmetry sparse's axes).
 static constexpr int kRespEtaRecoAxis = 0;
 static constexpr int kRespPtGenAxis = 1;
@@ -50,11 +50,9 @@ static const ResponseVariant kVariants[kNVariants] = {
     {kRespRawRAxis, "raw", "p_{T}^{raw}/p_{T}^{gen}"},
 };
 
-// ---- Gaussian fit around 1.0 -> JES (mean) and JER (sigma/mean) ----
-//
-// Mirrors ResidualsExtractor.cxx's FitGauss in spirit (same NQSR fit, same
-// CanFit entry-count guard) but centered at the response peak (1.0), not 0,
-// and additionally returns the sigma/mean ratio directly.
+// Gaussian fit around 1.0 -> JES (mean) and JER (sigma/mean). Mirrors
+// CalibrationExtractor.cxx's FitGauss (same NQSR fit, same CanFit guard) but
+// centered at the response peak, not 0, and also returns sigma/mean directly.
 
 struct ResponseFitResult {
   double jes = 0, jesErr = 0, jer = 0, jerErr = 0;
@@ -92,13 +90,10 @@ static ResponseFitResult FitResponse(TH1D *h, double halfWidth,
   return r;
 }
 
-// ---- vs pt_gen: marginal over eta_reco and the other two ratio axes
-// entirely, binned directly off the response sparse's own uniform pT axis
-// granularity (no separate coarse slicing scheme, unlike Step 2's
-// ptavgSlices). Runs once per response variant (corr/reco/raw), so JES/JER
-// for all three land side by side for direct comparison. eta_reco-binned
-// extraction is deliberately not done here yet -- the axis is preserved in
-// the sparse for a future pass (see ResponseExtractor.h). ----
+// vs pt_gen: marginal over eta_reco and the other two ratio axes, binned off
+// the sparse's own uniform pT granularity. Runs once per variant so JES/JER
+// for corr/reco/raw land side by side. eta_reco binning is deferred -- see
+// ResponseExtractor.h.
 
 static void ExtractVsPtGen(THnSparse *h, const TString &cone,
                            const TString &collection,
@@ -154,8 +149,8 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
   delete hJER;
 }
 
-// ---- Per-|eta|-bin JER (and JES) vs pT_gen. Used by runTextFilePtResolution
-// to write the CMS JER pT resolution text file.
+// Per-|eta|-bin JER (and JES) vs pT_gen. Used by runTextFilePtResolution to
+// write the CMS JER pT resolution text file.
 //
 // Takes a |eta|-folded response THnSparse (axis 0 = kAbsEtaEdges). For each
 // |eta| bin, restricts axis 0, then projects and fits per pT_gen bin exactly

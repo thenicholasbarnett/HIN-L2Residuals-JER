@@ -60,15 +60,10 @@ TString ResolvePath(const TString &path, const std::string &root) {
 
 } // namespace
 
-// No implicit fallback to cfg/2024ppRef.toml: which TOML gets loaded is a
-// physics-affecting choice (e.g. main run-period config vs. a closure
-// config with different residual_files), so it must always come from an
-// explicit source — either L2RESIDUALS_CONFIG (set directly, or via a
-// compiled binary's required CONFIG= token) or an explicit path passed
-// straight to LoadAnalysisConfig(). L2RESIDUALS_HOME is a different,
-// narrower mechanism (relative-path resolution within an already-chosen
-// TOML, see ConfigRoot() below) and deliberately does NOT count as an
-// implicit config selection here.
+// which TOML loads is a physics-affecting choice (main config vs. a closure
+// config with different residual_files) -- always explicit, never a default.
+// L2RESIDUALS_HOME is separate: relative-path resolution within an
+// already-chosen TOML (see ConfigRoot() below), not a config selector.
 std::string DefaultConfigPath() {
   const char *envConfig = std::getenv("L2RESIDUALS_CONFIG");
   if (envConfig && envConfig[0])
@@ -139,9 +134,8 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   for (const auto &v : *doc["binning"]["ptavg_edges"].as_array())
     cfg.ptavgEdges.push_back(v.value_or(0.0f));
 
-  // min_jet_pt is a single global floor used both for the Step 1 inclusive-
-  // jet histogram and as the dijet subleading-jet validity cut — the third
-  // jet's pT (used for alpha) is deliberately NOT subject to this.
+  // min_jet_pt gates both the incl-jet histogram and the dijet subleading
+  // cut; alpha's third-jet pT is exempt.
   cfg.minJetPt = doc["cuts"]["min_jet_pt"].value_or(0.0f);
   cfg.dphiCut = doc["cuts"]["dphi"].value_or(0.0f);
   cfg.maxAbsA = doc["cuts"]["max_abs_a"].value_or(0.0f);
@@ -152,9 +146,8 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   cfg.responseGausFitHalfWidth =
       doc["cuts"]["response_gaus_fit_half_width"].value_or(0.3);
 
-  // Step 3 output selection only — Step 2 always computes and stores every
-  // method (gauss/doubleGauss/trunc90/trunc95) and both eta modes regardless
-  // of these values; they just pick what runTextFile turns into JEC text files.
+  // Step 3 output selection only -- Step 2 always computes every method and
+  // eta mode regardless.
   cfg.defaultMethod = TString(
       doc["step3"]["default_method"].value_or(std::string("gauss")).c_str());
   cfg.etaModeOutput =
