@@ -5,13 +5,8 @@
 //              (build the library first: cmake --build build)
 //              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
 //
-// Compiled arguments use JetMET's own CommandLine parser (vendored under
-// external/jetmet/, see include/RunAsymmetry.h's neighbors): "-key value" on
-// the shell, or a leading params.config file with "key = value" lines.
-// Unknown/unused options and missing required values are immediate CLI
-// errors, reported together by CommandLine::check(). config is always
-// required; there is no default TOML. Keys are matched exactly as written
-// below (case-sensitive) -- this is CommandLine's own convention.
+// CLI details (CommandLine parser, config files, case-sensitivity): see
+// README's Command-Line Convention section.
 
 #ifdef __CLING__
 // clang-format off

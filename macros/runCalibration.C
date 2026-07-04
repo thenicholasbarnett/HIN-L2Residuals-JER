@@ -8,16 +8,10 @@
 //
 // -mode jec  -- extract L2Residual correction (mean of A distribution)
 // -mode jer  -- extract JER scale factor (stddev of A distribution)
-// Mode is required -- no default. JEC and JER produce separate output files
-// and are run as separate passes; the mode selection determines which
-// intercept TH1Ds and R(alpha) graphs are written.
+// Mode is required -- no default; each mode is its own pass and output file.
 //
-// Compiled arguments use JetMET's own CommandLine parser (vendored under
-// external/jetmet/): "-key value" on the shell, or a leading params.config
-// file with "key = value" lines. Unknown/unused options and missing required
-// values are immediate CLI errors, reported together by CommandLine::check().
-// config is always required; there is no default TOML. Keys are matched
-// exactly as written below (case-sensitive).
+// CLI details (CommandLine parser, config files, case-sensitivity): see
+// README's Command-Line Convention section.
 
 #ifdef __CLING__
 // clang-format off
