@@ -1,6 +1,6 @@
 # L2Residuals Cleanup Plan
 
-**Hard rule, before anything else: `external/` (vendored JetMET/JetMETAnalysis/CMSSW/nlohmann/toml++ source) is never touched by this cleanup — not formatting, not comments, nothing. See `style.md`.**
+**Hard rule, before anything else: `external/` (vendored JetMET/JetMETAnalysis/CMSSW/nlohmann/toml++ source, plus `JetCorrector.h`/`JSON_handler.h` -- code written by other people, relocated into `external/` on 2026-07-04 for exactly this reason) is never touched by this cleanup — not formatting, not comments, nothing. See `style.md`.**
 
 This plan is for making the repository feel plainly authored and maintainable without erasing the real analysis history or replacing Nicky's code style with a generic formatter style.
 

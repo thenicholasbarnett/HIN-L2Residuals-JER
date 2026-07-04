@@ -8,9 +8,9 @@
 #include "TString.h"
 #include "Rtypes.h"
 
-#include "JetCorrector.h"
+#include "jetcorrector/JetCorrector.h"
 #include "JetSelection.h"
-#include "JSON_handler.h"
+#include "json_handler/JSON_handler.h"
 
 #include "BranchMapping.h"
 #include "EventStructs.h"

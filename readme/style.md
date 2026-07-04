@@ -4,7 +4,7 @@ Reference for the cleanup pass in `cleanup_plan.md`, and for any new code writte
 
 ## Hard rule: never touch vendored code
 
-**Nothing under `external/` gets touched, ever — not formatting, not comments, not casts, nothing.** This covers all vendored JetMET/JetMETAnalysis and CMSSW `CondFormats/JetMETObjects` source (`external/jetmet/`, `external/jetmet_jer/`, `external/nlohmann/`, `external/toml.hpp`). Not a style preference — a correctness boundary. Vendored code stays byte-identical to upstream so it can be diffed/updated against its real source later. A deliberate local patch (e.g. `JetResolutionObject.cc`'s `STANDALONE` fix) is a rare, clearly-flagged exception, never part of a sweep.
+**Nothing under `external/` gets touched, ever — not formatting, not comments, not casts, nothing.** This covers all vendored JetMET/JetMETAnalysis and CMSSW `CondFormats/JetMETObjects` source (`external/jetmet/`, `external/jetmet_jer/`, `external/nlohmann/`, `external/toml.hpp`), plus `external/jetcorrector/JetCorrector.h` (Yi Chen) and `external/json_handler/JSON_handler.h` (a collaborator) -- code written by people other than this repo's authors, not this repo's own tooling. Not a style preference — a correctness boundary. Externally-written code stays as-received so it can be compared against its real source later. A deliberate local patch (e.g. `JetResolutionObject.cc`'s `STANDALONE` fix) is a rare, clearly-flagged exception, never part of a sweep.
 
 ## No AI attribution, anywhere
 
