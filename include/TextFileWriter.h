@@ -48,9 +48,10 @@
 // format via the vendored JME::JetResolutionObject
 // (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) rather than a
 // hand-rolled format.
-void runTextFile( TString triggeredResidualsFile, TString nonTriggeredResidualsFile,
-                  TString outputRootFile, TString outputTag = "",
-                  TString method = "gauss", bool useNorm = true );
+void runTextFile(TString triggeredResidualsFile,
+                 TString nonTriggeredResidualsFile, TString outputRootFile,
+                 TString outputTag = "", TString method = "gauss",
+                 bool useNorm = true);
 
 // A scoped enum, not a bool: a bare bool in this parameter slot collides with
 // the two-file overload above under C++ overload resolution -- a TString/
@@ -77,9 +78,9 @@ enum class SingleDatasetKind { Triggered, NonTriggered };
 //   NonTriggered -- residualsFile is not trigger-biased (e.g. ZeroBias/MinBias-only,
 //            or any single min-bias-like sample). Every pT_avg slice is used
 //            unconditionally, no threshold cut applied.
-void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputRootFile,
-                  TString outputTag = "",
-                  TString method = "gauss", bool useNorm = true );
+void runTextFile(TString residualsFile, SingleDatasetKind kind,
+                 TString outputRootFile, TString outputTag = "",
+                 TString method = "gauss", bool useNorm = true);
 
 // Reads a runResponse output file (produced by runResponse on a Step 1 MC
 // file) and writes a CMS JER pT resolution text file per cone. The resolution
@@ -92,6 +93,6 @@ void runTextFile( TString residualsFile, SingleDatasetKind kind, TString outputR
 // "<tag>_<cone>_abseta_ptresolution.txt". eta_mode from the TOML controls
 // whether the abseta (mirrored) variant, the independent full-eta variant, or
 // both are written -- same rule as the JEC/JER SF writers.
-void runTextFilePtResolution( TString responseFile, TString outputTag = "" );
+void runTextFilePtResolution(TString responseFile, TString outputTag = "");
 
 #endif

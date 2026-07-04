@@ -18,6 +18,7 @@
 // extracted and why (JES/JER binned by gen quantities, not reco).
 
 #ifdef __CLING__
+// clang-format off
 R__ADD_INCLUDE_PATH(include)
 R__ADD_INCLUDE_PATH(cfg)
 R__ADD_INCLUDE_PATH(external)
@@ -26,6 +27,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.dylib)
 #else
 R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #endif
+// clang-format on
 #endif
 
 #include "ResponseExtractor.h"
@@ -34,26 +36,28 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #ifndef __CLING__
 #include <cstdlib>
 #include <iostream>
-int main( int argc, char* argv[] ){
-    static const char* const kUsage =
-        "Usage: runResponse -input mc_asymmetry.root -output response.root -config path\n"
-        "       runResponse args.config   # config file lines use: key = value\n";
+int main(int argc, char *argv[]) {
+  static const char *const kUsage =
+      "Usage: runResponse -input mc_asymmetry.root -output response.root "
+      "-config path\n"
+      "       runResponse args.config   # config file lines use: key = value\n";
 
-    CommandLine cl;
-    if( !cl.parse( argc, argv ) ) return 1;
+  CommandLine cl;
+  if (!cl.parse(argc, argv))
+    return 1;
 
-    std::string input  = cl.getValue<std::string>( "input" );
-    std::string output = cl.getValue<std::string>( "output" );
-    std::string config = cl.getValue<std::string>( "config" );
+  std::string input = cl.getValue<std::string>("input");
+  std::string output = cl.getValue<std::string>("output");
+  std::string config = cl.getValue<std::string>("config");
 
-    if( !cl.check() ){
-        std::cerr << kUsage;
-        return 1;
-    }
+  if (!cl.check()) {
+    std::cerr << kUsage;
+    return 1;
+  }
 
-    setenv( "L2RESIDUALS_CONFIG", config.c_str(), 1 );
+  setenv("L2RESIDUALS_CONFIG", config.c_str(), 1);
 
-    runResponse( input, output );
-    return 0;
+  runResponse(input, output);
+  return 0;
 }
 #endif

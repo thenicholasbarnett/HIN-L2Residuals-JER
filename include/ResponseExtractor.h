@@ -23,6 +23,6 @@
 // future eta_reco-binned extraction pass, not marginalized away, but this
 // pass doesn't slice on it yet. No data-mode input exists -- the response
 // THnSparses this reads are MC-only.
-void runResponse( TString inputFile, TString outputFile );
+void runResponse(TString inputFile, TString outputFile);
 
 #endif

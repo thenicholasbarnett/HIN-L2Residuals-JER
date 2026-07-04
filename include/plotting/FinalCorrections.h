@@ -45,155 +45,172 @@
 // runPlotting() call.
 // ============================================================
 
-inline void PlotFinals( TFile* fIn, const TString& outDir,
-                       const TString& cone, const BinningConfig& bins,
-                       ProgressBar& pb, bool isClosure = false, bool useJer = false ){
-    TStyle* prevStyle = gStyle;
-    setTDRStyle();
-    SetupPlotStyle();
+inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
+                       const BinningConfig &bins, ProgressBar &pb,
+                       bool isClosure = false, bool useJer = false) {
+  TStyle *prevStyle = gStyle;
+  setTDRStyle();
+  SetupPlotStyle();
 
-    const TString calibKey = useJer ? "jer" : "jec";
-    for( int m = 0; m < kNMethods; m++ ){
-        for( int ieta = 0; ieta < 2; ieta++ ){   // 0 = |eta|, 1 = full eta
-            const bool   fullEta  = ( ieta == 1 );
-            const TString xTitle  = fullEta ? "#eta" : "|#eta|";
-            const double  xMin    = fullEta ? kEtaEdges.front()    :( double )kAbsEtaEdges.front();
-            const double  xMax    = fullEta ? kEtaEdges.back()     :( double )kAbsEtaEdges.back();
-            const TString etaMode = L2Name::EtaModeKey( fullEta );
+  const TString calibKey = useJer ? "jer" : "jec";
+  for (int m = 0; m < kNMethods; m++) {
+    for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
+      const bool fullEta = (ieta == 1);
+      const TString xTitle = fullEta ? "#eta" : "|#eta|";
+      const double xMin =
+          fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
+      const double xMax =
+          fullEta ? kEtaEdges.back() : (double)kAbsEtaEdges.back();
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-            std::vector<TH1D*> hists;
-            for( const auto& ptSl : bins.ptavgSlices ){
-                TString name = L2Name::ObjectName( cone, CalibKind( "intercept", useJer ),
-                    {etaMode, L2Name::PtKey( ptSl )}, {kMethodKeys[m]} );
-                hists.push_back( GetHAny( fIn, {cone + "/" + name} ) );
-            }
+      std::vector<TH1D *> hists;
+      for (const auto &ptSl : bins.ptavgSlices) {
+        TString name = L2Name::ObjectName(cone, CalibKind("intercept", useJer),
+                                          {etaMode, L2Name::PtKey(ptSl)},
+                                          {kMethodKeys[m]});
+        hists.push_back(GetHAny(fIn, {cone + "/" + name}));
+      }
 
-            bool anyValid = false;
-            for( auto* h : hists ) if( h ){ anyValid = true; break; }
-
-            // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
-            // method) instead of per-slice histograms — project each pT slice's row
-            // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
-            // grid's Y edges are built from exactly those slices in order. No JER SF
-            // equivalent exists yet (runTextFile doesn't write one) -- this fallback
-            // is JEC-only regardless of useJer, so a JER request against a Step 3
-            // file simply finds nothing, same as any other unmet flag.
-            if( !anyValid && !useJer ){
-                // Step 3 stores only whichever of direct/kFSR-norm it was run with —
-                // try norm first (matches PlotAlphaFit's convention), then direct.
-                TString gridName = L2Name::ObjectName( cone, "corrfinal", {etaMode}, {kMethodKeys[m]} );
-                TString gridNormName = gridName + "_norm";
-                TH2D* h2 = GetH2Any( fIn, {cone + "/" + gridNormName, gridNormName,
-                                           cone + "/" + gridName, gridName} );
-                if( h2 ){
-                    for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
-                        TH1D* px;
-                        {
-                            TDirectory::TContext nodir( nullptr );
-                            px = h2->ProjectionX( Form( "%s_px%d", gridName.Data(), ip ), ip + 1, ip + 1 );
-                        }
-                        px->SetDirectory( 0 );
-                        hists[ip] = px;
-                        anyValid = true;
-                    }
-                    delete h2;
-                }
-            }
-
-            if( !anyValid ){
-                for( auto* h : hists ) delete h;
-                continue;
-            }
-
-            const TString cvName = Form( "finals_%s_%s_%s_%s",
-                cone.Data(), calibKey.Data(), kMethodKeys[m], etaMode.Data() );
-            TCanvas* c = new TCanvas( cvName, "", 800, 800 );
-            RealAspectRatio( c );
-            c->SetLeftMargin( 0.13 );
-            c->SetGridx();
-            c->SetGridy();
-
-            auto [ylo, yhi] = YRange( hists );
-            // Closure passes are checking R_MC/R_data ~= 1 to a tight tolerance --
-            // fixed 0.95-1.05 range with 0.99/1.01 guide lines reads that much
-            // more clearly than the auto-scaled range used for the correction
-            // derivation itself.
-            if( isClosure ){ ylo = 0.95; yhi = 1.05; }
-
-            TLegend* leg = new TLegend( 0.60, 0.68, 0.93, 0.88 );
-            leg->SetBorderSize( 0 );
-            leg->SetFillStyle( 0 );
-            leg->SetTextSize( 0.038 );
-
-            bool first = true;
-            for( int ip = 0; ip <( int )bins.ptavgSlices.size(); ip++ ){
-                if( !hists[ip] ) continue;
-                const auto& ptSl = bins.ptavgSlices[ip];
-                StyleH( hists[ip], ptSl.color, kMethodStyles[m], 1.5f );
-                hists[ip]->GetYaxis()->SetRangeUser( ylo, yhi );
-                hists[ip]->GetYaxis()->SetTitle( CalibYTitle( useJer ) );
-                hists[ip]->GetYaxis()->SetTitleSize( 0.052 );
-                hists[ip]->GetYaxis()->SetTitleOffset( 1.15 );
-                hists[ip]->GetYaxis()->SetLabelSize( 0.048 );
-                hists[ip]->GetXaxis()->SetTitle( xTitle );
-                hists[ip]->GetXaxis()->SetTitleSize( 0.052 );
-                hists[ip]->GetXaxis()->SetLabelSize( 0.048 );
-                hists[ip]->GetXaxis()->CenterTitle();
-                hists[ip]->GetYaxis()->CenterTitle();
-                hists[ip]->SetTitle( "" );
-                hists[ip]->Draw( first ? "E1" : "E1 same" );
-                first = false;
-                leg->AddEntry( hists[ip], ptSl.title, "lp" );
-            }
-
-            TLine* rl = new TLine( xMin, 1.0, xMax, 1.0 );
-            rl->SetLineStyle( 2 );
-            rl->SetLineColor( kGray + 2 );
-            rl->SetLineWidth( 1 );
-            rl->Draw();
-
-            if( isClosure ){
-                // Distinct accent color + heavier weight than the plain gray
-                // dotted gridlines (gStyle's own grid is also style 3 at every
-                // 0.01 here) -- same gray would make these guide lines
-                // indistinguishable from the automatic grid.
-                TLine* rl99 = new TLine( xMin, 0.99, xMax, 0.99 );
-                rl99->SetLineStyle( 3 );
-                rl99->SetLineColor( HiroshigeLightRed() );
-                rl99->SetLineWidth( 2 );
-                rl99->Draw();
-
-                TLine* rl101 = new TLine( xMin, 1.01, xMax, 1.01 );
-                rl101->SetLineStyle( 3 );
-                rl101->SetLineColor( HiroshigeLightRed() );
-                rl101->SetLineWidth( 2 );
-                rl101->Draw();
-            }
-
-            leg->Draw();
-
-            // CMS_lumi's two-line "CMS"/"Internal" block runs from about
-            // y=0.92 ("CMS" baseline) down to y=0.875 ("Internal" baseline)
-            // under tdrStyle's margins -- verified visually, an initial
-            // y=0.86 for the line below still collided with "Internal"'s
-            // own font extent. y=0.78 clears it with real margin.
-            CMS_lumi( c, 16, 11 );
-
-            TLatex* tex = new TLatex();
-            tex->SetNDC();
-            tex->SetTextSize( 0.048 );
-            tex->SetTextFont( 62 );
-            tex->DrawLatex( 0.14, 0.78, Form( "%s  |  %s  |  %s  |  %s",
-                cone.Data(), kMethodLabels[m], xTitle.Data(), CalibTag( useJer ).Data() ) );
-
-            SavePlot( c, outDir, cone, "finals", {calibKey, etaMode}, cvName );
-            pb.Update();
-
-            delete c;   // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)
+      bool anyValid = false;
+      for (auto *h : hists)
+        if (h) {
+          anyValid = true;
+          break;
         }
-    }
 
-    gStyle = prevStyle;
+      // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
+      // method) instead of per-slice histograms — project each pT slice's row
+      // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
+      // grid's Y edges are built from exactly those slices in order. No JER SF
+      // equivalent exists yet (runTextFile doesn't write one) -- this fallback
+      // is JEC-only regardless of useJer, so a JER request against a Step 3
+      // file simply finds nothing, same as any other unmet flag.
+      if (!anyValid && !useJer) {
+        // Step 3 stores only whichever of direct/kFSR-norm it was run with —
+        // try norm first (matches PlotAlphaFit's convention), then direct.
+        TString gridName =
+            L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[m]});
+        TString gridNormName = gridName + "_norm";
+        TH2D *h2 = GetH2Any(fIn, {cone + "/" + gridNormName, gridNormName,
+                                  cone + "/" + gridName, gridName});
+        if (h2) {
+          for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+            TH1D *px;
+            {
+              TDirectory::TContext nodir(nullptr);
+              px = h2->ProjectionX(Form("%s_px%d", gridName.Data(), ip), ip + 1,
+                                   ip + 1);
+            }
+            px->SetDirectory(0);
+            hists[ip] = px;
+            anyValid = true;
+          }
+          delete h2;
+        }
+      }
+
+      if (!anyValid) {
+        for (auto *h : hists)
+          delete h;
+        continue;
+      }
+
+      const TString cvName =
+          Form("finals_%s_%s_%s_%s", cone.Data(), calibKey.Data(),
+               kMethodKeys[m], etaMode.Data());
+      TCanvas *c = new TCanvas(cvName, "", 800, 800);
+      RealAspectRatio(c);
+      c->SetLeftMargin(0.13);
+      c->SetGridx();
+      c->SetGridy();
+
+      auto [ylo, yhi] = YRange(hists);
+      // Closure passes are checking R_MC/R_data ~= 1 to a tight tolerance --
+      // fixed 0.95-1.05 range with 0.99/1.01 guide lines reads that much
+      // more clearly than the auto-scaled range used for the correction
+      // derivation itself.
+      if (isClosure) {
+        ylo = 0.95;
+        yhi = 1.05;
+      }
+
+      TLegend *leg = new TLegend(0.60, 0.68, 0.93, 0.88);
+      leg->SetBorderSize(0);
+      leg->SetFillStyle(0);
+      leg->SetTextSize(0.038);
+
+      bool first = true;
+      for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+        if (!hists[ip])
+          continue;
+        const auto &ptSl = bins.ptavgSlices[ip];
+        StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
+        hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
+        hists[ip]->GetYaxis()->SetTitle(CalibYTitle(useJer));
+        hists[ip]->GetYaxis()->SetTitleSize(0.052);
+        hists[ip]->GetYaxis()->SetTitleOffset(1.15);
+        hists[ip]->GetYaxis()->SetLabelSize(0.048);
+        hists[ip]->GetXaxis()->SetTitle(xTitle);
+        hists[ip]->GetXaxis()->SetTitleSize(0.052);
+        hists[ip]->GetXaxis()->SetLabelSize(0.048);
+        hists[ip]->GetXaxis()->CenterTitle();
+        hists[ip]->GetYaxis()->CenterTitle();
+        hists[ip]->SetTitle("");
+        hists[ip]->Draw(first ? "E1" : "E1 same");
+        first = false;
+        leg->AddEntry(hists[ip], ptSl.title, "lp");
+      }
+
+      TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
+      rl->SetLineStyle(2);
+      rl->SetLineColor(kGray + 2);
+      rl->SetLineWidth(1);
+      rl->Draw();
+
+      if (isClosure) {
+        // Distinct accent color + heavier weight than the plain gray
+        // dotted gridlines (gStyle's own grid is also style 3 at every
+        // 0.01 here) -- same gray would make these guide lines
+        // indistinguishable from the automatic grid.
+        TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+        rl99->SetLineStyle(3);
+        rl99->SetLineColor(HiroshigeLightRed());
+        rl99->SetLineWidth(2);
+        rl99->Draw();
+
+        TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+        rl101->SetLineStyle(3);
+        rl101->SetLineColor(HiroshigeLightRed());
+        rl101->SetLineWidth(2);
+        rl101->Draw();
+      }
+
+      leg->Draw();
+
+      // CMS_lumi's two-line "CMS"/"Internal" block runs from about
+      // y=0.92 ("CMS" baseline) down to y=0.875 ("Internal" baseline)
+      // under tdrStyle's margins -- verified visually, an initial
+      // y=0.86 for the line below still collided with "Internal"'s
+      // own font extent. y=0.78 clears it with real margin.
+      CMS_lumi(c, 16, 11);
+
+      TLatex *tex = new TLatex();
+      tex->SetNDC();
+      tex->SetTextSize(0.048);
+      tex->SetTextFont(62);
+      tex->DrawLatex(0.14, 0.78,
+                     Form("%s  |  %s  |  %s  |  %s", cone.Data(),
+                          kMethodLabels[m], xTitle.Data(),
+                          CalibTag(useJer).Data()));
+
+      SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
+      pb.Update();
+
+      delete c; // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)
+    }
+  }
+
+  gStyle = prevStyle;
 }
 
 #endif
