@@ -19,6 +19,8 @@ for ( size_t i = 0; i < n; i++ ) { ... }
 functionCall( arg1, arg2 );
 ```
 
+(2026-07-04: confirmed directly with Nicky — this spaced format, `if (`/`for (` with a space before the paren, is the real target, for everything. An earlier pass in this doc briefly "corrected" this to match the *existing* codebase's dominant convention (`if(` no space, 303 instances) — that was backwards; the existing convention is what's being changed, not preserved. Applying this repo-wide is Phase 3's job, not something to do ad hoc.)
+
 Use spacing to make expressions readable. Do not use spacing to line up columns across unrelated lines.
 
 Prefer this:
