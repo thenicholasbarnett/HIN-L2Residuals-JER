@@ -347,6 +347,10 @@ Reason: macros are user-facing, so they need clarity, not essay headers.
 
 ## Phase 9: README And Docs Consolidation
 
+**Cancelled 2026-07-04 — Nicky's call ("basically forget and remove").**
+He's assembling his own README from the `readme/README_v*.md` snapshots
+instead. Left below for history only; not part of the active plan.
+
 Small tasks:
 
 - [ ] Decide whether root `README.md` should be a quick start or a full manual.
