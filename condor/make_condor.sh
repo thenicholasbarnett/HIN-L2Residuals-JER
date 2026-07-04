@@ -54,7 +54,7 @@
 # basename exactly.
 #
 # Note: the condor Arguments= line generated later in this script (runAsymmetry
-# INPUT OUTPUT MODE) stays positional on purpose -- it's an internal,
+# INPUT OUTPUT MODE CMSSW_SRC) stays positional on purpose -- it's an internal,
 # script-generated contract consumed by runtime_wrapper.sh, never hand-typed,
 # so there's no typo risk to guard against. Only this script's own top-level
 # CLI (what a human actually types) needs named arguments.
@@ -301,9 +301,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 (
     cd "${WORKDIR}"
 
-    CMSSW_SRC_ESCAPED="${CMSSW_SRC_FROM_CONFIG//\\/\\\\}"
-    CMSSW_SRC_ESCAPED="${CMSSW_SRC_ESCAPED//&/\\&}"
-    sed "s|@CMSSW_SRC@|${CMSSW_SRC_ESCAPED}|g" "${CONDOR_DIR}/runtime_wrapper.sh" > runtime_wrapper.sh
+    # CMSSW_SRC is passed to runtime_wrapper.sh as a plain Arguments= value
+    # per job (below), not templated into this file -- a templated copy
+    # depends on Condor's file transfer delivering the exact stamped bytes
+    # to the worker, which was observed to fail in practice.
+    cp "${CONDOR_DIR}/runtime_wrapper.sh" runtime_wrapper.sh
     cp "${BINARY}"  runAsymmetry
     if [[ -n "${LIBRARY}" ]]; then cp "${LIBRARY}" libl2residuals.so; fi
     # Only jec/veto/json are read by the worker (via [paths]/[jec] in
@@ -366,7 +368,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 Transfer_Output_Files   = ""
 
-Transfer_Input_Files    = $(pwd)/runtime_wrapper.sh,$(pwd)/runAsymmetry${LIBRARY:+,$(pwd)/libl2residuals.so},$(pwd)/data,$(pwd)/analysis_config.toml
+Transfer_Input_Files    = $(pwd)/runAsymmetry${LIBRARY:+,$(pwd)/libl2residuals.so},$(pwd)/data,$(pwd)/analysis_config.toml
 
 request_cpus            = 1
 
@@ -383,7 +385,7 @@ EOF
             mkdir -p "${OUTPUT_DIR}/${LABEL}"
 
             cat >> "${SUBMIT_FILE}" <<EOF
-Arguments = runAsymmetry ${INPUT_FILE} ${OUTPUT_FILE} ${MODE}
+Arguments = runAsymmetry ${INPUT_FILE} ${OUTPUT_FILE} ${MODE} ${CMSSW_SRC_FROM_CONFIG}
 Output    = $(pwd)/logs/${LABEL}/out/job_${COUNT}.out
 Error     = $(pwd)/logs/${LABEL}/err/job_${COUNT}.err
 Log       = $(pwd)/logs/${LABEL}/log/job_${COUNT}.log

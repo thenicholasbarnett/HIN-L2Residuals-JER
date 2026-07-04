@@ -3,12 +3,20 @@
 # Sets up the CMSSW ROOT environment, then runs runAsymmetry.
 #
 # Called by Condor as:
-#   runtime_wrapper.sh runAsymmetry <input.root> <output.root> <mode>
+#   runtime_wrapper.sh runAsymmetry <input.root> <output.root> <mode> <cmssw_src>
+#
+# cmssw_src is passed as a plain Arguments= value (baked into the .condor
+# submit file text by make_condor.sh), not templated into this script -- a
+# templated copy of this file depends on Condor's file transfer delivering
+# the exact stamped bytes to the worker, which was observed to fail in
+# practice (submit-side file correctly stamped, worker-side execution still
+# saw the unstamped placeholder). Arguments are part of the job's ClassAd
+# directly, with no separate file-transfer step to race against.
 
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-    echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE" >&2
+if [[ $# -ne 5 ]]; then
+    echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE CMSSW_SRC" >&2
     exit 1
 fi
 
@@ -16,12 +24,11 @@ EXECUTABLE="$1"
 INPUT="$2"
 OUTPUT="$3"
 MODE="$4"
+CMSSW_SRC="$5"
 START_DIR="$(pwd)"
 
-CMSSW_SRC="@CMSSW_SRC@"
-
-if [[ -z "${CMSSW_SRC}" || "${CMSSW_SRC}" == "@CMSSW_SRC@" ]]; then
-    echo "ERROR: CMSSW_SRC was not stamped into runtime_wrapper.sh by make_condor.sh" >&2
+if [[ -z "${CMSSW_SRC}" ]]; then
+    echo "ERROR: CMSSW_SRC argument was empty" >&2
     exit 1
 fi
 
