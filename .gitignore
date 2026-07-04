@@ -20,3 +20,6 @@ data/jec/preliminary/
 # editor / OS
 *.swp
 .DS_Store
+
+# scratch/manual-test scripts, never shared
+local/

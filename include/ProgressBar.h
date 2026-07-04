@@ -3,13 +3,26 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <string>
+#include <sys/ioctl.h>
 #include <unistd.h>
 
 // ProgressBar pb("Label:", total, ProgressBar::kRandom);
 // for(...){ doWork(); pb.Update(); }
 // pb.Finish();
+
+// Real terminal width via ioctl, falling back when stdout isn't a tty (e.g.
+// Condor job output redirected to a log file).
+inline int TerminalWidth(int fallback = 80) {
+  struct winsize w;
+  if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 &&
+      w.ws_col > 0) {
+    return w.ws_col;
+  }
+  return fallback;
+}
 
 // Colors: kBlack, kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite, kRandom
 
@@ -32,7 +45,6 @@ struct ProgressBar {
   std::string label;
   int total;
   int current = 0;
-  int width = 40;
   Color color;
   time_t startTime;
 
@@ -111,23 +123,19 @@ private:
     }
   }
 
+  static constexpr int kMinBarWidth = 10;
+
   void Draw() const {
     if (total <= 0) {
-      printf("\r  %-24s [%s\033[0m]  0/0  100%%  00:00\033[K", label.c_str(),
+      printf("\r  %s  [%s\033[0m]  0/0  100%%  00:00\033[K", label.c_str(),
              AnsiColor());
       fflush(stdout);
       return;
     }
-    int filled =
-        (total > 0 && current >= total) ? width : (current * width / total);
-    int empty = width - filled;
-    int pct = (total > 0 && current >= total) ? 100 : (current * 100 / total);
+    int pct = (current >= total) ? 100 : (current * 100 / total);
 
-    std::string bar, gap;
-    for (int i = 0; i < filled; i++)
-      bar += "\xe2\x96\x88"; // █
-    for (int i = 0; i < empty; i++)
-      gap += "\xe2\x96\x91"; // ░
+    char countBuf[32];
+    snprintf(countBuf, sizeof(countBuf), "%d/%d", current, total);
 
     long elapsed = (long)(time(nullptr) - startTime);
 
@@ -146,9 +154,27 @@ private:
                eta % 60);
     }
 
-    printf("\r  %-24s [%s%s\033[90m%s\033[0m]  %d/%d  %3d%%%s%s\033[K",
-           label.c_str(), AnsiColor(), bar.c_str(), gap.c_str(), current, total,
-           pct, rateBuf, timeBuf);
+    // everything on the line except the bar itself: "  label  [" + "]" +
+    // "  " + counts + "  " + "100%" + rate + time, plus a 1-col safety margin
+    int overhead = 2 + (int)label.size() + 2 + 2 + 1 + 2 +
+                   (int)strlen(countBuf) + 2 + 4 + (int)strlen(rateBuf) +
+                   (int)strlen(timeBuf) + 1;
+    int barWidth = TerminalWidth() - overhead;
+    if (barWidth < kMinBarWidth)
+      barWidth = kMinBarWidth;
+
+    int filled = (current >= total) ? barWidth : (current * barWidth / total);
+    int empty = barWidth - filled;
+
+    std::string bar, gap;
+    for (int i = 0; i < filled; i++)
+      bar += "\xe2\x96\x88"; // █
+    for (int i = 0; i < empty; i++)
+      gap += "\xe2\x96\x91"; // ░
+
+    printf("\r  %s  [%s%s\033[90m%s\033[0m]  %s  %3d%%%s%s\033[K",
+           label.c_str(), AnsiColor(), bar.c_str(), gap.c_str(), countBuf, pct,
+           rateBuf, timeBuf);
     fflush(stdout);
   }
 };

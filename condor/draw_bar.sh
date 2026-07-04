@@ -4,8 +4,27 @@ _LAST_BAR_COLOR=""
 _COLOR_QUEUE=()
 BAR_COLOR=""
 _BAR_START_TIME=""
+_TERM_COLS=80
 
 start_bar_timer() { _BAR_START_TIME=$(date +%s); }
+
+# Real terminal width, falling back when stdout isn't a tty (e.g. Condor job
+# output redirected to a log file). Sets _TERM_COLS (global, same convention
+# as BAR_COLOR above) rather than a $(...)-captured return value -- capturing
+# would redirect this function's own fd 1 to the capture pipe and break the
+# -t 1 check below. Also avoids `local -n` (bash 4.3+), since macOS ships
+# bash 3.2.
+terminal_width() {
+  _TERM_COLS=80
+  if [[ -t 1 ]]; then
+    local size cols
+    size=$(stty size </dev/tty 2>/dev/null) || size=""
+    cols="${size#* }"
+    if [[ -n "$cols" && "$cols" -gt 0 ]]; then
+      _TERM_COLS="$cols"
+    fi
+  fi
+}
 
 # Sets BAR_COLOR by drawing from a shuffled deck; refills when exhausted,
 # guaranteeing every color appears once per cycle with no consecutive repeats.
@@ -33,9 +52,6 @@ pick_bar_color() {
 
 draw_bar() {
   local color="$1" label="$2" current="$3" total="$4"
-  local width=40
-  local filled=$((current >= total ? width : current * width / total))
-  local empty=$((width - filled))
   local pct=$((current >= total ? 100 : current * 100 / total))
   local ansi_color
   case "$color" in
@@ -52,9 +68,7 @@ draw_bar() {
   esac
   local reset='\033[0m'
   local grey='\033[90m'
-  local filled_str="" empty_str=""
-  ((filled > 0)) && filled_str="$(printf '%0.s█' $(seq 1 $filled))"
-  ((empty > 0)) && empty_str="$(printf '%0.s░' $(seq 1 $empty))"
+  local count_str="${current}/${total}"
   local rate_str="" time_str="  --:-- ETA"
   if ((current >= total)); then time_str=""; fi
   if [[ -n "$_BAR_START_TIME" && "$current" -gt 0 ]]; then
@@ -69,6 +83,16 @@ draw_bar() {
       fi
     fi
   fi
-  printf "\r  %-24s [${ansi_color}%s${reset}${grey}%s${reset}]  %d/%d  %3d%%%s%s\033[K" \
-    "$label" "$filled_str" "$empty_str" "$current" "$total" "$pct" "$rate_str" "$time_str"
+  # everything on the line except the bar itself, plus a 1-col safety margin
+  local overhead=$((2 + ${#label} + 2 + 2 + 1 + 2 + ${#count_str} + 2 + 4 + ${#rate_str} + ${#time_str} + 1))
+  terminal_width
+  local width=$((_TERM_COLS - overhead))
+  ((width < 10)) && width=10
+  local filled=$((current >= total ? width : current * width / total))
+  local empty=$((width - filled))
+  local filled_str="" empty_str=""
+  ((filled > 0)) && filled_str="$(printf '%0.s█' $(seq 1 $filled))"
+  ((empty > 0)) && empty_str="$(printf '%0.s░' $(seq 1 $empty))"
+  printf "\r  %s  [${ansi_color}%s${reset}${grey}%s${reset}]  %s  %3d%%%s%s\033[K" \
+    "$label" "$filled_str" "$empty_str" "$count_str" "$pct" "$rate_str" "$time_str"
 }
