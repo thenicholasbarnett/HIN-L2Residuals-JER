@@ -16,8 +16,8 @@
 set -euo pipefail
 
 if [[ $# -ne 5 ]]; then
-    echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE CMSSW_SRC" >&2
-    exit 1
+  echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE CMSSW_SRC" >&2
+  exit 1
 fi
 
 EXECUTABLE="$1"
@@ -28,8 +28,8 @@ CMSSW_SRC="$5"
 START_DIR="$(pwd)"
 
 if [[ -z "${CMSSW_SRC}" ]]; then
-    echo "ERROR: CMSSW_SRC argument was empty" >&2
-    exit 1
+  echo "ERROR: CMSSW_SRC argument was empty" >&2
+  exit 1
 fi
 
 echo "CMSSW environment: $(basename "$(dirname "${CMSSW_SRC}")")"
