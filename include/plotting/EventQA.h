@@ -29,14 +29,14 @@
 // histograms that are absent (e.g. hfilt/h_hlt_j80 on MC).
 // ============================================================
 
-// Style pilot (2026-07-03): this plot family uses the vendored JetMET
-// setTDRStyle()/CMS_lumi() (external/jetmet/RootStyle.h, Style.h) instead of
-// this repo's own SetupPlotStyle()/DrawCMSInternalHeader(), as a contained
-// trial before deciding whether to roll it out further -- see FinalCorrections.h
-// for the other piloted family and CLAUDE.md for the visual comparison.
-// setTDRStyle() replaces the *global* gStyle, so it's saved and restored
-// around this function's drawing calls rather than left to leak into every
-// other (non-piloted) plot family drawn later in the same runPlotting() call.
+// This plot family uses the vendored JetMET setTDRStyle()/CMS_lumi()
+// (external/jetmet/RootStyle.h, Style.h) instead of this repo's own
+// SetupPlotStyle()/DrawCMSInternalHeader() -- a contained trial before
+// deciding whether to roll it out further; see FinalCorrections.h for the
+// other piloted family. setTDRStyle() replaces the *global* gStyle, so it's
+// saved and restored around this function's drawing calls rather than left
+// to leak into other (non-piloted) plot families in the same runPlotting()
+// call.
 // SetupPlotStyle() is re-applied immediately after setTDRStyle() to layer
 // this repo's own repo-specific overrides on top -- most importantly the
 // gray grid color, since tdrStyle's own SetGridColor(0) would otherwise

@@ -29,19 +29,16 @@
 //   finals_{cone}_{method}_fulleta — same vs full eta
 // PlotEtaSym does the |eta|-vs-fulleta symmetry check per pT slice; this overlays pT slices.
 //
-// Style pilot (2026-07-03): this is the second of two plot families piloting
-// the vendored JetMET setTDRStyle()/CMS_lumi() (external/jetmet/RootStyle.h,
-// Style.h) instead of this repo's own SetupPlotStyle() -- deliberately picked
-// because, unlike every other plot family, PlotFinals never called
-// DrawCMSInternalHeader() at all (it substitutes its own descriptive
-// "cone | method | xTitle | JEC/JER" title instead) -- a real test of whether
-// CMS_lumi() composes cleanly alongside a plot that has no prior CMS-header
-// call site to swap out. Adds CMS_lumi() as a genuinely new label (closing
-// that gap) and nudges the existing custom title down slightly to avoid the
-// two overlapping -- see the exact y-position note at that call site.
-// setTDRStyle() replaces the *global* gStyle, so it's saved/restored around
-// this function the same way as EventQA.h's pilot, to avoid leaking into
-// every other (non-piloted) plot family drawn later in the same
+// Uses the vendored JetMET setTDRStyle()/CMS_lumi() (external/jetmet/
+// RootStyle.h, Style.h) instead of this repo's own SetupPlotStyle() -- one
+// of two plot families piloting that, alongside EventQA.h. Unlike every
+// other plot family, PlotFinals never called DrawCMSInternalHeader() (it
+// draws its own descriptive "cone | method | xTitle | JEC/JER" title
+// instead), so CMS_lumi() is a new label here, not a swap -- the existing
+// custom title is nudged down to avoid the two overlapping (see the
+// y-position at that call site). setTDRStyle() replaces the *global*
+// gStyle, so it's saved/restored around this function, matching EventQA.h,
+// to avoid leaking into other (non-piloted) plot families in the same
 // runPlotting() call.
 // ============================================================
 

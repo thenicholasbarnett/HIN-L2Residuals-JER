@@ -18,33 +18,26 @@
 // The TH3Ds use variable-width CMS JEC eta bins on X, enabling eta-phi maps
 // at arbitrary pT thresholds via SetRangeUser on Z + Project3D("yx").
 //
-// MC-only (Init's isMC flag), JES/JER inputs — parallel to, not a replacement
-// for, the TH3Ds above (those keep the same behavior/stats for both data and
-// MC):
+// MC-only (Init's isMC flag), JES/JER inputs — parallel to the TH3Ds above,
+// not a replacement:
 //   hInclJetResp  — 5D THnSparse (eta_reco, pT_gen, corrPt/pT_gen,
 //                    rawPt/pT_gen, jtPt/pT_gen) for corrected jets passing
 //                    cfg.minPt, ref-matched only
-//   hTagJetResp   — same, for the tag jet of each valid dijet, ref-matched only
-//   hProbeJetResp — same, for the probe jet of each valid dijet, ref-matched only
-// "ref-matched" means the ntuple's refpt[j] (index-aligned to reco jet j) is
-// >= 0; a negative refpt marks no matching GenJet, and that jet is dropped
-// from these histograms entirely (never filled with a bogus ratio). No phi
-// axis — this pipeline's correction philosophy is eta-only everywhere
-// downstream, and phi is essentially uncorrelated with the other axes, so it
-// would have pushed sparse storage close to one filled bin per jet for
-// comparatively little use. A dedicated, much smaller phi-uniformity QA
-// histogram (e.g. TProfile2D) is the right tool if that's ever needed
-// instead.
-// eta_reco (not eta_gen) is the binning axis deliberately (Nicky's explicit
-// call, 2026-07-02): the L2Residual correction is applied to a jet based on
-// its reconstructed eta in data, so this answers "how well-corrected is a
-// jet reconstructed at this eta" rather than a pure gen-binned resolution
-// measurement. pT stays gen-binned (pT_gen) since that part of the original
-// falling-spectrum-migration-bias reasoning still applies. Three response
-// ratios ride together — corrPt (this framework's L2Relative+L2Residual
-// chain), rawPt (uncorrected), jtPt (the ntuple's own baked-in "jtpt"
-// correction) — each divided by pT_gen, so a single extraction pass can show
-// how much response corrPt buys over the other two.
+//   hTagJetResp   — same, for the tag jet of each valid dijet
+//   hProbeJetResp — same, for the probe jet of each valid dijet
+// ref-matched: refpt[j] (index-aligned to reco jet j) >= 0; unmatched jets
+// (refpt < 0) are dropped entirely, never filled with a bogus ratio. No phi
+// axis — correction here is eta-only, and phi is uncorrelated enough with
+// the other axes that it would push sparse storage close to one bin per jet
+// for little use; a TProfile2D is the right tool if phi-uniformity QA is
+// ever needed.
+// eta_reco, not eta_gen, is the binning axis: the L2Residual correction is
+// applied by a jet's reconstructed eta in data, so this measures "how
+// well-corrected is a jet reconstructed at this eta," not a pure gen-binned
+// resolution. pT stays gen-binned to avoid falling-spectrum migration bias.
+// Three ratios ride together — corrPt (this framework's correction), rawPt
+// (uncorrected), jtPt (the ntuple's own baked-in correction) — each over
+// pT_gen, so one pass shows how much response corrPt buys over the others.
 
 struct ConeHistograms {
 

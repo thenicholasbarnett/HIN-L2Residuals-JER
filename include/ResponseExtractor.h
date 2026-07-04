@@ -17,12 +17,11 @@
 // on the GEN pT, never reco: conditioning on truth directly is what makes
 // this an unbiased resolution measurement rather than a data-applicable
 // correction curve (binning by reco pT would bias the result via
-// falling-spectrum migration). eta_reco is deliberately NOT gen-binned here
-// (Nicky's explicit call, 2026-07-02) -- the correction is applied to a jet
-// by its reconstructed eta in data, so the axis is kept in the sparse for a
-// future eta_reco-binned extraction pass, not marginalized away, but this
-// pass doesn't slice on it yet. No data-mode input exists -- the response
-// THnSparses this reads are MC-only.
+// falling-spectrum migration). eta_reco isn't gen-binned here -- the
+// correction is applied to a jet by its reconstructed eta in data, so the
+// axis stays in the sparse for a future eta_reco-binned extraction pass,
+// not marginalized away, but this pass doesn't slice on it yet. No
+// data-mode input exists -- the response THnSparses this reads are MC-only.
 void runResponse(TString inputFile, TString outputFile);
 
 #endif
