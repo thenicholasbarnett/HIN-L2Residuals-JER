@@ -7,21 +7,12 @@ execute_process(COMMAND hostname
 if(L2RESIDUALS_HOSTNAME MATCHES "lxplus" AND NOT DEFINED ENV{CMSSW_BASE})
     message(FATAL_ERROR
         "This looks like lxplus (${L2RESIDUALS_HOSTNAME}), but cmsenv is not active.\n"
-        "Builds intended for HTCondor must use CMSSW GCC + CMSSW ROOT.\n"
-        "Run something like:\n"
-        "  source /cvmfs/cms.cern.ch/cmsset_default.sh\n"
-        "  cd <CMSSW_RELEASE>/src\n"
-        "  cmsenv\n"
-        "  cd /path/to/L2Residuals-2024ppref\n"
-        "  cmake -S . -B build\n"
-        "  cmake --build build")
+        "HTCondor builds need CMSSW GCC + CMSSW ROOT -- run cmsenv first.")
 endif()
 
-# Must be before project(): CMSSW GCC has a broken annobin plugin and
-# system ROOT on lxplus lacks libCling.so — both fixed with CMSSW GCC + CMSSW ROOT.
+# Before project(): fixes CMSSW GCC's broken annobin plugin, points CMake at
+# CMSSW ROOT (system ROOT on lxplus lacks libCling.so).
 if(DEFINED ENV{CMSSW_BASE})
-    # CMSSW GCC has broken annobin plugin specs (the .so is missing from cvmfs).
-    # Fix: dump its specs, strip annobin entries, compile with -specs=<cleaned>.
     execute_process(COMMAND g++ -dumpspecs
         OUTPUT_VARIABLE _specs OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     string(REGEX REPLACE "-fplugin=annobin" "" _specs "${_specs}")
@@ -29,11 +20,10 @@ if(DEFINED ENV{CMSSW_BASE})
     set(_specs_file "${CMAKE_CURRENT_LIST_DIR}/.noannobin.specs")
     file(WRITE "${_specs_file}" "${_specs}")
     set(CMAKE_CXX_FLAGS_INIT "-specs=${_specs_file}")
-    set(CMAKE_C_FLAGS_INIT   "-specs=${_specs_file}")
+    set(CMAKE_C_FLAGS_INIT "-specs=${_specs_file}")
 
-    # The stripped specs may not propagate CMSSW GCC's own lib dir to ld, causing
-    # "undefined reference to GLIBCXX_3.4.31" when linking against CMSSW ROOT libs.
-    # Explicitly add CMSSW GCC's libstdc++ dir to ld's search path and RPATH.
+    # Stripping the specs can drop CMSSW GCC's own libstdc++ dir, breaking
+    # linking ("undefined reference to GLIBCXX_3.4.31") -- add it back explicitly.
     execute_process(COMMAND g++ -print-file-name=libstdc++.so.6
         OUTPUT_VARIABLE _libstdcxx OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     if(_libstdcxx AND NOT "${_libstdcxx}" STREQUAL "libstdc++.so.6")
@@ -44,8 +34,7 @@ if(DEFINED ENV{CMSSW_BASE})
             "${CMAKE_SHARED_LINKER_FLAGS} -L${_gxx_lib_dir} -Wl,-rpath,${_gxx_lib_dir}")
     endif()
 
-    # CMSSW ROOT: system ROOT on lxplus lacks libCling.so; CMSSW ROOT has it.
-    # Both compiler and ROOT must come from the same GCC 13 ABI.
+    # System ROOT lacks libCling.so; CMSSW ROOT has it and matches the GCC ABI.
     execute_process(COMMAND root-config --prefix
         OUTPUT_VARIABLE _r OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     foreach(_subdir cmake lib/cmake/ROOT)
@@ -55,9 +44,9 @@ if(DEFINED ENV{CMSSW_BASE})
         endif()
     endforeach()
 
-    # EL9's ld.bfd defaults to DT_RPATH already, but make it explicit so future
-    # linker upgrades can't silently switch to DT_RUNPATH (which LD_LIBRARY_PATH
-    # can override, allowing the wrong ROOT to load on Condor worker nodes).
+    # Make DT_RPATH explicit (EL9's ld.bfd default, but not guaranteed) so a
+    # future linker can't switch to DT_RUNPATH, which LD_LIBRARY_PATH could
+    # override and load the wrong ROOT on a Condor worker.
     set(CMAKE_EXE_LINKER_FLAGS
         "${CMAKE_EXE_LINKER_FLAGS} -Wl,--disable-new-dtags")
     set(CMAKE_SHARED_LINKER_FLAGS
@@ -88,17 +77,12 @@ set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
 # Vendored single header takes priority — no network dependency
 set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
-# shared library from src/ only. External vendored .cc files that need
-# compiling are covered by thin .cxx wrappers in src/ (e.g. src/CommandLine.cxx,
-# src/JetResolutionObject.cxx) so that both CMake and SCRAM pick them up via
-# the same src/*.cxx glob without symlink or path-resolution ambiguity.
-# Header-only vendored deps (toml++, nlohmann-json) need nothing here.
+# Shared library built from src/*.cxx only -- vendored .cc files needing
+# compilation ride in via thin .cxx wrappers (e.g. src/CommandLine.cxx) so
+# CMake and SCRAM share one glob. Header-only vendored deps need nothing here.
 #
-# JetResolutionObject.h self-defines STANDALONE (see external/jetmet_jer/) so
-# every TU that includes it gets the TFormula-based standalone path rather than
-# CMSSW's reco::FormulaEvaluator path. The PUBLIC flag below propagates the
-# definition to tests and any downstream that links against l2residuals, keeping
-# the class layout consistent across all translation units.
+# STANDALONE is PUBLIC so every TU, including tests and downstream users,
+# sees JetResolutionObject.h's TFormula-based path consistently.
 file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
@@ -144,10 +128,8 @@ foreach(test ${TESTS})
         target_link_libraries(${name} ${ROOT_LIBRARIES})
     endif()
     add_test(NAME ${name} COMMAND ${name})
-    # Keep test CWD at the repo root so any test-created output paths stay
-    # predictable. CONFIG no longer has an implicit fallback (see
-    # AnalysisConfig.cxx), so tests must set L2RESIDUALS_CONFIG explicitly
-    # rather than relying on one.
+    # WORKING_DIRECTORY keeps test-created paths predictable; L2RESIDUALS_CONFIG
+    # is set explicitly since Config() has no implicit fallback (AnalysisConfig.cxx).
     set_tests_properties(${name} PROPERTIES
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/2024ppRef.toml")
