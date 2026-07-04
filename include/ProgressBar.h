@@ -154,14 +154,35 @@ private:
                eta % 60);
     }
 
-    // everything on the line except the bar itself: "  label  [" + "]" +
-    // "  " + counts + "  " + "100%" + rate + time, plus a 1-col safety margin
-    int overhead = 2 + (int)label.size() + 2 + 2 + 1 + 2 +
-                   (int)strlen(countBuf) + 2 + 4 + (int)strlen(rateBuf) +
-                   (int)strlen(timeBuf) + 1;
-    int barWidth = TerminalWidth() - overhead;
-    if (barWidth < kMinBarWidth)
-      barWidth = kMinBarWidth;
+    // Progressively drop cosmetics as the terminal narrows -- rate first,
+    // then ETA/elapsed, then the label -- so the bar itself is the last
+    // thing to give up space. If even a bare minimum-width bar won't fit,
+    // drop the bar too and fall back to plain "current/total pct%".
+    const char *useLabel = label.c_str();
+    const char *useRate = rateBuf;
+    const char *useTime = timeBuf;
+    int termWidth = TerminalWidth();
+    int barWidth = 0;
+    for (int stage = 0; stage < 4; stage++) {
+      if (stage == 1)
+        useRate = "";
+      if (stage == 2)
+        useTime = "";
+      if (stage == 3)
+        useLabel = "";
+      int overhead = 2 + (int)strlen(useLabel) + 2 + 2 + 1 + 2 +
+                     (int)strlen(countBuf) + 2 + 4 + (int)strlen(useRate) +
+                     (int)strlen(useTime) + 1;
+      barWidth = termWidth - overhead;
+      if (barWidth >= kMinBarWidth)
+        break;
+    }
+
+    if (barWidth < kMinBarWidth) {
+      printf("\r  %s  %3d%%%s%s\033[K", countBuf, pct, useRate, useTime);
+      fflush(stdout);
+      return;
+    }
 
     int filled = (current >= total) ? barWidth : (current * barWidth / total);
     int empty = barWidth - filled;
@@ -173,8 +194,8 @@ private:
       gap += "\xe2\x96\x91"; // ░
 
     printf("\r  %s  [%s%s\033[90m%s\033[0m]  %s  %3d%%%s%s\033[K",
-           label.c_str(), AnsiColor(), bar.c_str(), gap.c_str(), countBuf, pct,
-           rateBuf, timeBuf);
+           useLabel, AnsiColor(), bar.c_str(), gap.c_str(), countBuf, pct,
+           useRate, useTime);
     fflush(stdout);
   }
 };

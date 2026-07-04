@@ -113,7 +113,7 @@ bash ./condor/make_condor.sh -output <output_files_dir> -filelists <input_HiFore
 Merge Step 1 outputs before Step 2:
 
 ```bash
-bash ./condor/batch_hadd.sh <output_asymmetry.root> <input_glob> <batch_size> <N_parallel>
+bash ./condor/batch_hadd.sh -output <output_asymmetry.root> -input <input_glob> [-batchsize N] [-njobs N]
 ```
 
 <h1> Usage </h1> 
@@ -461,12 +461,12 @@ Mode for each filelist is looked up from `[condor.filelist_modes]` in the select
 
 ```bash
 bash condor/batch_hadd.sh \
-  /eos/.../l2residuals/asym_hp0.root \
-  "/eos/.../l2residuals/HP0/output_*.root" \
-  10 2 [z|--zombie-check]
+  -output /eos/.../l2residuals/asym_hp0.root \
+  -input "/eos/.../l2residuals/HP0/output_*.root" \
+  -batchsize 10 -njobs 2 [-zombiecheck]
 ```
 
-`batch_hadd.sh` uses hadd on batches of files in parallel using tree reduction, and optionally scanning for zombie/corrupt files. Arguments: `OUT_FILE "IN_FILES" BATCH_SIZE NJOBS [-z]`.
+`batch_hadd.sh` uses hadd on batches of files in parallel using tree reduction, and optionally scanning for zombie/corrupt files. `-batchsize`/`-njobs` default to 5/2 if omitted; `-zombiecheck` is a bare switch, off by default.
 
 <h2> Data Files </h2>
 

@@ -1,29 +1,103 @@
 #!/usr/bin/env bash
+# Merge many ROOT files into one via tree-reduction hadd, batched and run in
+# parallel per level.
+#
+# Arguments are JetMET-style "-flag value" (matching make_condor.sh and the
+# compiled binaries' CLI) or bare boolean "-flag" switches -- no positional
+# arguments. Flag names are case-insensitive (matched after uppercasing).
+#
+# Usage:
+#   bash condor/batch_hadd.sh -output out.root -input "IN_FILES" [-batchsize N] [-njobs N] [-zombiecheck]
+#
+# -output out.root  — required; path for the final merged ROOT file
+# -input pattern    — required; a quoted glob (e.g. "/eos/.../asym_*.root") or
+#                      a directory (matches every *.root directly inside it,
+#                      non-recursive). Must be quoted to prevent shell expansion.
+# -batchsize N      — optional, default 5; files merged together per hadd job
+# -njobs N          — optional, default 2; parallel hadd batches per level
+# -zombiecheck      — bare switch; scan every input with rootls first and skip
+#                      any that fail, before merging starts (default off)
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 OUT_FILE \"IN_FILES\" BATCH_SIZE NJOBS [-z|--zombie-check]" >&2
-  echo "  Note: IN_FILES must be quoted to prevent shell expansion" >&2
+  echo "Usage: $0 -output out.root -input \"IN_FILES\" [-batchsize N] [-njobs N] [-zombiecheck]" >&2
+  echo "  Note: -input must be quoted to prevent shell expansion" >&2
   exit 1
 }
 
-if [[ $# -lt 4 || $# -gt 5 ]]; then
-  usage
-fi
+# Parses "$@" into the OUT_FILE/IN_FILES/BATCH_SIZE/NJOBS/ZOMBIE_CHECK
+# globals. Exits via usage() on any error.
+parse_args() {
+  if [[ $# -lt 1 ]]; then usage; fi
 
-OUT_FILE="$1"
-IN_FILES="$2"
-BATCH_SIZE="${3:-10}"
-NJOBS="${4:-4}"
+  OUT_FILE=""
+  IN_FILES=""
+  BATCH_SIZE=5
+  NJOBS=2
+  ZOMBIE_CHECK=false
 
-ZOMBIE_CHECK=false
-if [[ $# -eq 5 ]]; then
-  if [[ "$5" == "-z" || "$5" == "--zombie-check" ]]; then
-    ZOMBIE_CHECK=true
-  else
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    if [[ "${arg}" != -?* ]]; then
+      echo "ERROR: argument \"${arg}\" is not a -flag (this script only accepts JetMET-style -flag arguments)" >&2
+      usage
+    fi
+    flag="$(printf '%s' "${arg#-}" | tr '[:lower:]' '[:upper:]')"
+    shift
+    case "${flag}" in
+      OUTPUT)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -output requires a value" >&2
+          usage
+        fi
+        OUT_FILE="$1"
+        shift
+        ;;
+      INPUT)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -input requires a value" >&2
+          usage
+        fi
+        IN_FILES="$1"
+        shift
+        ;;
+      BATCHSIZE)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -batchsize requires a value" >&2
+          usage
+        fi
+        BATCH_SIZE="$1"
+        shift
+        ;;
+      NJOBS)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -njobs requires a value" >&2
+          usage
+        fi
+        NJOBS="$1"
+        shift
+        ;;
+      ZOMBIECHECK)
+        ZOMBIE_CHECK=true
+        ;;
+      *)
+        echo "ERROR: unrecognized argument \"-${flag}\"" >&2
+        usage
+        ;;
+    esac
+  done
+
+  if [[ -z "${OUT_FILE}" ]]; then
+    echo "ERROR: -output out.root is required" >&2
     usage
   fi
-fi
+  if [[ -z "${IN_FILES}" ]]; then
+    echo "ERROR: -input \"pattern\" is required" >&2
+    usage
+  fi
+}
+
+parse_args "$@"
 
 echo "Started: $(date '+%Y-%m-%d %H:%M:%S')"
 

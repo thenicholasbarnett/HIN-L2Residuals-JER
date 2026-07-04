@@ -83,16 +83,36 @@ draw_bar() {
       fi
     fi
   fi
-  # everything on the line except the bar itself, plus a 1-col safety margin
-  local overhead=$((2 + ${#label} + 2 + 2 + 1 + 2 + ${#count_str} + 2 + 4 + ${#rate_str} + ${#time_str} + 1))
   terminal_width
-  local width=$((_TERM_COLS - overhead))
-  ((width < 10)) && width=10
+
+  # Progressively drop cosmetics as the terminal narrows -- rate first,
+  # then ETA/elapsed, then the label -- so the bar itself is the last
+  # thing to give up space. If even a bare minimum-width bar won't fit,
+  # drop the bar too and fall back to plain "current/total pct%".
+  local min_bar=10
+  local use_label="$label" use_rate="$rate_str" use_time="$time_str" width
+  local stage
+  for stage in 0 1 2 3; do
+    case "$stage" in
+      1) use_rate="" ;;
+      2) use_time="" ;;
+      3) use_label="" ;;
+    esac
+    local overhead=$((2 + ${#use_label} + 2 + 2 + 1 + 2 + ${#count_str} + 2 + 4 + ${#use_rate} + ${#use_time} + 1))
+    width=$((_TERM_COLS - overhead))
+    ((width >= min_bar)) && break
+  done
+
+  if ((width < min_bar)); then
+    printf "\r  %s  %3d%%%s%s\033[K" "$count_str" "$pct" "$use_rate" "$use_time"
+    return
+  fi
+
   local filled=$((current >= total ? width : current * width / total))
   local empty=$((width - filled))
   local filled_str="" empty_str=""
   ((filled > 0)) && filled_str="$(printf '%0.s█' $(seq 1 $filled))"
   ((empty > 0)) && empty_str="$(printf '%0.s░' $(seq 1 $empty))"
   printf "\r  %s  [${ansi_color}%s${reset}${grey}%s${reset}]  %s  %3d%%%s%s\033[K" \
-    "$label" "$filled_str" "$empty_str" "$count_str" "$pct" "$rate_str" "$time_str"
+    "$use_label" "$filled_str" "$empty_str" "$count_str" "$pct" "$use_rate" "$use_time"
 }
