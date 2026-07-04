@@ -42,7 +42,7 @@ set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 #
 # STANDALONE is PUBLIC so every TU, including tests and downstream users,
 # sees JetResolutionObject.h's TFormula-based path consistently.
-file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx)
+file(GLOB SOURCES CONFIGURE_DEPENDS src/*.cxx src/external/*.cxx)
 if(SOURCES)
     add_library(l2residuals SHARED ${SOURCES})
     target_include_directories(l2residuals PUBLIC
