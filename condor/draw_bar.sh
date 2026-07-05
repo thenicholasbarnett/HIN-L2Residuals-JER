@@ -6,6 +6,13 @@ BAR_COLOR=""
 _BAR_START_TIME=""
 _TERM_COLS=80
 
+# Wipe the line the instant a resize is signaled, instead of waiting for the
+# next scheduled draw_bar call -- shrinks (doesn't eliminate) the window
+# where a live drag-resize's terminal-side reflow of already-painted output
+# is visible. The reflow itself is kitty's own repaint of history, not new
+# bytes from this script, so this can't fully suppress it.
+trap 'printf "\r\033[2K"' WINCH
+
 start_bar_timer() { _BAR_START_TIME=$(date +%s); }
 
 # Real terminal width, falling back when stdout isn't a tty (e.g. Condor job
@@ -24,6 +31,10 @@ terminal_width() {
       _TERM_COLS="$cols"
     fi
   fi
+  # reserve one column -- writing all the way to the last column leaves the
+  # terminal in a pending-wrap state that \r doesn't reliably clear, which
+  # walks the bar down the screen over many redraws
+  _TERM_COLS=$((_TERM_COLS - 1))
 }
 
 # Sets BAR_COLOR by drawing from a shuffled deck; refills when exhausted,

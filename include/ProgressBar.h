@@ -17,11 +17,15 @@
 // Condor job output redirected to a log file).
 inline int TerminalWidth(int fallback = 80) {
   struct winsize w;
+  int cols = fallback;
   if (isatty(STDOUT_FILENO) && ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 &&
       w.ws_col > 0) {
-    return w.ws_col;
+    cols = w.ws_col;
   }
-  return fallback;
+  // reserve one column -- writing all the way to the last column leaves the
+  // terminal in a pending-wrap state that \r doesn't reliably clear, which
+  // walks the bar down the screen over many redraws
+  return cols - 1;
 }
 
 // Colors: kBlack, kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite, kRandom
