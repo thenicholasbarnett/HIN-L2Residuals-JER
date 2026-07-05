@@ -9,8 +9,8 @@ golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 # for that filelist without moving or renaming the file. The physical dataset
 # name (HP0, ZB0, ...) is free-form; only the mapped mode matters.
 [condor.filelist_modes]
-filelist_HiForest_2024ppref_DATA_HP* = "triggered"
-filelist_HiForest_2024ppref_DATA_ZB* = "non-triggered"
+"filelist_HiForest_2024ppref_DATA_HP*" = "triggered"
+"filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
 filelist_HiForest_2024ppref_MC = "mc"
 
 [trees]
