@@ -15,14 +15,9 @@
 
 #include <vector>
 
-// ============================================================
-// Plot type: Direct vs kFSR-norm correction factor overlay
-//
-// For each (cone, method, eta mode): one two-panel canvas with
-//   top panel  : direct intercept (filled circles) and kFSR-norm (open circles) vs eta,
-//                all pT slices overlaid, same color per pT slice
-//   bottom panel : (kFSR-norm) / direct ratio per pT slice
-// ============================================================
+// Direct vs kFSR-norm correction factor overlay. Two-panel canvas per
+// (cone, method, eta mode): top = direct (filled) vs kFSR-norm (open) vs eta,
+// all pT slices overlaid; bottom = norm/direct ratio per slice.
 
 inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
                          const BinningConfig &bins, bool fullEta,
@@ -79,7 +74,7 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
              kMethodKeys[m], etaMode.Data());
     TwoPad cv = MakeTwoPad(cvName);
 
-    // ---- main pad ----
+    // main pad
     cv.main->cd();
     cv.main->SetGridx();
     cv.main->SetGridy();
@@ -157,7 +152,7 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
                         kMethodLabels[m], xTitle.Data(),
                         CalibTag(useJer).Data()));
 
-    // ---- ratio pad ----
+    // ratio pad
     cv.ratio->cd();
     cv.ratio->SetGridx();
     cv.ratio->SetGridy();

@@ -30,12 +30,10 @@ static constexpr int kPtAvgAxis = 1;
 static constexpr int kAlphaAxis = 2;
 static constexpr int kAAxis = 3;
 
-// methods
+// methods to capture mean
 static constexpr int kNMethods = 4;
 static const char *const kMethodNames[] = {"gauss", "doubleGauss", "trunc90",
                                            "trunc95"};
-
-// ---- result structs ----
 
 struct GaussResult {
   double mean = 0, meanErr = 0, sigma = 0, sigmaErr = 0, chi2ndf = -1;
@@ -55,14 +53,12 @@ struct ResidualFitControls {
   int outOfRangeMeanWarnings = 0;
 };
 
-// One R(alpha) point -- JEC (mean-derived) and JER (stddev-derived) both
-// accumulate these, just fed different underlying fit quantities.
+// for alpha extrapolations
 struct RPoint {
   double alpha, val, err;
 };
 
-// ---- Gaussian fit in [-controls.gausFitHalfWidth, +controls.gausFitHalfWidth] ----
-
+// gauss fitting
 static GaussResult FitGauss(TH1D *h, const ResidualFitControls &controls) {
   GaussResult r;
   if (!CanFit(h, controls.minEntries))
@@ -87,14 +83,7 @@ static GaussResult FitGauss(TH1D *h, const ResidualFitControls &controls) {
   return r;
 }
 
-// ---- Double-Gaussian fit (narrow core + wide component) in the configured fit window ----
-//
-// Reports the amplitude*sigma-weighted mean of the two components: the
-// mean of the fitted mixture distribution (each component's contribution
-// weighted by its integral, amp*sigma), not just the core. meanErr treats the
-// two component means as independent, which is an approximation but standard
-// for a quick per-bin estimate (see TruncMeanInRange for a similar tradeoff).
-
+// double gauss fitting
 static GaussResult FitDoubleGauss(TH1D *h,
                                   const ResidualFitControls &controls) {
   GaussResult r;
@@ -104,12 +93,12 @@ static GaussResult FitDoubleGauss(TH1D *h,
   TF1 *g = new TF1(Form("_dgf_%s", h->GetName()), "gaus(0)+gaus(3)",
                    -controls.gausFitHalfWidth, controls.gausFitHalfWidth);
   const double rms = std::max(h->GetRMS(), 1e-3);
-  g->SetParameter(0, h->GetMaximum());       // core amplitude
-  g->SetParameter(1, h->GetMean());          // core mean
-  g->SetParameter(2, 0.5 * rms);             // core sigma (narrow)
-  g->SetParameter(3, 0.3 * h->GetMaximum()); // tail amplitude
-  g->SetParameter(4, h->GetMean());          // tail mean
-  g->SetParameter(5, 1.5 * rms);             // tail sigma (wide)
+  g->SetParameter(0, h->GetMaximum());  // core amplitude
+  g->SetParameter(1, h->GetMean());  // core mean
+  g->SetParameter(2, 0.5 * rms);  // core sigma
+  g->SetParameter(3, 0.3 * h->GetMaximum());  // tail amplitude
+  g->SetParameter(4, h->GetMean());  // tail mean
+  g->SetParameter(5, 1.5 * rms);  // tail sigma 
 
   TFitResultPtr res = h->Fit(g, "NQSR");
   if (res.Get() && res->IsValid()) {
@@ -123,14 +112,13 @@ static GaussResult FitDoubleGauss(TH1D *h,
     if (wsum > 0) {
       const double f1 = w1 / wsum, f2 = w2 / wsum;
       r.mean = f1 * mean1 + f2 * mean2;
+      // errors summed in quadrature
       r.meanErr = std::sqrt(TMath::Power(f1 * res->ParError(1), 2) +
                             TMath::Power(f2 * res->ParError(4), 2));
+      // weighted sigma
       r.sigma = std::sqrt(std::max(
           0.0, f1 * (sigma1 * sigma1 + mean1 * mean1) +
                    f2 * (sigma2 * sigma2 + mean2 * mean2) - r.mean * r.mean));
-      // Same quick-estimate approximation as meanErr: propagate only the two
-      // component sigma errors (weighted the same way), ignoring cross terms
-      // from the mean/weight parameters entering the mixture sigma formula.
       r.sigmaErr = std::sqrt(TMath::Power(f1 * res->ParError(2), 2) +
                              TMath::Power(f2 * res->ParError(5), 2));
       r.chi2ndf = (res->Ndf() > 0) ? res->Chi2() / res->Ndf() : -1.0;
@@ -141,10 +129,7 @@ static GaussResult FitDoubleGauss(TH1D *h,
   return r;
 }
 
-// ---- truncated mean ----
-
-// Find the bin range that contains the central `fraction` of h's area.
-// Returns {1, 0} (lo > hi = invalid) if h has fewer than the configured minimum entries.
+// truncation
 static std::pair<int, int> FindTruncBins(TH1D *h, double fraction,
                                          const ResidualFitControls &controls) {
   if (!CanFit(h, controls.minEntries))
@@ -175,9 +160,7 @@ static std::pair<int, int> FindTruncBins(TH1D *h, double fraction,
   return {binLo, binHi};
 }
 
-// Compute the mean (and width) of h restricted to bins [binLo, binHi].
-// Converts nEff to entry-equivalent count so MC histograms filled with XS weights
-// (where Integral() << GetEntries()) are handled correctly.
+// mean and width of h in bins [binLo, binHi]
 static TruncResult TruncMeanInRange(TH1D *h, int binLo, int binHi) {
   TruncResult r;
   if (binLo > binHi)
@@ -195,17 +178,15 @@ static TruncResult TruncMeanInRange(TH1D *h, int binLo, int binHi) {
   r.mean = mean;
   r.meanErr = rms / TMath::Sqrt(nEffEntries);
   r.sigma = rms;
-  // Standard large-N approximation for the SE of a sample std-dev estimate
-  // (asymptotic normal approximation) -- same "quick per-bin estimate"
-  // tradeoff as meanErr above, not a full jackknife/bootstrap estimate.
+  // large-N (asymptotic normal) approximation for the SE of a sample std-dev estimate
+  // same tradeoff as meanErr above, not a full jackknife/bootstrap estimate
   r.sigmaErr = rms / TMath::Sqrt(2.0 * TMath::Max(nEffEntries - 1.0, 1.0));
   r.nEff = nEffEntries;
   r.valid = true;
   return r;
 }
 
-// ---- <A> → R and propagated error ----
-
+// A (avg or sigma) → R
 static double ToR(double A) { return (1.0 + A) / (1.0 - A); }
 static double ToRErr(double A, double dA) {
   return dA * 2.0 / ((1.0 - A) * (1.0 - A));
@@ -225,30 +206,25 @@ WarnOutOfRangeValue(ResidualFitControls &controls, const TString &cone,
   if (controls.outOfRangeMeanWarnings < kMaxOutOfRangeMeanWarnings) {
     std::cerr << "WARNING: residual " << method << " " << sample << " "
               << quantity << "=" << value
-              << " exceeds configured max_abs_a=" << controls.maxAbsA << " for "
+              << " exceeds " << controls.maxAbsA << " for "
               << cone << " " << etaMode << " " << etaKey << " " << ptKey << " "
-              << alphaKey << "; dropping this point before R conversion\n";
+              << alphaKey << "; dropping this point, but please investigate this! (unexpected behaviour and a red flag) \n";
   } else if (controls.outOfRangeMeanWarnings == kMaxOutOfRangeMeanWarnings) {
-    std::cerr << "WARNING: more residual values exceed configured max_abs_a="
+    std::cerr << "WARNING: more values exceed configured max_abs_a="
               << controls.maxAbsA
-              << "; suppressing further detailed warnings\n";
+              << "; suppressing more of these warnings\n";
   }
   controls.outOfRangeMeanWarnings++;
 }
 
-// ---- R(alpha) -> alpha=0 intercept, direct and kFSR-normalized ----
-//
-// Shared by both JEC (fed mean-derived R points) and JER (fed stddev-derived
-// R points) -- the linear-fit-and-extrapolate machinery, including the
-// kFSR-style normalization (divide by the value at the fit range's high
-// edge, fit, multiply back), doesn't care what physical quantity the R
-// points came from. Builds and writes a TGraphErrors of pts (plus a
-// normalized companion graph, if valid) to dGraphs; returns the extrapolated
-// intercept(s).
+// direct correction and kFSR extraction
+// JEC (mean-derived R points)
+// JER (fed stddev-derived R points)
+// each (alpha, ptSlice, etaBin) fit returns mean and width of A
 
 struct ExtrapResult {
-  double c0 = 0, ec0 = 0;   // direct intercept
-  double c0n = 0, ec0n = 0; // kFSR-normalized intercept
+  double c0 = 0, ec0 = 0;  // direct intercept
+  double c0n = 0, ec0n = 0;  // kFSR (normalized alpha values by nominal alpha)
   bool valid = false;
   bool normValid = false;
 };
@@ -280,8 +256,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
     return out;
   }
 
-  // "R" option: only points within the configured fit range enter the chi2.
-  // Points above the range are displayed in the graph but excluded from the fit.
+  // only points within the fit range enter chi2
   TF1 *fitFn = new TF1(gname + "_fit", "[0]+[1]*x", 0.0, controls.alphaFitHi);
   fitFn->SetParameter(0, 1.0);
   fitFn->SetParameter(1, 0.0);
@@ -292,9 +267,9 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   out.ec0 = fitFn->GetParError(0);
   out.valid = true;
 
-  // normalized variant: divide each point by the value at the high end of
-  // the fit range, fit, then multiply the intercept back. Errors differ from
-  // the direct method since normalization changes the fit input distribution.
+  // kFSR
+  // fitting values at each alpha normalized by the value at a nominal alpha
+  // extrapolated value multiplied by value at nominal alpha gives correction
   double normVal = 0, normErr = 0;
   for (int k = n - 1; k >= 0; k--) {
     if (pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6) {
@@ -325,7 +300,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
       TGraphErrors *grn =
           new TGraphErrors(nfit, xn.data(), yn.data(), exn.data(), eyn.data());
       grn->SetName(gnorm);
-      grn->SetTitle(";#alpha threshold;R_{MC}/R_{data} (norm.)");
+      grn->SetTitle(";#alpha threshold;R_{MC}/R_{data} (k_{FSR})");
       grn->SetMarkerStyle(20);
       grn->SetMarkerColor(color);
       grn->SetLineColor(color);
@@ -353,29 +328,19 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   }
 
   dGraphs->cd();
-  gr->Write();  // fit function clone is embedded in graph by ROOT's Fit()
-  delete fitFn; // delete the original (clone in graph list is separately owned)
+  gr->Write();  // fit function clone
+  delete fitFn;  // delete original
   delete gr;
   return out;
 }
 
-// Runs the full extraction loop for one eta mode. etaEdges: kAbsEtaEdges
-// (18 bins) or kEtaEdges (36 bins). nameSuffix: "" for |eta|, "_fulleta" for
-// full eta. pb: progress bar updated once per pT slice. Output names follow
-// the global key order: cone, object kind, eta mode/bin, ptavg, alpha,
-// method/detail.
+// full extraction loop for JER SF or L2Residuals
+// progress bar updated once per pT slice
+// namespace: cone, object kind, eta mode/bin, ptavg, alpha, method
 //
-// Every (alpha, ptSlice, etaBin) fit already returns both the mean and the
-// width of the A distribution as a side effect -- JEC uses the mean, JER SF
-// uses the width through the same R=(1+x)/(1-x) transform and the same
-// linear-fit-and-extrapolate machinery, so both ride one pass instead of
-// fitting twice.
-//
-// Outputs per (method, ptSlice): {cone}_intercept[_jer]_{etaMode}_{ptSlice}_
-// {method}[_norm]. Outputs in dRvals per (method, alphaSlice, ptSlice):
-// {cone}_R_data[_jer]/_mc[_jer]_{etaMode}_{ptSlice}_{alphaSlice}_{method}.
-// Outputs in dGraphs per (method, ptSlice, etaBin): a TGraphErrors of
-// R_MC/R_data vs alpha ("R_jer" for the JER SF companion).
+// Outputs: 
+// dGraph (method, ptSlice, etaBin)
+// TGraphErrors of R_MC/R_data vs alpha (R_jer)
 
 static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
                           const BinningConfig &bins, TDirectory *dQA_data,
@@ -393,8 +358,8 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
   const bool fullEta = !nameSuffix.IsNull();
   const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-  // rpts[method][ipt][ieta]: all nAlpha bins; "QR" fit selects only those within the configured fit range.
-  // rptsJer mirrors rpts exactly, fed stddev-derived R points instead of mean-derived ones.
+  // rpts[method][ipt][ieta]: all nAlpha bins
+  // rptsJer mirrors rpts, given stddev R points instead of mean-derived
   std::vector<std::vector<std::vector<std::vector<RPoint>>>> rpts(
       kNMethods, std::vector<std::vector<std::vector<RPoint>>>(
                      nPt, std::vector<std::vector<RPoint>>(nEta)));
@@ -402,7 +367,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
       kNMethods, std::vector<std::vector<std::vector<RPoint>>>(
                      nPt, std::vector<std::vector<RPoint>>(nEta)));
 
-  // R_data and R_mc TH1Ds per (method, ialpha, ipt): eta on x-axis
+  // R_data and R_mc vs eta, TH1Ds (method, ialpha, ipt)
   using RH = std::vector<std::vector<std::vector<TH1D *>>>;
   RH hRd(kNMethods, std::vector<std::vector<TH1D *>>(
                         nAlpha, std::vector<TH1D *>(nPt, nullptr)));
@@ -435,8 +400,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
     }
   }
 
-  // ---- main extraction loop ----
-
+  // main extraction loop
   for (int ipt = 0; ipt < nPt; ipt++) {
     const auto &ptSlice = bins.ptavgSlices[ipt];
 
@@ -448,7 +412,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
       hData->GetAxis(kAlphaAxis)->SetRangeUser(aSlice.lo, aSlice.hi);
       hMC->GetAxis(kAlphaAxis)->SetRangeUser(aSlice.lo, aSlice.hi);
 
-      // One 2D (eta, A) projection per (ipt, ialpha) instead of nEta 1D projections.
+      // 2D (eta, A) projection per (ipt, ialpha)
       // Projection(yDim, xDim) → TH2D with x=eta, y=A.
       TH2D *h2Data;
       TH2D *h2MC;
@@ -497,9 +461,9 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
 
         double alphaX = aSlice.hi;
 
-        // Accumulate all alpha bins; "QR" fit later selects only those within the configured fit range.
-        // Shared by JEC (fed mean/meanErr) and JER SF (fed sigma/sigmaErr) --
-        // same R=(1+x)/(1-x) transform either way, just a different rptsOut/hRdOut/hRmOut target.
+        // accumulate alpha bins
+        // L2Res/JEC=fed mean/meanErr, JER(SF)=fed sigma/sigmaErr
+        // R=(1+x)/(1-x)
         auto accumulate =
             [&](std::vector<std::vector<std::vector<std::vector<RPoint>>>>
                     &rptsOut,
@@ -576,8 +540,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
     pb.Update();
   }
 
-  // ---- write R_data and R_mc histograms (JEC and JER SF) ----
-
+  // write R_data and R_mc histograms
   dRvals->cd();
   for (int m = 0; m < kNMethods; m++) {
     for (int ia = 0; ia < nAlpha; ia++) {
@@ -598,8 +561,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
     }
   }
 
-  // ---- build TGraphErrors and fit R_ratio vs alpha (JEC, then JER SF) ----
-
+  // TGraphErrors and fit R_ratio vs alpha
   for (int method = 0; method < kNMethods; method++) {
     for (int ipt = 0; ipt < nPt; ipt++) {
       const auto &ptSlice = bins.ptavgSlices[ipt];
@@ -692,8 +654,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
   }
 }
 
-// ============================================================
-
+// main
 void runCalibration(TString dataFile, TString mcFile, TString outputFile,
                     CalibrationMode mode) {
 
@@ -719,7 +680,7 @@ void runCalibration(TString dataFile, TString mcFile, TString outputFile,
   BinningConfig bins;
   const int nPt = (int)bins.ptavgSlices.size();
 
-  // two ExtractAndFit calls per cone (|eta| and full eta), each steps through nPt pT slices
+  // |eta| and full eta ExtractAndFit calls per cone, each loops through nPt pT slices
   const int totalSteps = (int)cfg.coneLabels.size() * 2 * nPt;
   ProgressBar pb("Extracting:", totalSteps);
 

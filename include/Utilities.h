@@ -180,11 +180,8 @@ inline THnSparse *FoldEtaAxis(THnSparse *h, Int_t etaAxis,
                        TMath::Sqrt(oldErr * oldErr + err * err));
   }
 
-  // hfold is built via SetBinContent/SetBinError, never Fill() -- so its own
-  // entries counter would count unique filled-bin combos, not real entries.
-  // Folding doesn't change the total, only remaps eta, so copy it from h
-  // directly. Without this, Projection() off hfold underreports entries and
-  // can silently fail downstream CanFit() guards.
+  // built via SetBinContent, not Fill(), so GetEntries() would undercount --
+  // copy the real count from h, or downstream CanFit() guards silently fail
   hfold->SetEntries(h->GetEntries());
 
   return hfold;

@@ -1,11 +1,23 @@
-// CMake:       ./build/bin/runPlotting -input residuals.root [-outdir dir] [-flags "..."] [-closure true] [-calibration JEC|JER] [-tag name] -config path
-//              ./build/bin/runPlotting args.config  (with lines like: flags = finals etasym)
-// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runPlotting.C("residuals.root")'
-//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+
+// USAGE       
 //
-// CLI details (CommandLine parser, config files, case-sensitivity): see
-// README's Command-Line Convention section.
+// Binary:
+//
+// ./build/bin/runPlotting \
+//   -input residuals.root \
+//   [-outdir dir] \
+//   [-flags "..."] \
+//   [-closure true] \
+//   [-calibration JEC|JER] \
+//   [-tag name] \
+//   -config path
+//
+// ./build/bin/runPlotting args.config  # config file lines: key = value
+//
+// Interpreted: 
+//
+// export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
+// root -l -b -q 'macros/runPlotting.C("residuals.root")'
 
 #ifdef __CLING__
 // clang-format off

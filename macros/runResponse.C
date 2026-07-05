@@ -1,17 +1,19 @@
-// CMake:       ./build/bin/runResponse -input mc_asymmetry.root -output response.root -config path
-//              ./build/bin/runResponse args.config  (with lines like: input = mc_asymmetry.root)
-// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runResponse.C("mc_asymmetry.root","response.root")'
-//              (build the library first: cmake --build build)
-//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+
+// USAGE
 //
-// CLI details (CommandLine parser, config files, case-sensitivity): see
-// README's Command-Line Convention section.
+// Binary:
 //
-// Reads a single hadded Step 1 MC file (runAsymmetry -mode mc) -- no -data,
-// no -mode, since the MC-only response THnSparses this reads don't exist in
-// a data-mode Step 1 file. See include/ResponseExtractor.h for what gets
-// extracted and why (JES/JER binned by gen quantities, not reco).
+// ./build/bin/runResponse \
+//   -input mc_asymmetry.root \
+//   -output response.root \
+//   -config path
+//
+// ./build/bin/runResponse args.config  # config file lines: key = value
+//
+// Interpreted: 
+//
+// export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
+// root -l -b -q 'macros/runResponse.C("mc_asymmetry.root", "response.root")'
 
 #ifdef __CLING__
 // clang-format off

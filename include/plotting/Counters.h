@@ -14,9 +14,7 @@
 #include "Binning.h"
 #include "Naming.h"
 
-// ============================================================
-// Progress accounting
-// ============================================================
+// progress accounting
 
 inline int CountAsymDistPlots(TFile *fIn, const TString &cone,
                               const BinningConfig &bins) {

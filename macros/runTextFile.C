@@ -1,39 +1,25 @@
-// CMake:       ./build/bin/runTextFile -triggered trig.root -nontriggered notrig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
-//              ./build/bin/runTextFile -triggered trig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
-//              ./build/bin/runTextFile -nontriggered notrig.root -output out.root [-tag name] [-method gauss] [-norm true] -config path
-//              ./build/bin/runTextFile args.config  (with lines like: triggered = trig.root)
-// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runTextFile.C("triggered.root","nontriggered.root","out.root")'
-//              (build the library first: cmake --build build)
-//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+
+// USAGE
 //
-// CLI details (CommandLine parser, config files, case-sensitivity): see
-// README's Command-Line Convention section.
+// Binary:
 //
-// Processes every cone in cfg.coneLabels. Per pT_avg slice, uses the
-// triggered residuals if the slice starts at or above cfg.hltJ80Thresh,
-// otherwise the non-triggered residuals.
-// Correction text files always go to data/jec/preliminary/ (relative to the
-// repo root, created automatically) -- gitignored, meant for locally
-// generated/preliminary corrections. Writes
-// "data/jec/preliminary/<tag>_<cone>_abseta[_norm].txt" and
-// "..._<cone>_eta[_norm].txt".
+// ./build/bin/runTextFile \
+//   -triggered trig.root \
+//   -nontriggered notrig.root \
+//   -output out.root \
+//   # [-tag name] \
+//   # [-method gauss] \
+//   # [-norm true] \
+//   -config path
 //
-// -triggered/-nontriggered: pass both for the merge (as above). Pass only
-//          one for single-dataset mode -- the two are NOT interchangeable:
-//          -triggered alone means this one dataset is itself trigger-biased,
-//          so pT_avg slices below cfg.hltJ80Thresh are dropped entirely (no
-//          non-triggered fallback exists to fill them in). -nontriggered
-//          alone means the dataset is not trigger-biased, so every pT_avg
-//          slice is used unconditionally, no threshold cut. At least one of
-//          the two is required.
-// -tag: a plain filename prefix, NOT a path -- must not contain '/'.
-//          Optional; defaults to "L2Residual" when omitted.
-// -method: gauss | doubleGauss | trunc90 | trunc95 (default: cfg [step3] default_method)
-// -norm:   true (default) uses the kFSR-normalized intercepts (the standard
-//          method); false uses the direct, non-normalized variant instead.
-// [step3] eta_mode in the TOML ("both" | "abseta" | "eta") controls which of
-// the two text files (per cone) actually get written; see TextFileWriter.cxx.
+// ./build/bin/runTextFile args.config  # config file lines: key = value
+//
+// Interpreted: 
+//
+// export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
+// root -l -b -q 'macros/runTextFile.C("triggered.root", "nontriggered.root", "out.root")'
+//
+// compatible with only triggered residuals, only non-trigger residuals, or both
 
 #ifdef __CLING__
 // clang-format off

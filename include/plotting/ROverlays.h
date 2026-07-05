@@ -15,13 +15,9 @@
 #include "Naming.h"
 #include "ProgressBar.h"
 
-// ============================================================
-// Plot type 4: R_data and R_MC overlay with ratio panel
-//
-// For each (cone, method, alpha slice, pT slice): one two-panel canvas with
-//   top panel  : R_data (blue) and R_MC (red) vs |eta|, reference at 1
-//   bottom panel : R_data/R_MC vs |eta|, reference at 1
-// ============================================================
+// R_data/R_MC overlay with ratio panel. Two-panel canvas per (cone, method,
+// alpha slice, pT slice): top = R_data (blue) and R_MC (red) vs |eta|,
+// bottom = R_data/R_MC, both with a reference line at 1.
 
 inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
                          const BinningConfig &bins, ProgressBar &pb,
@@ -69,7 +65,7 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
                  kMethodKeys[m], ptKey.Data(), alphaKey.Data());
         TwoPad cv = MakeTwoPad(cvName);
 
-        // ---- main pad ----
+        // main pad
         cv.main->cd();
         cv.main->SetGridx();
         cv.main->SetGridy();
@@ -109,7 +105,7 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
                             kMethodLabels[m], ptSl.title.Data(),
                             aSl.title.Data(), CalibTag(useJer).Data()));
 
-        // ---- ratio pad ----
+        // ratio pad
         cv.ratio->cd();
         cv.ratio->SetGridx();
         cv.ratio->SetGridy();

@@ -31,15 +31,10 @@ void Check(bool cond, const char *msg) {
   }
 }
 
-// ---- helpers ----
+// helpers
 
-// Build a synthetic residuals ROOT file for cone "ak4PF", populating only the
-// given pT-slice indices (into BinningConfig::ptavgSlices) with intercept
-// histograms (both abseta and fulleta) set to corrValue ± corrErr in every
-// bin. The ak4PF TDirectory always exists, even if sliceIndices is empty.
-// norm appends "_norm" to the histogram names; recreate=false appends to an
-// existing file (opened "update") instead of overwriting it, so a norm
-// variant can be added to a file that already has the direct variant.
+// synthetic ak4PF residuals file; norm appends "_norm" to names,
+// recreate=false updates an existing file in place
 static TString MakeResiduals(const char *path, double corrValue, double corrErr,
                              const std::vector<int> &sliceIndices,
                              bool norm = false, bool recreate = true) {
@@ -73,11 +68,7 @@ static TString MakeResiduals(const char *path, double corrValue, double corrErr,
   return TString(path);
 }
 
-// Like MakeResiduals, but also writes intercept_jer_* histograms (both
-// abseta and fulleta) at jerValue ± jerErr in every bin -- used only by the
-// JER SF writer test below, kept separate from MakeResiduals so every other
-// existing test's residuals files stay exactly as before (no intercept_jer_*
-// objects, matching what a pre-JER-SF Step 2 file would have).
+// like MakeResiduals, plus intercept_jer_* histograms
 static TString MakeResidualsWithJer(const char *path, double corrValue,
                                     double corrErr, double jerValue,
                                     double jerErr,
@@ -111,10 +102,8 @@ static TString MakeResidualsWithJer(const char *path, double corrValue,
   return TString(path);
 }
 
-// The real cfg.hltJ80Thresh (cfg/2024ppRef.toml) is 100.0: pT slices 0,1
-// (30-70, 70-100) fall below threshold -> NonTriggered; slices 2-5 (100-175 ... 500-1000)
-// are at/above -> Triggered. Build both files with full slice coverage, possibly at
-// different values, so tests can check which source ends up in the merge.
+// hltJ80Thresh=100: slices 0,1 (30-70, 70-100) below threshold -> NonTriggered,
+// slices 2-5 (100-175 ... 500-1000) at/above -> Triggered
 static void MakeTrigNoTrig(const char *trigPath, const char *notrigPath,
                            double trigValue, double notrigValue,
                            double err = 0.001) {
@@ -122,10 +111,7 @@ static void MakeTrigNoTrig(const char *trigPath, const char *notrigPath,
   MakeResiduals(notrigPath, notrigValue, err, {0, 1, 2, 3, 4, 5});
 }
 
-// runTextFile now writes correction text files to a fixed location
-// (data/jec/preliminary/, relative to the repo root) regardless of TAG --
-// TAG is just a plain filename tag now, not a path. Tests still use
-// distinct tags per case so cleanup doesn't collide across cases.
+// output path is fixed (data/jec/preliminary/); TAG is just a filename tag
 static TString TxtPath(const TString &tag, const char *mode, bool norm) {
   return TString("data/jec/preliminary/") + tag + "_ak4PF_" + mode +
          (norm ? "_norm" : "") + ".txt";
@@ -146,8 +132,7 @@ static void CleanupFiles(const char *trigPath, const char *notrigPath,
   std::remove(TxtPath(tag, "eta_jer", true).Data());
 }
 
-// Parse one data line from the JEC text file.
-// Returns false if parsing fails or field count is wrong.
+// parse one JEC text-file data line
 struct JECLine {
   double etaLo, etaHi;
   int npar;
@@ -165,7 +150,7 @@ static bool ParseJECLine(const std::string &line, JECLine &out) {
   return true;
 }
 
-// Read all JEC data lines (skip the header) from a text file.
+// read JEC file, skipping the header
 static std::vector<JECLine> ReadJECFile(const char *path, std::string &header) {
   std::ifstream f(path);
   std::vector<JECLine> lines;
@@ -186,9 +171,9 @@ static std::vector<JECLine> ReadJECFile(const char *path, std::string &header) {
   return lines;
 }
 
-// ---- test cases ----
+// test cases
 
-// [1] Both text files exist with correct header and line counts
+// [1] both text files exist with correct header and line counts
 void TestFileStructure() {
   std::cout << "\n[1] File structure\n";
 
@@ -222,8 +207,7 @@ void TestFileStructure() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [2] Merge source selection: Triggered and NonTriggered carry different values; the merged
-// corrfinal grid must pull each pT slice from the correct source.
+// [2] merge pulls each pT slice from the correct source
 void TestMergeSourceSelection() {
   std::cout << "\n[2] Merge source selection\n";
 
@@ -241,10 +225,8 @@ void TestMergeSourceSelection() {
       fOut ? (TH2D *)fOut->Get("ak4PF/ak4PF_corrfinal_abseta_gauss") : nullptr;
   Check(hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output");
   if (hGrid) {
-    // y-bin 1 = ptavg_30_70  (lo=30  < 100 threshold) -> NonTriggered value
     Check(std::fabs(hGrid->GetBinContent(1, 1) - 1.0) < 1e-6,
           "ptavg_30_70 pulled from NonTriggered");
-    // y-bin 3 = ptavg_100_175 (lo=100 >= 100 threshold) -> Triggered value
     Check(std::fabs(hGrid->GetBinContent(1, 3) - 5.0) < 1e-6,
           "ptavg_100_175 pulled from Triggered");
   }
@@ -254,8 +236,7 @@ void TestMergeSourceSelection() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [2b] useNorm selects the "_norm"-suffixed intercepts and suffixes the
-// output objects/filenames accordingly, leaving the direct variant untouched.
+// [2b] norm variant selection: swaps in "_norm" intercepts, direct variant untouched
 void TestNormSelection() {
   std::cout << "\n[2b] Normalized variant selection\n";
 
@@ -294,10 +275,8 @@ void TestNormSelection() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [2c] Single-file overload, non-triggered-only (SingleDatasetKind::NonTriggered):
-// no Triggered/NonTriggered split, every pT slice reads from the one residuals
-// file regardless of cfg.hltJ80Thresh -- correct because an unbiased dataset
-// has nothing to gate on.
+// [2c] single-file, non-triggered-only: every slice reads from the one file,
+// no threshold gate
 void TestSingleFileMode() {
   std::cout << "\n[2c] Single-file mode, non-triggered-only\n";
 
@@ -318,9 +297,6 @@ void TestSingleFileMode() {
       fOut ? (TH2D *)fOut->Get("ak4PF/ak4PF_corrfinal_abseta_gauss") : nullptr;
   Check(hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output");
   if (hGrid) {
-    // y-bin 1 = ptavg_30_70 (below threshold, would be NonTriggered in two-file mode);
-    // y-bin 3 = ptavg_100_175 (at/above threshold, would be Triggered); both must
-    // come from the single file regardless, so both equal 3.0.
     Check(std::fabs(hGrid->GetBinContent(1, 1) - 3.0) < 1e-6,
           "low-pT slice reads from the single file");
     Check(std::fabs(hGrid->GetBinContent(1, 3) - 3.0) < 1e-6,
@@ -332,9 +308,7 @@ void TestSingleFileMode() {
   CleanupFiles(resPath, resPath, rootPath, tag);
 }
 
-// [2d] Single-file overload, triggered-only (SingleDatasetKind::Triggered): pT
-// slices below cfg.hltJ80Thresh must be dropped entirely (no fallback source
-// exists), not silently pulled from the same trigger-biased file.
+// [2d] single-file, triggered-only: below-threshold slices are dropped, no fallback
 void TestSingleTriggeredMode() {
   std::cout << "\n[2d] Single-file mode, triggered-only\n";
 
@@ -352,9 +326,6 @@ void TestSingleTriggeredMode() {
       fOut ? (TH2D *)fOut->Get("ak4PF/ak4PF_corrfinal_abseta_gauss") : nullptr;
   Check(hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output");
   if (hGrid) {
-    // y-bin 1 = ptavg_30_70 (below threshold) -- must be dropped, left at the
-    // TH2D's default zero, not pulled from the triggered file anyway.
-    // y-bin 3 = ptavg_100_175 (at/above threshold) -- must read from the file.
     Check(std::fabs(hGrid->GetBinContent(1, 1) - 0.0) < 1e-6,
           "below-threshold slice is dropped (stays at the TH2D default), not "
           "read from the triggered file");
@@ -595,13 +566,9 @@ void TestEtaExtent() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [9] JER SF text writer: round-trips the written file through the real
-// vendored JME::JetResolutionObject reader, confirming the on-disk format is
-// valid and the values match what was written. Uses getRecords() directly
-// rather than getRecord() -- this writer emits one record per (eta bin, pT
-// slice) cell, so getRecord() (eta-only matching) could return any of
-// several same-eta-bin records; the test scans for the one whose eta AND
-// pT ranges both contain the target point.
+// [9] JER SF writer round-trip via the vendored JetResolutionObject reader;
+// uses getRecords() since getRecord() only matches on eta and this writer
+// emits one record per (eta, pT) cell
 void TestJerSfWriter() {
   std::cout << "\n[9] JER SF text writer round-trip\n";
 
@@ -638,7 +605,6 @@ void TestJerSfWriter() {
     Check(obj->getDefinition().getBinsName().size() == 1 &&
               obj->getDefinition().getBinsName()[0] == "JetEta",
           "definition bin variable is JetEta");
-    // 18 abs-eta bins, mirrored onto 36 eta identities, x 6 populated pT slices
     Check(obj->getRecords().size() == 36 * 6,
           "record count = 36 eta identities x 6 pT slices");
 
@@ -658,8 +624,7 @@ void TestJerSfWriter() {
       if (found->getParametersValues().size() == 2) {
         Check(std::fabs(found->getParametersValues()[0] - 1.02) < 1e-4,
               "first parameter is the JER SF value (1.02)");
-        // unc = error/value = 0.01/1.02, not the raw absolute error --
-        // matches the standard s_up/down = sJER * (1 +/- unc) convention.
+        // unc = error/value, matching the JER s_up/down convention
         Check(
             std::fabs(found->getParametersValues()[1] - (0.01 / 1.02)) < 1e-4,
             "second parameter is the fractional uncertainty unc = error/value");
@@ -677,7 +642,7 @@ void TestJerSfWriter() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// ---- main ----
+// main
 
 int main() {
   gROOT->SetBatch(true);

@@ -23,26 +23,28 @@
 #include <string>
 #include <cmath>
 
-// Minimum valid pT slices needed to attempt a 3-parameter fit.
+// min pT slices for 3-parameter fit
 static constexpr int kMinSlices = 3;
 
-// outputTag default and fixed output location, see TextFileWriter.h.
+// outputTag default and fixed output dir (see TextFileWriter.h)
 static const char *const kDefaultTag = "L2Residual";
 static const char *const kTextOutputSubdir = "data/jec/preliminary";
 
+// NEED TO CHANGE
+// REFERENCE BINNING IN TOML
 static constexpr double kPtLo = 40.0;
 static constexpr double kPtHi = 1000.0;
+
 static constexpr int kNPar = 3;
 
 // Fit function: 1/(p0 + p1*log10(0.01*x) + p2/(x/10))
-// Matches the formula declared in the JEC header line below.
 static Double_t FitFunc(Double_t *x, Double_t *par) {
   double denom =
       par[0] + par[1] * TMath::Log10(0.01 * x[0]) + par[2] / (x[0] / 10.0);
   return (denom != 0.0) ? 1.0 / denom : 1.0;
 }
 
-// Level label and JEC formula declaration; keep in sync with FitFunc.
+// JEC formula declaration
 static const char *const kJECHeader =
     "{1 JetEta 1 JetPt 1./([p0]+[p1]*log10(0.01*x)+[p2]/(x/10.0)) Correction "
     "L2Residual}";
@@ -52,20 +54,17 @@ struct FitResult {
   bool valid = false;
 };
 
-// Arithmetic midpoint of a pT slice, used as the fit x-value for that slice.
+// midpoint of slice, x-value in fit
 static double SliceCenter(const RangeBin &sl) { return 0.5 * (sl.lo + sl.hi); }
 
-// Fetch an intercept histogram from the current cone TDirectory layout.
+// get intercept histogram
 static TH1D *FetchIntercept(TFile *f, const TString &cone,
                             const TString &name) {
   TDirectory *coneDir = (TDirectory *)f->Get(cone);
   return coneDir ? (TH1D *)coneDir->Get(name) : nullptr;
 }
 
-// Fit corr(pT_avg) at one eta bin, write the TGraphErrors (with the TF1
-// embedded so it draws later) into dGraphs, and return the fit parameters.
-// The graph and the text-file output are always derived from this single
-// fit; never re-fit the same points twice elsewhere.
+// fit corr(pT_avg) per eta bin, write TGraphErrors to dGraphs, return the fit parameters
 static FitResult FitPtSlices(const std::vector<double> &ptCenters,
                              const std::vector<double> &corr,
                              const std::vector<double> &corrErr,
@@ -82,13 +81,13 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
   gr->SetTitle(";p_{T,avg} [GeV];Correction factor");
 
   TF1 *f = new TF1(graphName + "_fit", FitFunc, kPtLo, kPtHi, kNPar);
-  // Start at the unity correction (1/(1+0+0)=1), close for all eta.
-  // Starting at (1.5,1.5,1.5) gives a negative denominator at low pT.
+  // start at unity correction (1/(1+0+0)=1)
+  // Starting at (1.5,1.5,1.5) gives a negative denominator at low pT
   f->SetParameter(0, 1.0);
   f->SetParameter(1, 0.0);
   f->SetParameter(2, 0.0);
 
-  // No "N": the fit function is embedded in the graph so runPlotting can draw it later.
+  // fit function in graph so runPlotting can draw
   TFitResultPtr res = gr->Fit(f, "QSR");
   if (res.Get() && res->IsValid()) {
     for (int p = 0; p < kNPar; p++)
@@ -100,12 +99,12 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
     dGraphs->cd();
     gr->Write();
   }
-  delete f; // clone embedded in gr's function list is separately owned
+  delete f;  // clone in gr's function list is separately owned
   delete gr;
   return r;
 }
 
-// Write one CMS L2Residual JEC data line for the [etaLo, etaHi] range.
+// one CMS L2Residual JEC data line for the [etaLo, etaHi] range
 static void WriteJECLine(std::ofstream &out, double etaLo, double etaHi,
                          const FitResult &fit) {
   out << etaLo << "\t" << etaHi << "\t" << (kNPar + 2) << "\t" << kPtLo << "\t"
@@ -118,8 +117,7 @@ static void WriteJECLine(std::ofstream &out, double etaLo, double etaHi,
   out << "\n";
 }
 
-// Mirrored |eta| text file: negative half outermost→innermost, then positive
-// half innermost→outermost, both halves reusing the same |eta| fit results.
+// mirrored |eta| about eta = 0 for |eta| results text file
 static bool WriteAbsEtaTextFile(const TString &path,
                                 const std::vector<FitResult> &fits) {
   std::ofstream out(path.Data());
@@ -135,8 +133,7 @@ static bool WriteAbsEtaTextFile(const TString &path,
   return true;
 }
 
-// Independent full-eta text file: kEtaEdges is already ascending -5.191→5.191,
-// so this is a single direct pass, no mirroring, each bin has its own fit.
+// full-eta text file, each bin has its own fit
 static bool WriteFullEtaTextFile(const TString &path,
                                  const std::vector<FitResult> &fits) {
   std::ofstream out(path.Data());

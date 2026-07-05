@@ -19,10 +19,7 @@
 #include <iostream>
 #include <cmath>
 
-// axis order within {cone}_incl_resp/_tag_resp/_probe_resp -- matches
-// DijetHistograms.h's ConeHistograms exactly (kept as a local redefinition,
-// not a DijetHistograms.h include, the same decoupling CalibrationExtractor.cxx
-// already uses for the main asymmetry sparse's axes).
+// axis order {cone}_incl_resp/_tag_resp/_probe_resp
 static constexpr int kRespEtaRecoAxis = 0;
 static constexpr int kRespPtGenAxis = 1;
 static constexpr int kRespCorrRAxis = 2;
@@ -35,9 +32,7 @@ static const char *const kCollectionKeys[kNCollections] = {"incl", "tag",
 static const char *const kCollectionSuffixes[kNCollections] = {
     "_incl_resp", "_tag_resp", "_probe_resp"};
 
-// The three response ratios riding in one sparse (see DijetHistograms.h) --
-// "reco" here means the ntuple's own baked-in "jtpt" correction (the
-// JetStruct field is literally named reco.pt), not this framework's corrPt.
+// Three response ratios in one sparse
 struct ResponseVariant {
   int axis;
   const char *tag;
@@ -50,10 +45,7 @@ static const ResponseVariant kVariants[kNVariants] = {
     {kRespRawRAxis, "raw", "p_{T}^{raw}/p_{T}^{gen}"},
 };
 
-// Gaussian fit around 1.0 -> JES (mean) and JER (sigma/mean). Mirrors
-// CalibrationExtractor.cxx's FitGauss (same NQSR fit, same CanFit guard) but
-// centered at the response peak, not 0, and also returns sigma/mean directly.
-
+// Gaussian fit around 1.0 -> JES (mean) and JER (sigma/mean)
 struct ResponseFitResult {
   double jes = 0, jesErr = 0, jer = 0, jerErr = 0;
   bool valid = false;
@@ -90,11 +82,7 @@ static ResponseFitResult FitResponse(TH1D *h, double halfWidth,
   return r;
 }
 
-// vs pt_gen: marginal over eta_reco and the other two ratio axes, binned off
-// the sparse's own uniform pT granularity. Runs once per variant so JES/JER
-// for corr/reco/raw land side by side. eta_reco binning is deferred -- see
-// ResponseExtractor.h.
-
+// vs pt_gen
 static void ExtractVsPtGen(THnSparse *h, const TString &cone,
                            const TString &collection,
                            const ResponseVariant &variant,
@@ -149,16 +137,11 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
   delete hJER;
 }
 
-// Per-|eta|-bin JER (and JES) vs pT_gen. Used by runTextFilePtResolution to
-// write the CMS JER pT resolution text file.
+// per |eta| bin JER and JES vs pT_gen
+// used by runTextFilePtResolution
 //
-// Takes a |eta|-folded response THnSparse (axis 0 = kAbsEtaEdges). For each
-// |eta| bin, restricts axis 0, then projects and fits per pT_gen bin exactly
-// as ExtractVsPtGen does for the inclusive case. Writes
-//   {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection}
-//   {cone}_JER_{variant}_vs_ptgen_{etaKey}_{collection}
-// to dOut. Only the "corr" variant is written (the one relevant for the
-// text file; corr = this framework's L2Relative+L2Residual-corrected pT).
+// |eta| bin (restrict axis 0), projects and fit per pT_gen bin
+// writes {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection} to dOut
 
 static void ExtractPerAbsEtaVsPtGen(THnSparse *hFolded, const TString &cone,
                                     const TString &collection,
@@ -217,8 +200,7 @@ static void ExtractPerAbsEtaVsPtGen(THnSparse *hFolded, const TString &cone,
   }
 }
 
-// ============================================================
-
+// main
 void runResponse(TString inputFile, TString outputFile) {
 
   const AnalysisConfig &cfg = Config();
@@ -234,11 +216,7 @@ void runResponse(TString inputFile, TString outputFile) {
     return;
   }
 
-  // sentinel pre-scan: incl/tag/probe response sparses are always created
-  // together by ConeHistograms::Init when isMC (even if some end up
-  // unfilled), so checking incl_resp alone is enough to know whether a
-  // cone has response objects at all -- mirrors Kinematics.h's use of
-  // "_incl" as its own Step-1-file sentinel.
+  // incl/tag/probe response sparses made by ConeHistograms::Init
   int totalSteps = 0;
   for (const TString &cone : cfg.coneLabels) {
     if (fIn->Get(cone + "/" + cone + "_incl_resp"))
@@ -246,7 +224,7 @@ void runResponse(TString inputFile, TString outputFile) {
   }
   if (totalSteps == 0) {
     std::cerr << "No MC response histograms found in " << inputFile
-              << " -- is this a Step 1 file run with MODE=mc?\n";
+              << " -- are these MC asymmetries? (they need to be)\n";
     fIn->Close();
     return;
   }
@@ -290,8 +268,8 @@ void runResponse(TString inputFile, TString outputFile) {
         pb.Update();
       }
 
-      // Per-|eta|-bin extraction for the corr variant only -- used by
-      // runTextFilePtResolution to write the CMS JER pT resolution text file.
+      // per |eta| bin extraction for corr variant
+      // used to write CMS JER pT resolution text files
       THnSparse *hFolded = FoldEtaAxis(
           hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
       ExtractPerAbsEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,

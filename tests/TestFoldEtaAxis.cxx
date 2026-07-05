@@ -40,9 +40,6 @@ int main() {
 
   std::cout << "=== TestFoldEtaAxis ===" << std::endl;
 
-  // ----------------------------------------------------------------
-  // Test 1: input axis properties before folding
-  // ----------------------------------------------------------------
   std::cout << "\n[1] Input axis properties" << std::endl;
   {
     THnSparse *h = MakeTestSparse("h1");
@@ -58,9 +55,6 @@ int main() {
     delete h;
   }
 
-  // ----------------------------------------------------------------
-  // Test 2: folded axis properties
-  // ----------------------------------------------------------------
   std::cout << "\n[2] Folded axis properties" << std::endl;
   {
     THnSparse *h = MakeTestSparse("h2");
@@ -90,12 +84,6 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
-  // Test 3: symmetric fill, both sides fold into the same |eta| bin
-  //   fill eta = +0.13 and eta = -0.13 with weight 1.0 each
-  //   both land in |eta| bin 1 [0, 0.261]
-  //   expect: content = 2.0, error = sqrt(1^2 + 1^2) = sqrt(2)
-  // ----------------------------------------------------------------
   std::cout << "\n[3] Symmetric fill" << std::endl;
   {
     THnSparse *h = MakeTestSparse("h3");
@@ -123,11 +111,6 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
-  // Test 4: positive-only fill
-  //   fill eta = +2.0 (|eta| bin 9, [1.930, 2.172]) with weight 3.0
-  //   expect: content = 3.0, error = 3.0
-  // ----------------------------------------------------------------
   std::cout << "\n[4] Positive-only fill" << std::endl;
   {
     THnSparse *h = MakeTestSparse("h4");
@@ -150,11 +133,6 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
-  // Test 5: negative-only fill maps to the same |eta| bin as positive
-  //   fill eta = -2.0 with weight 5.0
-  //   should map to same |eta| bin as eta = +2.0
-  // ----------------------------------------------------------------
   std::cout << "\n[5] Negative-only fill maps to correct |eta| bin"
             << std::endl;
   {
@@ -192,13 +170,8 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
-  // Test 6: negative and positive fills at different |eta| values
-  //   fill eta = +0.5 (|eta| bin 2) and eta = -2.6 (|eta| bin 12, interior)
-  //   these should not add together: they land in different |eta| bins.
-  //   Note: -2.5 is exactly on edge kEtaEdges[7] and would go to the
-  //   adjacent bin due to ROOT's bin-edge convention, so -2.6 is used instead.
-  // ----------------------------------------------------------------
+  // -2.6, not -2.5: -2.5 sits exactly on edge kEtaEdges[7], which ROOT's
+  // bin-edge convention would put in the adjacent bin
   std::cout << "\n[6] Fills at different |eta| values stay separate"
             << std::endl;
   {
@@ -227,10 +200,6 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
-  // Test 7: eta axis index is not hardcoded, fold works on axis 1
-  //   same symmetric fill, but eta is axis 1 instead of axis 0
-  // ----------------------------------------------------------------
   std::cout << "\n[7] FoldEtaAxis works on arbitrary axis index" << std::endl;
   {
     BinningConfig bins;
@@ -270,7 +239,6 @@ int main() {
     delete hf;
   }
 
-  // ----------------------------------------------------------------
   std::cout << "\n=== " << nPass << " passed, " << nFail
             << " failed ===" << std::endl;
   return nFail > 0 ? 1 : 0;

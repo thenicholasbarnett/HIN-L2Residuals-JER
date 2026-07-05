@@ -125,15 +125,9 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
   hMC->Draw("E1 same");
 }
 
-// ============================================================
-// Plot type 3: Asymmetry distributions
-//
-// For each (cone, pT slice, alpha slice, eta bin): three canvases with
-//   data (black) and MC (red) overlaid, log-y scale:
-//     trunc90/trunc95: data and MC truncation bounds
-//     gauss: data and MC Gaussian fit guides
-// Skips bins with fewer than kMinEntriesPlot entries.
-// ============================================================
+// Asymmetry distributions. Three canvases per (cone, pT slice, alpha slice,
+// eta bin), data (black) vs MC (red), log-y: trunc90/trunc95 truncation
+// bounds, gauss fit guides. Skips bins under kMinEntriesPlot.
 
 inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
                          const BinningConfig &bins, ProgressBar &pb) {

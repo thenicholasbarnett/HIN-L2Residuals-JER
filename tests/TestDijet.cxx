@@ -18,7 +18,7 @@ void Check(bool cond, const char *msg) {
   }
 }
 
-// ── FindLeadingJets ──────────────────────────────────────────────────────────
+// FindLeadingJets
 
 void TestFindLeadingJets() {
   std::cout << "\n[FindLeadingJets]\n";
@@ -73,7 +73,7 @@ void TestFindLeadingJets() {
   }
 }
 
-// ── MakeDijet ────────────────────────────────────────────────────────────────
+// MakeDijet
 
 // pi for a clean back-to-back dphi
 static constexpr float kPi = 3.14159265f;
