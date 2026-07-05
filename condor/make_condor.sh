@@ -45,13 +45,17 @@
 # selected TOML, keyed by the filelist's basename (without .txt):
 #   [condor.filelist_modes]
 #   filelist_HiForest_2024ppref_DATA_HP0 = "triggered"
-#   filelist_HiForest_2024ppref_DATA_ZB0 = "non-triggered"
+#   "filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
 #   filelist_HiForest_2024ppref_MC       = "mc"
 # Comment out (or simply omit) a filelist's entry to skip submitting jobs for
 # it without moving or renaming the file. Values: triggered | non-triggered | mc.
 # The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form;
-# only the mapped mode value matters, and the key just has to match the
-# filelist's basename exactly.
+# only the mapped mode value matters. A key may be a bare exact basename
+# (matches that one filelist only) or a "*"-wildcard pattern -- a wildcard
+# key must be TOML-quoted, since "*" isn't a legal bareword character in
+# TOML. Entries are checked top to bottom; the first matching key (exact or
+# wildcard) wins, so put a specific override above a broader wildcard if one
+# filelist in a numbered run needs to differ from the rest.
 #
 # Note: the condor Arguments= line generated later in this script (runAsymmetry
 # INPUT OUTPUT MODE CMSSW_SRC) stays positional on purpose -- it's an internal,
@@ -189,10 +193,26 @@ require_config() {
 
 # Look up the run mode for a filelist basename from [condor.filelist_modes] in
 # the selected TOML. Prints "triggered", "non-triggered", "mc", or nothing if
-# there's no active (uncommented) entry for that key.
+# there's no active (uncommented) entry matching that key. A TOML entry's key
+# may be a bare exact basename or a quoted "*"-wildcard pattern; entries are
+# checked top to bottom and the first match wins.
 lookup_filelist_mode() {
   local key="$1"
   awk -v key="${key}" '
+        function to_regex(pat,    out, i, ch) {
+            out = ""
+            for ( i = 1; i <= length(pat); i++ ) {
+                ch = substr(pat, i, 1)
+                if ( ch == "*" ) {
+                    out = out ".*"
+                } else if ( ch ~ /[][\.^$+?(){}|]/ ) {
+                    out = out "\\" ch
+                } else {
+                    out = out ch
+                }
+            }
+            return out
+        }
         /^[[:space:]]*\[/ {
             insec = ( $0 ~ /^[[:space:]]*\[condor\.filelist_modes\][[:space:]]*(#.*)?$/ )
             next
@@ -200,7 +220,15 @@ lookup_filelist_mode() {
         insec {
             line = $0
             sub( /#.*/, "", line )
-            if ( line ~ ( "^[[:space:]]*" key "[[:space:]]*=" ) ) {
+            if ( line !~ /=/ ) next
+            entryKey = line
+            sub( /[[:space:]]*=.*/, "", entryKey )
+            gsub( /^[[:space:]]+|[[:space:]]+$/, "", entryKey )
+            if ( entryKey ~ /^".*"$/ ) {
+                entryKey = substr( entryKey, 2, length(entryKey) - 2 )
+            }
+            if ( entryKey == "" ) next
+            if ( key ~ ( "^" to_regex(entryKey) "$" ) ) {
                 val = line
                 sub( /^[^=]*=[[:space:]]*"/, "", val )
                 sub( /".*/, "", val )
