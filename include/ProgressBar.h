@@ -154,10 +154,8 @@ private:
                eta % 60);
     }
 
-    // Progressively drop cosmetics as the terminal narrows -- rate first,
-    // then ETA/elapsed, then the label -- so the bar itself is the last
-    // thing to give up space. If even a bare minimum-width bar won't fit,
-    // drop the bar too and fall back to plain "current/total pct%".
+    // drop rate, then time, then label as the terminal narrows, so the bar
+    // is last to go; below kMinBarWidth, drop the bar too
     const char *useLabel = label.c_str();
     const char *useRate = rateBuf;
     const char *useTime = timeBuf;

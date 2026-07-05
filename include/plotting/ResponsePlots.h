@@ -22,35 +22,14 @@
 #include <algorithm>
 #include <vector>
 
-// ============================================================
-// Plot type: runResponse (JES/JER extraction) QA + summary
-//
-// Response objects come in three variants riding the same 5D sparse
-// (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen) -- "corr"
-// (this framework's L2Relative+L2Residual correction), "reco" (the ntuple's
-// own baked-in "jtpt" correction), "raw" (uncorrected). See
-// ResponseExtractor.h/.cxx.
-//
-// Per (cone, collection = incl/tag/probe, variant = corr/reco/raw):
-//   response_dist    : per pT_gen bin: the raw response distribution with a
-//                       Gaussian guide fit redone at plot time. The
-//                       extraction step (ResponseExtractor.cxx) writes only
-//                       the raw histogram, never an embedded fit -- same
-//                       split as Step 2's QA_data/QA_mc +
-//                       AsymmetryDistributions.h's FitGaussianGuide.
-//   response_summary : JES and JER vs pT_gen, one canvas per (quantity,
-//                       variant) with all three collections overlaid (same
-//                       incl/tag/probe 3-color scheme as Kinematics.h's
-//                       overview overlay).
-// Plus, per (cone, collection): a variant-comparison overlay -- corr/reco/raw
-// JES (and separately JER) vs pT_gen on one canvas, to see directly how much
-// response this framework's correction buys over the ntuple's own
-// correction and over no correction at all.
-// eta_reco-binned plots are deliberately not produced yet (extraction
-// doesn't slice on that axis -- see ResponseExtractor.h).
-// Expects a runResponse output file; gracefully does nothing if the input
-// has no response objects (e.g. any other step's output).
-// ============================================================
+// runResponse (JES/JER) QA + summary plots. Three variants per
+// (cone, collection = incl/tag/probe): corr/reco/raw -- see ResponseExtractor.h.
+//   response_dist:     raw distribution + Gaussian guide fit, refit here
+//                       (extraction only writes the raw histogram).
+//   response_summary:  JES/JER vs pT_gen, incl/tag/probe overlaid.
+//   response_variants: corr/reco/raw overlaid, one per collection.
+// eta_reco-binned plots not produced yet (extraction doesn't slice on that axis).
+// No-op if the input has no response objects.
 
 static const char *const kResponseCollections[] = {"incl", "tag", "probe"};
 static constexpr int kNResponseCollections = 3;
@@ -61,12 +40,8 @@ static const char *const kResponseVariantLabels[] = {"p_{T}^{corr}/p_{T}^{gen}",
                                                      "p_{T}^{raw}/p_{T}^{gen}"};
 static constexpr int kNResponseVariants = 3;
 
-// pT_gen is the binning variable for every JES/JER-vs-pT_gen plot below --
-// JetMET's own refpt ("reference"/gen-matched jet pT in JRA terminology) is
-// the closest honest equivalent, so its axis-title convention is used here
-// rather than a locally hardcoded string. The response-ratio axes above
-// (kResponseVariantLabels) have no such equivalent -- VARIABLES has no
-// "response ratio" concept -- and stay local.
+// pT_gen axis title uses JetMET's refpt convention; response-ratio labels
+// stay local (no JME equivalent)
 static const TString kPtGenAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::refpt, true);
 
@@ -220,10 +195,7 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   delete c; // cascade-deletes h[*], leg, lab (and rl if drawn)
 }
 
-// Overlays the three response variants (corr/reco/raw) for one fixed
-// collection on a single canvas -- directly answers "how much response does
-// this framework's correction buy over the ntuple's own correction, and over
-// no correction at all" for JES (and separately JER) vs pT_gen.
+// overlays corr/reco/raw for one collection: JES/JER vs pT_gen
 inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
                                   const TString &cone,
                                   const TString &collection,
@@ -326,10 +298,8 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
   for (int ic = 0; ic < kNResponseCollections; ic++) {
     const TString collection = kResponseCollections[ic];
 
-    // ---- QA distributions vs pt_gen, one per response variant -- bin
-    // edges read back from each variant's own JES-vs-ptgen output
-    // histogram axis rather than re-deriving them, so this stays correct
-    // even if BinningConfig.pt ever changes ----
+    // QA dists vs pt_gen; bin edges read from each variant's own JES output,
+    // not re-derived
     for (int iv = 0; iv < kNResponseVariants; iv++) {
       const TString variant = kResponseVariants[iv];
       TString jesName =
@@ -353,7 +323,7 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
     }
   }
 
-  // ---- per-variant summary: 3 collections overlaid per canvas ----
+  // per-variant summary: 3 collections overlaid
   for (int iv = 0; iv < kNResponseVariants; iv++) {
     const TString variant = kResponseVariants[iv];
     DrawResponseSummary(fIn, outDir, cone, "JES", {variant, "vs_ptgen"},
@@ -362,7 +332,7 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                         kPtGenAxisTitle, "JER_" + variant + "_vs_ptgen", pb);
   }
 
-  // ---- variant comparison: corr/reco/raw overlaid per canvas, one per collection ----
+  // variant comparison: corr/reco/raw overlaid, one per collection
   for (int ic = 0; ic < kNResponseCollections; ic++) {
     DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic], "JES",
                           pb);

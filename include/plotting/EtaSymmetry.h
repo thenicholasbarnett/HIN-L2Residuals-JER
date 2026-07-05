@@ -13,11 +13,8 @@
 #include "Naming.h"
 #include "ProgressBar.h"
 
-//
-// For each (cone, method, ptavg slice): one canvas with
-//   top panel  : full-eta corrections + |eta| reflected, reference at 1
-//   bottom panel : (full eta) / (reflected |eta|)
-// ============================================================
+// Eta symmetry check. One canvas per (cone, method, ptavg slice): top =
+// full-eta corrections + |eta| reflected, bottom = full/reflected ratio.
 
 inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
@@ -52,7 +49,7 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
                kMethodKeys[m], ptKey.Data());
       TwoPad cv = MakeTwoPad(cvName);
 
-      // ---- main pad ----
+      // main pad
       cv.main->cd();
       cv.main->SetGridx();
       cv.main->SetGridy();
@@ -92,7 +89,7 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
                           kMethodLabels[m], sl.title.Data(),
                           CalibTag(useJer).Data()));
 
-      // ---- ratio pad ----
+      // ratio pad
       cv.ratio->cd();
       cv.ratio->SetGridx();
       cv.ratio->SetGridy();

@@ -44,7 +44,7 @@ int main() {
   std::remove(inputPath);
   std::remove(outputPath);
 
-  // ---- build a synthetic Step 1 MC output file (ak4PF, incl collection only) ----
+  // synthetic Step 1 MC output file (ak4PF, incl collection only)
   // corrPt, rawPt, and jtPt all use the same symmetric response values so
   // JES(corr)=JES(reco)=JES(raw)~1.0 by construction -- this test checks
   // the extraction plumbing (all three variants, entry-count guard), not
@@ -78,10 +78,8 @@ int main() {
     delete fo;
   }
 
-  // ---- run the real extraction ----
   runResponse(inputPath, outputPath);
 
-  // ---- verify output ----
   TFile *fIn = TFile::Open(outputPath, "read");
   Check(fIn && !fIn->IsZombie(), "output file opens");
   if (!fIn || fIn->IsZombie()) {

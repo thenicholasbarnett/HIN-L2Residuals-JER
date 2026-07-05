@@ -7,11 +7,9 @@
 #include <vector>
 #include <utility>
 
-// declaring event stucture
 template <Int_t MAXNREF> struct JetStruct {
 
-  // jet variables //
-  // more than any number of jets in an event in ttrees being processed
+  // upper bound on jets per event across all input ttrees
   static constexpr Int_t maxnref = MAXNREF;
 
   // reco jets
@@ -53,7 +51,6 @@ template <Int_t MAXNREF> struct JetStruct {
     Float_t phi[MAXNREF];
   } gen;
 
-  // mapping variables to branches
   std::vector<std::pair<TString, void *>> BranchMap(bool isMC) {
     std::vector<std::pair<TString, void *>> map = {
         {"nref", &reco.nref},     {"rawpt", reco.rawpt},

@@ -29,7 +29,6 @@ int main() {
 
   BinningConfig bins;
 
-  // ── data mode: no response histograms ───────────────────────────────────
   std::cout << "\n[1] Data mode: no response histograms" << std::endl;
   {
     ConeHistograms h;
@@ -39,7 +38,6 @@ int main() {
     Check(h.hProbeJetResp == nullptr, "hProbeJetResp null in data mode");
   }
 
-  // ── MC mode: response histograms are created ────────────────────────────
   std::cout << "\n[2] MC mode: response histograms created" << std::endl;
   ConeHistograms h;
   h.Init("test_mc", bins, true);
@@ -47,12 +45,9 @@ int main() {
   Check(h.hTagJetResp != nullptr, "hTagJetResp created in MC mode");
   Check(h.hProbeJetResp != nullptr, "hProbeJetResp created in MC mode");
 
-  // ── FillInclJetResp: matched jet lands at (eta_reco, pT_gen, corrPt/pT_gen,
-  // jtPt/pT_gen, rawPt/pT_gen) ─────────────────────────────────────────────
-  // Values are chosen away from axis bin edges (pT/pT_gen bins are 10-wide,
-  // response bins are 0.01-wide) and exactly representable in float, so
-  // there's no float->double rounding ambiguity at a boundary between this
-  // fill and the test's independent FindBin lookup below.
+  // values are exactly representable in float and away from bin edges, so
+  // there's no float->double rounding ambiguity against the independent
+  // FindBin lookup below
   std::cout << "\n[3] FillInclJetResp: matched jet" << std::endl;
   {
     // corrPt=105, rawPt=88, jtPt=100, eta=0.13, refPt=80
@@ -67,7 +62,6 @@ int main() {
           "matched jet fills all three response ratios correctly");
   }
 
-  // ── FillInclJetResp: unmatched jet (refPt < 0) is dropped ───────────────
   std::cout << "\n[4] FillInclJetResp: unmatched jet skipped" << std::endl;
   {
     Long64_t before = h.hInclJetResp->GetNbins();
@@ -76,7 +70,6 @@ int main() {
     Check(before == after, "unmatched jet (refPt<0) does not add a filled bin");
   }
 
-  // ── FillResp: tag matched, probe unmatched, independent per-leg ────────
   std::cout << "\n[5] FillResp: tag matched, probe unmatched" << std::endl;
   {
     float pt[] = {117.0f, 80.0f}; // corrPt

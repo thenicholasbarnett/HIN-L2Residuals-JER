@@ -16,38 +16,24 @@
 
 #include <algorithm>
 
-// ============================================================
-// Plot type: Event-level QA
+// Event-level QA. Reads control histograms from runAsymmetry:
+//   hvz_all/hvz: vz before/after cuts
+//   hfilt: pprimaryVertexFilter (DATA only)
+//   h_hlt_j80: HLT_AK4PFJet80 bits (hard-probe DATA only)
+// Expects a Step-1 file; skips histograms that are absent (e.g. on MC).
 //
-// Reads event-level control histograms written by runAsymmetry:
-//   hvz_all   : vz before any cuts
-//   hvz       : vz after vz + vertex filter cuts
-//   hfilt     : pprimaryVertexFilter (DATA only)
-//   h_hlt_j80 : HLT_AK4PFJet80 bits (hard-probe DATA only)
-//
-// Expects a Step-1 runAsymmetry output file; gracefully skips
-// histograms that are absent (e.g. hfilt/h_hlt_j80 on MC).
-// ============================================================
-
-// This plot family uses the vendored JetMET setTDRStyle()/CMS_lumi()
-// (external/jetmet/RootStyle.h, Style.h) instead of this repo's own
-// SetupPlotStyle()/DrawCMSInternalHeader() -- a contained trial before
-// deciding whether to roll it out further; see FinalCorrections.h for the
-// other piloted family. setTDRStyle() replaces the *global* gStyle, so it's
-// saved and restored around this function's drawing calls rather than left
-// to leak into other (non-piloted) plot families in the same runPlotting()
-// call.
-// SetupPlotStyle() is re-applied immediately after setTDRStyle() to layer
-// this repo's own repo-specific overrides on top -- most importantly the
-// gray grid color, since tdrStyle's own SetGridColor(0) would otherwise
-// render an invisible (white-on-white) grid where c->SetGridx()/SetGridy()
-// are already called below.
+// Pilots the vendored JetMET setTDRStyle()/CMS_lumi() instead of this
+// repo's SetupPlotStyle()/DrawCMSInternalHeader() (see FinalCorrections.h,
+// the other piloted family). gStyle is global, so it's saved/restored
+// around this function. SetupPlotStyle() runs again after setTDRStyle() to
+// put this repo's gray grid color back -- tdrStyle's own grid is otherwise
+// invisible (white-on-white).
 inline void PlotEvent(TFile *fIn, const TString &outDir, ProgressBar &pb) {
   TStyle *prevStyle = gStyle;
   setTDRStyle();
   SetupPlotStyle();
 
-  // ---- vz: all events vs after cuts ----
+  // vz: all events vs after cuts
   {
     TH1D *hall = (TH1D *)fIn->Get("hvz_all");
     TH1D *hvz = (TH1D *)fIn->Get("hvz");
@@ -102,7 +88,7 @@ inline void PlotEvent(TFile *fIn, const TString &outDir, ProgressBar &pb) {
     }
   }
 
-  // ---- primary vertex filter ----
+  // primary vertex filter
   {
     TH1I *hfilt = (TH1I *)fIn->Get("hfilt");
     if (hfilt) {
@@ -130,7 +116,7 @@ inline void PlotEvent(TFile *fIn, const TString &outDir, ProgressBar &pb) {
     }
   }
 
-  // ---- HLT trigger ----
+  // HLT trigger
   {
     TH1I *htrig = (TH1I *)fIn->Get("h_hlt_j80");
     if (htrig) {

@@ -10,50 +10,34 @@ The goal is not to make the code look "machine perfect." The goal is to make it 
 
 ## Guiding Style
 
-Keep the local C++/ROOT style:
+**Mechanical style (spacing, braces, alignment) is entirely `.clang-format`'s job — run it, don't hand-author it.** (2026-07-05: reconciled with Nicky — an earlier version of this doc hand-specified a spaced-paren convention, `if ( condition )`, as the target and assigned bringing the repo into line with it to Phase 3. That was never actually encoded in `.clang-format`, which is `BasedOnStyle: LLVM` + `ReflowComments: false` + `SortIncludes: false` + `InsertBraces: true` — real output is unspaced parens and clang-format-inserted braces, see below. `.clang-format` is the actual source of truth now; this doc's job is comments and things a formatter can't decide, not re-describing what `clang-format -style=file` already produces.)
 
 ```cpp
-if ( condition ) { continue; }
-if ( !ptr ) { return; }
-for ( size_t i = 0; i < n; i++ ) { ... }
-functionCall( arg1, arg2 );
+if (condition) {
+  continue;
+}
+if (!ptr) {
+  return;
+}
+for (size_t i = 0; i < n; i++) {
+  ...
+}
+functionCall(arg1, arg2);
 ```
 
-(2026-07-04: confirmed directly with Nicky — this spaced format, `if (`/`for (` with a space before the paren, is the real target, for everything. An earlier pass in this doc briefly "corrected" this to match the *existing* codebase's dominant convention (`if(` no space, 303 instances) — that was backwards; the existing convention is what's being changed, not preserved. Applying this repo-wide is Phase 3's job, not something to do ad hoc.)
-
-Use spacing to make expressions readable. Do not use spacing to line up columns across unrelated lines.
-
-Prefer this:
+`InsertBraces: true` means every `if`/`for`/`while`, including one-line bodies and guard clauses, gets braces on format — no bare `if (x) return;` survives a pass. No column alignment on declarations/assignments — clang-format's LLVM base already defaults to no consecutive-alignment, so this falls out for free:
 
 ```cpp
-std::string input = cl.getValue<std::string>( "input" );
-std::string output = cl.getValue<std::string>( "output" );
-bool useNorm = cl.getValue<bool>( "norm", true );
-```
-
-Avoid this:
-
-```cpp
-std::string input   = cl.getValue<std::string>( "input" );
-std::string output  = cl.getValue<std::string>( "output" );
-bool        useNorm = cl.getValue<bool>( "norm", true );
+std::string input = cl.getValue<std::string>("input");
+std::string output = cl.getValue<std::string>("output");
+bool useNorm = cl.getValue<bool>("norm", true);
 ```
 
 Comments should mostly answer "why." Short section labels are fine when they help navigation. Long failure histories should move to docs unless they are needed right beside the code.
 
-Comment brevity is a hard target. After cleanup, the default should be no comment. Add one only when it helps a reader avoid a real misunderstanding. A comment should usually be one short line. Multi-line comments are allowed for physics choices, ROOT ownership/lifetime traps, CMS text-file formats, and build quirks that cannot be made clear by naming.
+Comment brevity is a hard target. After cleanup, the default should be no comment. Add one only when it helps a reader avoid a real misunderstanding. A comment should usually be one short line. Multi-line comments are allowed for physics choices, ROOT ownership/lifetime traps, CMS text-file formats, and build quirks that cannot be made clear by naming. `ReflowComments: false` means clang-format never touches comment wording or wraps them — comment content is entirely hand-authored, always.
 
-Style reference: `CMS_2026PbPb` is closer to the desired voice than the current L2Residuals build/Condor layer. It uses short section markers like `// looping over events`, direct comments like `// event objects`, and compact guards. The cleanup should borrow that restraint, while keeping the slightly more spaced L2Residuals control-flow convention:
-
-```cpp
-if ( condition ) { continue; }
-```
-
-not the tighter old style:
-
-```cpp
-if(condition){continue;}
-```
+Style reference: `CMS_2026PbPb` is closer to the desired voice than the current L2Residuals build/Condor layer. It uses short section markers like `// looping over events`, direct comments like `// event objects`, and compact guards. The cleanup should borrow that restraint for comments; control-flow spacing is `.clang-format`'s call, not a voice choice.
 
 ## What Feels Off Today
 

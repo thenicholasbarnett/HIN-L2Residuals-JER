@@ -61,7 +61,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     return;
   }
 
-  // find the trigger cone
+  // find trigger cone
   size_t trigConeIdx = nCones;
   for (size_t c = 0; c < nCones; c++) {
     if (cfg.coneLabels[c] == cfg.trigCone) {
@@ -75,8 +75,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     return;
   }
 
-  // chain L2Residual files onto the base JEC for data only -- mode decides
-  // this, never the TOML
+  // L2Residuals applied to data only
   std::vector<JetCorrector> jecs;
   jecs.reserve(nCones);
   for (size_t c = 0; c < nCones; c++) {
@@ -118,20 +117,20 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
   for (size_t c = 0; c < nCones; c++) {
     trees[c] = (TTree *)fi->Get(cfg.jetTreePaths[c]);
     if (!trees[c]) {
-      std::cerr << "Missing jet tree " << cfg.jetTreePaths[c] << " in " << input
+      std::cerr << "Missing jet TTree " << cfg.jetTreePaths[c] << " in " << input
                 << "\n";
       return;
     }
   }
   trees[kEvtIdx] = (TTree *)fi->Get(cfg.hiTreePath);
   if (!trees[kEvtIdx]) {
-    std::cerr << "Missing HiTree in " << input << "\n";
+    std::cerr << "Missing HiTree " << cfg.hiTreePath << " in " << input << "\n";
     return;
   }
   if (mode != RunMode::MC) {
     trees[kSkimIdx] = (TTree *)fi->Get(cfg.skimTreePath);
     if (!trees[kSkimIdx]) {
-      std::cerr << "Missing skim tree in " << input
+      std::cerr << "Missing skim TTree " << cfg.skimTreePath << " in " << input
                 << "\n(check cfg/2024ppRef.toml)\n";
       return;
     }
@@ -139,7 +138,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
   if (mode == RunMode::Triggered) {
     trees[kTrigIdx] = (TTree *)fi->Get(cfg.trigTreePath);
     if (!trees[kTrigIdx]) {
-      std::cerr << "Missing HLT tree in " << input
+      std::cerr << "Missing HLT TTree " << cfg.trigTreePath << " in " << input
                 << "\n(check cfg/2024ppRef.toml)\n";
       return;
     }
@@ -158,7 +157,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     SetBranches(trees[kTrigIdx], {{cfg.hltJ80Branch, &hlt_j80}});
   }
 
-  // event histograms
+  // event hists
   TH1D *hvz_all = new TH1D("hvz_all", "all events;v_{z} (cm);N", 40, -20, 20);
   TH1D *hvz = new TH1D("hvz", "after vz+filter;v_{z} (cm);N", 40, -20, 20);
   TH1I *hfilt = (mode != RunMode::MC)
@@ -168,18 +167,18 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
                     ? new TH1I("h_hlt_j80", "HLT_AK4PFJet80;bit;N", 2, 0, 2)
                     : nullptr;
 
-  // per-cone histograms
+  // jet hists
   BinningConfig bins;
   std::vector<ConeHistograms> cones(nCones);
   for (size_t c = 0; c < nCones; c++) {
     cones[c].Init(cfg.coneLabels[c], bins, isMC);
   }
 
-  // corrected pT buffer: corrPt[cone][jet]
+  // corrected jet pT buffer: corrPt[cone][jet]
   std::vector<std::vector<float>> corrPt(nCones,
                                          std::vector<float>(kNRefMax, 0.0f));
 
-  // sorted leading-jet indices
+  // sorted leading jet indices
   std::vector<SortedJets> sorted(nCones);
 
   // event loop
@@ -196,7 +195,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       continue;
     }
 
-    // ppvF filter
+    // primary vertex filter
     if (mode != RunMode::MC) {
       trees[kSkimIdx]->GetEntry(i);
       hfilt->Fill(filters.ppvF);
@@ -206,7 +205,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     }
     hvz->Fill(event.vz);
 
-    // trig
+    // jet trigger hist
     if (mode == RunMode::Triggered) {
       trees[kTrigIdx]->GetEntry(i);
       h_j80->Fill(hlt_j80);
@@ -217,7 +216,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       continue;
     }
 
-    // jet trees (nref)
+    // jet trees
     for (size_t c = 0; c < nCones; c++) {
       trees[c]->GetEntry(i);
     }
@@ -227,7 +226,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
 
     const float weight = event.w;
 
-    // JEC
+    // applying JEC
     for (size_t c = 0; c < nCones; c++) {
       for (int j = 0; j < jets[c].reco.nref; j++) {
         jecs[c].SetJetPT(jets[c].reco.rawpt[j]);
@@ -237,12 +236,12 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       }
     }
 
-    // sort
+    // sorted structure of jet indices per cone
     for (size_t c = 0; c < nCones; c++) {
       sorted[c] = FindLeadingJets(corrPt[c].data(), jets[c].reco.nref);
     }
 
-    // trigger efficiency cut
+    // cutting on trigger pT threshold near full efficiency
     if (mode == RunMode::Triggered) {
       if (hlt_j80 == 0) {
         continue;
@@ -253,7 +252,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       }
     }
 
-    // jet ID -> dijet -> |A| -> fill
+    // jet ID -> dijet -> A -> fill
     for (size_t c = 0; c < nCones; c++) {
 
       // inclusive jets
@@ -273,7 +272,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
         continue;
       }
 
-      // jet ID
+      // jet ID & veto map applied to all jets used in this analysis
       auto &pf = jets[c].reco.pf;
       if (!js.JetSelection(jets[c].reco.eta[sorted[c].lead],
                            jets[c].reco.phi[sorted[c].lead],

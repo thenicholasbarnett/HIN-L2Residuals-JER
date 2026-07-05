@@ -1,12 +1,21 @@
-// CMake:       ./build/bin/runAsymmetry -input in.root -output out.root -mode triggered|non-triggered|mc [-maxevents n] -config path
-//              ./build/bin/runAsymmetry args.config  (with lines like: input = in.root)
-// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runAsymmetry.C("in.root","out.root")'
-//              (build the library first: cmake --build build)
-//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+
+// USAGE
 //
-// CLI details (CommandLine parser, config files, case-sensitivity): see
-// README's Command-Line Convention section.
+// Binary:
+//
+// ./build/bin/runAsymmetry \
+//   -input in.root \
+//   -output out.root \
+//   -mode triggered|non-triggered|mc \
+//   # -maxevents n \
+//   -config path
+// 
+// ./build/bin/runAsymmetry args.config  # config file lines: key = value
+//
+// Interpreted: 
+//
+// export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
+// root -l -b -q 'macros/runAsymmetry.C("in.root", "out.root")'
 
 #ifdef __CLING__
 // clang-format off
@@ -28,12 +37,12 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include <cstdlib>
 #include <exception>
 #include <iostream>
+
 int main(int argc, char *argv[]) {
   static const char *const kUsage =
       "Usage: runAsymmetry -input in.root -output out.root"
       " -mode triggered|non-triggered|mc [-maxevents n] -config path\n"
-      "       runAsymmetry args.config   # config file lines use: key = "
-      "value\n";
+      "       runAsymmetry args.config   # config file lines use: key = value\n";
 
   CommandLine cl;
   if (!cl.parse(argc, argv))

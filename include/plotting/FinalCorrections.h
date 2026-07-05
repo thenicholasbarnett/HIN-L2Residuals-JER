@@ -21,26 +21,11 @@
 
 #include <vector>
 
-// ============================================================
-// Plot type 6: Final extrapolated values, all pT slices overlaid
-//
-// For each (cone, method): two canvases
-//   finals_{cone}_{method}_abseta  : R_data/R_MC at alpha→0 vs |eta|, all pT bins overlaid
-//   finals_{cone}_{method}_fulleta : same vs full eta
-// PlotEtaSym does the |eta|-vs-fulleta symmetry check per pT slice; this overlays pT slices.
-//
-// Uses the vendored JetMET setTDRStyle()/CMS_lumi() (external/jetmet/
-// RootStyle.h, Style.h) instead of this repo's own SetupPlotStyle() -- one
-// of two plot families piloting that, alongside EventQA.h. Unlike every
-// other plot family, PlotFinals never called DrawCMSInternalHeader() (it
-// draws its own descriptive "cone | method | xTitle | JEC/JER" title
-// instead), so CMS_lumi() is a new label here, not a swap -- the existing
-// custom title is nudged down to avoid the two overlapping (see the
-// y-position at that call site). setTDRStyle() replaces the *global*
-// gStyle, so it's saved/restored around this function, matching EventQA.h,
-// to avoid leaking into other (non-piloted) plot families in the same
-// runPlotting() call.
-// ============================================================
+// Final extrapolated values, all pT slices overlaid.
+// finals_{cone}_{method}_abseta/fulleta: R_data/R_MC at alpha->0 vs eta.
+// Uses the vendored JetMET setTDRStyle()/CMS_lumi() instead of this repo's
+// SetupPlotStyle() (piloted here and in EventQA.h); gStyle is saved/restored
+// around the call so it doesn't leak into other plot families.
 
 inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
@@ -75,16 +60,10 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
           break;
         }
 
-      // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
-      // method) instead of per-slice histograms. Project each pT slice's row
-      // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
-      // grid's Y edges are built from exactly those slices in order. No JER SF
-      // equivalent exists yet (runTextFile doesn't write one) -- this fallback
-      // is JEC-only regardless of useJer, so a JER request against a Step 3
-      // file simply finds nothing, same as any other unmet flag.
+      // Step 3 stores one TH2D grid per (cone, etaMode, method); fall back to
+      // projecting each pT slice's row. JEC-only -- no JER SF grid exists yet.
       if (!anyValid && !useJer) {
-        // Step 3 stores only whichever of direct/kFSR-norm it was run with.
-        // Try norm first (matches PlotAlphaFit's convention), then direct.
+        // try norm first (matches PlotAlphaFit), then direct
         TString gridName =
             L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[m]});
         TString gridNormName = gridName + "_norm";
@@ -122,10 +101,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       c->SetGridy();
 
       auto [ylo, yhi] = YRange(hists);
-      // Closure passes are checking R_MC/R_data ~= 1 to a tight tolerance --
-      // fixed 0.95-1.05 range with 0.99/1.01 guide lines reads that much
-      // more clearly than the auto-scaled range used for the correction
-      // derivation itself.
+      // closure passes check R_MC/R_data ~= 1 to a tight tolerance
       if (isClosure) {
         ylo = 0.95;
         yhi = 1.05;
@@ -165,10 +141,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       rl->Draw();
 
       if (isClosure) {
-        // Distinct accent color + heavier weight than the plain gray
-        // dotted gridlines (gStyle's own grid is also style 3 at every
-        // 0.01 here) -- same gray would make these guide lines
-        // indistinguishable from the automatic grid.
+        // distinct accent color -- plain gray would be invisible against the grid
         TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
         rl99->SetLineStyle(3);
         rl99->SetLineColor(HiroshigeLightRed());
@@ -184,11 +157,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
 
       leg->Draw();
 
-      // CMS_lumi's two-line "CMS"/"Internal" block runs from about
-      // y=0.92 ("CMS" baseline) down to y=0.875 ("Internal" baseline)
-      // under tdrStyle's margins -- verified visually, an initial
-      // y=0.86 for the line below still collided with "Internal"'s
-      // own font extent. y=0.78 clears it with real margin.
+      // y=0.78 clears CMS_lumi's "CMS"/"Internal" block (verified visually;
+      // y=0.86 still collided)
       CMS_lumi(c, 16, 11);
 
       TLatex *tex = new TLatex();

@@ -25,9 +25,7 @@
 #include <utility>
 #include <vector>
 
-// ============================================================
-// Canvas / pad helpers
-// ============================================================
+// canvas / pad helpers
 
 inline void RealAspectRatio(TCanvas *c) {
   if (!gROOT->IsBatch())
@@ -65,9 +63,7 @@ inline TwoPad MakeTwoPad(const TString &name) {
   return cv;
 }
 
-// ============================================================
 // ROOT object retrieval / cloning
-// ============================================================
 
 // Clone h from file, disassociate from directory so the canvas can own it cleanly.
 inline TH1D *GetH(TFile *f, const TString &name) {
@@ -152,9 +148,7 @@ inline TH2D *GetH2Any(TFile *f, const std::vector<TString> &names) {
   return nullptr;
 }
 
-// ============================================================
-// Histogram math helpers
-// ============================================================
+// histogram math helpers
 
 // Mirror an |eta| TH1D (kAbsEtaEdges, 18 bins) onto a full-eta TH1D (kEtaEdges, 36 bins).
 // Full-eta bin i (1-indexed): i <= 18 → |eta| bin (18-i+1),  i > 18 → |eta| bin (i-18).
@@ -209,9 +203,7 @@ inline std::pair<double, double> YRange(const std::vector<TH1D *> &hv,
   return {lo - pad * span, hi + pad * span};
 }
 
-// ============================================================
-// Plot path helpers
-// ============================================================
+// plot path helpers
 
 inline TString PlotDir(const TString &outDir, const TString &cone,
                        const TString &plotType,
@@ -242,10 +234,7 @@ inline TString MakePlotDir(const TString &prefix = "plots") {
   return dir;
 }
 
-// ============================================================
-// Transplanted from top-level include/Utilities.h: plotting
-// presentation infrastructure, not general analysis infrastructure.
-// ============================================================
+// plotting-presentation helpers transplanted from top-level Utilities.h
 
 struct PlotConfig {
   TString runNumber = "";

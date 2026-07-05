@@ -12,33 +12,28 @@ No AI/assistant-tool name, no "generated with," no watermark of any kind — not
 
 ## Control flow and spacing
 
-```cpp
-if ( condition ) { continue; }
-if ( !ptr ) { return; }
-for ( size_t i = 0; i < n; i++ ) { ... }
-while ( cond ) { ... }
-functionCall( arg1, arg2 );
-```
+**`.clang-format` is the source of truth for all of this — run it, don't hand-format to match prose.** `if (`/`for (`/`while (` spacing, brace insertion (including one-line bodies and guard clauses — `InsertBraces: true` means no bare `if (x) return;` survives a format pass), no column alignment on declarations/assignments/struct members: all mechanical, all enforced by running `clang-format -style=file` over a file. If a formatted file doesn't look like the example below, the `.clang-format` config is wrong or stale — fix the config, don't hand-diverge from it.
 
-- Space between the control keyword and `(`: `if (`, `for (`, `while (` — not `if(`.
-- Space just inside both the condition parens and the body braces: `if ( x ) { y; }`.
-- No space between a function/method name and its `(`: `functionCall( arg )`, not `functionCall ( arg )`.
-- **Every `if`/`for`/`while`, including one-line bodies and guard clauses, uses `{ }`.** No bare `if ( x ) return;`.
-- This is the target going forward — most of the existing codebase currently uses `if( x ){` with no space before the paren. Bringing existing code in line with the new spacing is Phase 3 (Mechanical Spacing Cleanup) of `cleanup_plan.md`, not something to chase file-by-file outside that phase.
-
-No column alignment on declarations, assignments, or struct members — one line each, no padding to a shared column. Alignment is fine only for genuine tables (bin-edge arrays, lookup tables) where the columns really are data.
+Real output from this repo's `.clang-format` (LLVM base + `ReflowComments: false`, `SortIncludes: false`, `InsertBraces: true`):
 
 ```cpp
-// prefer
-std::string input = cl.getValue<std::string>( "input" );
-std::string output = cl.getValue<std::string>( "output" );
-
-// avoid
-std::string input   = cl.getValue<std::string>( "input" );
-std::string output  = cl.getValue<std::string>( "output" );
+if (condition) {
+  continue;
+}
+if (!ptr) {
+  return;
+}
+for (size_t i = 0; i < n; i++) {
+  ...
+}
+functionCall(arg1, arg2);
 ```
 
-Casts stay C-style — `( Type )value`, not `static_cast<Type>( value )`. Matches ROOT/CMS convention and the rest of this codebase.
+No space inside the condition parens, no space between a function name and its `(` — this superseded an earlier draft of this doc that wanted `if ( x )` spacing; that was never actually encoded in `.clang-format` and isn't the real target. `.clang-format` wins.
+
+Alignment is fine only for genuine tables (bin-edge arrays, lookup tables) where the columns really are data — clang-format won't auto-align those (they're not consecutive declarations/assignments), so hand-alignment there is still yours to keep.
+
+Casts stay C-style — `(Type)value`, not `static_cast<Type>(value)`. clang-format doesn't rewrite cast style either way, so this is a manual convention, not something a format pass enforces — matches ROOT/CMS convention and the rest of this codebase.
 
 Variable names like `fi`, `fo`, `dcs`, `js` stay as-is. That's the author's real working style, not a mistake to fix.
 

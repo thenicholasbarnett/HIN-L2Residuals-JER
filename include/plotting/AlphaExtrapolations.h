@@ -15,13 +15,8 @@
 #include "Naming.h"
 #include "ProgressBar.h"
 
-// ============================================================
-// Plot type 5: Alpha fit plots
-//
-// For each (cone, method, pT slice, eta bin): one canvas showing
-//   all 9 alpha threshold points with fit line drawn only through [0, 0.31],
-//   points at alpha > 0.30 are shown but outside the fit line.
-// ============================================================
+// Alpha fit plots. One canvas per (cone, method, pT slice, eta bin): all
+// alpha threshold points, fit line drawn only through [0, 0.30].
 
 inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
                          const BinningConfig &bins, ProgressBar &pb,

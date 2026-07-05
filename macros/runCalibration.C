@@ -1,17 +1,21 @@
-// CMake:       ./build/bin/runCalibration -data data.root -mc mc.root -output out.root -mode jec -config path
-//              ./build/bin/runCalibration -data data.root -mc mc.root -output out.root -mode jer -config path
-//              ./build/bin/runCalibration args.config  (with lines like: data = data.root)
-// Interpreted: export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  (required -- no implicit default)
-//              root -l -b -q 'macros/runCalibration.C("data.root","mc.root","out.root","jec")'
-//              (build the library first: cmake --build build)
-//              (for interpreted ROOT, run from the repo root or set L2RESIDUALS_HOME)
+
+// USAGE
 //
-// -mode jec  -- extract L2Residual correction (mean of A distribution)
-// -mode jer  -- extract JER scale factor (stddev of A distribution)
-// Mode is required -- no default; each mode is its own pass and output file.
+// Binary:      
 //
-// CLI details (CommandLine parser, config files, case-sensitivity): see
-// README's Command-Line Convention section.
+// ./build/bin/runCalibration \
+//   -data data.root \
+//   -mc mc.root \
+//   -output out.root \
+//   -mode jec \
+//   -config path
+//
+//./build/bin/runCalibration args.config  # config file lines: key = value
+//
+// Interpreted:
+//
+// export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
+// root -l -b -q 'macros/runCalibration.C("data.root", "mc.root", "out.root", "jec")'
 
 #ifdef __CLING__
 // clang-format off

@@ -60,19 +60,16 @@ TString ResolvePath(const TString &path, const std::string &root) {
 
 } // namespace
 
-// Main config vs. a closure config with different residual_files load
-// different physics, so this is always explicit, no default.
-// L2RESIDUALS_HOME is separate: relative-path resolution within an
-// already-chosen TOML (see ConfigRoot() below), not a config selector.
+// main calibration vs closure config w/ different residual_files load
+// L2RESIDUALS_HOME is within TOML (see ConfigRoot() below)
 std::string DefaultConfigPath() {
   const char *envConfig = std::getenv("L2RESIDUALS_CONFIG");
   if (envConfig && envConfig[0])
     return ResolveConfigPath(envConfig);
 
-  throw std::runtime_error("No config resolvable: set L2RESIDUALS_CONFIG, or "
-                           "pass CONFIG=path on the "
-                           "command line (compiled binaries), or an explicit "
-                           "path to LoadAnalysisConfig().");
+  throw std::runtime_error("No config: set L2RESIDUALS_CONFIG or "
+                           "pass CONFIG=path to binaries or "
+                           "set path to LoadAnalysisConfig()");
 }
 
 AnalysisConfig LoadAnalysisConfig(const std::string &path) {
@@ -120,8 +117,7 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
     cfg.jecFilesPerCone.push_back(std::move(files));
   }
 
-  // Optional: absent entirely, or empty per-cone, both mean "no residual
-  // correction chained in for this cone yet."
+  // Optional: absent or empty, both mean "no residuals for this cone yet"
   if (auto *residualArr = doc["jec"]["residual_files"].as_array()) {
     for (const auto &row : *residualArr) {
       std::vector<std::string> files;
@@ -133,9 +129,7 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
 
   for (const auto &v : *doc["binning"]["ptavg_edges"].as_array())
     cfg.ptavgEdges.push_back(v.value_or(0.0f));
-
-  // min_jet_pt gates both the incl-jet histogram and the dijet subleading
-  // cut; alpha's third-jet pT is exempt.
+    
   cfg.minJetPt = doc["cuts"]["min_jet_pt"].value_or(0.0f);
   cfg.dphiCut = doc["cuts"]["dphi"].value_or(0.0f);
   cfg.maxAbsA = doc["cuts"]["max_abs_a"].value_or(0.0f);
@@ -146,8 +140,7 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   cfg.responseGausFitHalfWidth =
       doc["cuts"]["response_gaus_fit_half_width"].value_or(0.3);
 
-  // Step 3 output selection only -- Step 2 always computes every method and
-  // eta mode regardless.
+  // Step 3 output selection
   cfg.defaultMethod = TString(
       doc["step3"]["default_method"].value_or(std::string("gauss")).c_str());
   cfg.etaModeOutput =

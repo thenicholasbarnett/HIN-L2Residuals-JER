@@ -15,13 +15,8 @@
 
 #include <vector>
 
-// ============================================================
-// Plot type 2: method comparison (gauss vs trunc90 vs trunc95)
-//
-// For each (cone, ptavg slice, eta type): one canvas with
-//   top panel  : all three methods overlaid
-//   bottom panel : trunc90/gauss and trunc95/gauss
-// ============================================================
+// method comparison (gauss vs trunc90 vs trunc95). One canvas per (cone,
+// ptavg slice, eta type): top = all three overlaid, bottom = trunc/gauss ratios.
 
 inline void PlotMethodComp(TFile *fIn, const TString &outDir,
                            const TString &cone, const BinningConfig &bins,
@@ -68,7 +63,7 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
                                 calibKey.Data(), etaMode.Data(), ptKey.Data());
     TwoPad cv = MakeTwoPad(cvName);
 
-    // ---- main pad ----
+    // main pad
     cv.main->cd();
     cv.main->SetGridx();
     cv.main->SetGridy();
@@ -110,7 +105,7 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
                         etaLabel.Data(), sl.title.Data(),
                         CalibTag(useJer).Data()));
 
-    // ---- ratio pad ----
+    // ratio pad
     cv.ratio->cd();
     cv.ratio->SetGridx();
     cv.ratio->SetGridy();

@@ -3,25 +3,15 @@
 
 #include "TString.h"
 
-// Reads a hadded Step 1 MC file (runAsymmetry MODE=mc) and, for each cone
-// and each of the three matched jet collections (incl/tag/probe), extracts
-// JES/JER for three response ratios read off the 5D (eta_reco, pT_gen,
-// corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen) response THnSparse (see
-// DijetHistograms.h):
+// Reads a hadded Step 1 MC file (runAsymmetry MODE=mc). For each cone and
+// each matched jet collection (incl/tag/probe), extracts JES/JER for three
+// response ratios off the 5D response THnSparse (see DijetHistograms.h):
 //   corr : this framework's L2Relative+L2Residual-corrected pT
 //   reco : the ntuple's own baked-in "jtpt" correction
 //   raw  : the ntuple's uncorrected "rawpt"
-// JES = mean of a Gaussian fit to the ratio, JER = sigma/mean of the same
-// fit (fractional resolution, standard CMS convention), as a function of
-// pT_gen (marginal over eta_reco and the other two ratio axes). Binning is
-// on the GEN pT, never reco: conditioning on truth directly is what makes
-// this an unbiased resolution measurement rather than a data-applicable
-// correction curve (binning by reco pT would bias the result via
-// falling-spectrum migration). eta_reco isn't gen-binned here -- the
-// correction is applied to a jet by its reconstructed eta in data, so the
-// axis stays in the sparse for a future eta_reco-binned extraction pass,
-// not marginalized away, but this pass doesn't slice on it yet. No
-// data-mode input exists -- the response THnSparses this reads are MC-only.
+// JES = Gaussian fit mean, JER = sigma/mean, vs pT_gen (never reco pT, to
+// avoid falling-spectrum migration bias). eta_reco stays in the sparse for
+// a future binned pass, not sliced on yet. MC-only.
 void runResponse(TString inputFile, TString outputFile);
 
 #endif

@@ -35,7 +35,6 @@ public:
     loadVetoMap(defaultPath, "jetvetomap_all");
   }
 
-  // Custom constructor
   JetSelect(const std::string &VetoMapPath,
             const std::string &HistName = "jetvetomap_all") {
     loadVetoMap(VetoMapPath, HistName);
@@ -91,16 +90,11 @@ public:
 
 #endif
 
-// How to use:
-// example of checking if jet passes selections for index 0 in an event
-
-// #include "JetSelection_pp.h"
-// JetSelect js("/path/to/file/JetVetoMap.root");
-// OR
-// JetSelect js;
-// jet veto maps are regularly uploaded to this GitHub repository: https://github.com/cms-jet/JECDatabase/tree/master/jet_veto_maps
-// latest veto map as of November 25th, 2025 can be quickly grabbed with wget https://github.com/cms-jet/JECDatabase/raw/refs/heads/master/jet_veto_maps/Winter25Prompt25/Winter25Prompt25_RunCDE.root
-// jet ID requirements suggested by JetMET here https://twiki.cern.ch/twiki/bin/view/CMS/JetID13p6TeV
-
-// if(!js.JetSelection(jteta[0],jtphi[0],jtPfCHF[0],jtPfNHF[0],jtPfCEF[0],jtPfNEF[0],jtPfMUF[0],jtPfCHM[0],jtPfNHM[0],jtPfCEM[0],jtPfNEM[0],jtPfMUM[0])){continue;}
-// Do your stuff
+// Usage:
+//   JetSelect js("/path/to/JetVetoMap.root");  // or JetSelect() for the EOS default
+//   if (!js.JetSelection(jteta[0], jtphi[0], jtPfCHF[0], jtPfNHF[0], jtPfCEF[0],
+//                         jtPfNEF[0], jtPfMUF[0], jtPfCHM[0], jtPfNHM[0],
+//                         jtPfCEM[0], jtPfNEM[0], jtPfMUM[0])) { continue; }
+//
+// Veto maps: https://github.com/cms-jet/JECDatabase/tree/master/jet_veto_maps
+// Jet ID: https://twiki.cern.ch/twiki/bin/view/CMS/JetID13p6TeV

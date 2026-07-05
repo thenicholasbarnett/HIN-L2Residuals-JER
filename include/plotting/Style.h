@@ -13,10 +13,8 @@
 
 #include <cmath>
 
-// ============================================================
-// Method palette: shared across every plot family that compares
-// Gauss / double-Gauss / trunc90 / trunc95.
-// ============================================================
+// method palette: shared across every plot family comparing
+// Gauss/double-Gauss/trunc90/trunc95
 
 static const char *const kMethodKeys[] = {"gauss", "doubleGauss", "trunc90",
                                           "trunc95"};
@@ -32,13 +30,9 @@ static constexpr int kNMethods = 4;
 static const Color_t kColFull = HiroshigeLightRed();
 static const Color_t kColRefl = HiroshigeNightBlue();
 
-// ============================================================
-// JEC (default, mean-derived) vs JER SF (stddev-derived) selector for
-// Step 2 plots reading intercept/R/R_data/R_mc-kind objects -- see
-// runCalibration's CALIBRATION=JEC|JER token. Object names differ by a
-// "_jer" suffix (CalibrationExtractor.cxx writes both kinds side by side);
-// CalibKind builds the right one from the base JEC-kind string.
-// ============================================================
+// JEC vs JER SF selector for Step 2 plots reading intercept/R/R_data/R_mc
+// objects (runCalibration's CALIBRATION=JEC|JER token); names differ by a
+// "_jer" suffix
 
 inline TString CalibKind(const TString &base, bool useJer) {
   return useJer ? base + "_jer" : base;
@@ -51,9 +45,7 @@ inline TString CalibYTitle(bool useJer) {
                 : "R_{MC}/R_{data} at #alpha#rightarrow0";
 }
 
-// ============================================================
-// Global plotting style
-// ============================================================
+// global plotting style
 
 inline void SetupPlotStyle() {
   gStyle->SetOptStat(0);
@@ -65,9 +57,7 @@ inline void SetupPlotStyle() {
   gErrorIgnoreLevel = kWarning;
 }
 
-// ============================================================
-// Histogram / line style helpers
-// ============================================================
+// histogram / line style helpers
 
 inline void StyleH(TH1D *h, Color_t col, int mstyle, float lw = 2.0f) {
   h->SetLineColor(col);
@@ -114,9 +104,7 @@ inline void TuneRatio(TH1D *h, const TString &xTitle, const TString &yTitle,
   h->GetYaxis()->SetRangeUser(ylo, yhi);
 }
 
-// ============================================================
 // CMS/internal labels and common text labels
-// ============================================================
 
 inline void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
                                   double y = 0.905) {

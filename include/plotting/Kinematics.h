@@ -21,22 +21,12 @@
 #include <algorithm>
 #include <cctype>
 
-// ============================================================
-// Plot type 7: Step-1 jet kinematics
-//
-// Reads the TH3D(eta, phi, pT) control histograms written by runAsymmetry:
-//   {cone}_incl, {cone}_tag, {cone}_probe
-//
-// For each cone and collection, writes pT, eta, phi projections plus eta-phi
-// maps above a few pT thresholds. This mode expects a Step-1 runAsymmetry file,
-// not a Step-2 residuals file.
-//
-// includeIncl: when false, skips the inclusive-jet collection (both its own
-// per-collection plots and its contribution to the incl/probe/tag overview
-// overlays), used by runPlotting's curated smart-default flag set, which
-// only wants tag+probe by default; explicit "kinematics" or "all" still get
-// all three collections.
-// ============================================================
+// Step-1 jet kinematics. Reads the TH3D(eta, phi, pT) control histograms
+// from runAsymmetry: {cone}_incl, {cone}_tag, {cone}_probe.
+// Per cone/collection: pT/eta/phi projections + eta-phi maps above a few pT
+// thresholds. Expects a Step-1 file, not Step-2 residuals.
+// includeIncl=false skips the inclusive collection (runPlotting's curated
+// smart default wants tag+probe only); explicit flags still get all three.
 
 static constexpr int kNKinematicsCollections = 3;
 struct KinematicsCollection {
@@ -49,11 +39,8 @@ static const KinematicsCollection kKinematicsCollections[] = {
 static constexpr int kNKinematicsPtMins = 3;
 static const double kKinematicsPtMins[] = {40.0, 100.0, 200.0};
 
-// incl/tag/probe here are all genuinely reconstructed jets (Step 1's real
-// data/MC jet collections, not gen-matched), so JetMET's jtpt/jteta ("Reco")
-// convention is the honest equivalent for these two axes. phi has no JetMET
-// Variables.hh entry at all, so it and the eta-phi map (which pairs eta with
-// phi and would look inconsistent with only one axis relabeled) stay local.
+// incl/tag/probe are genuinely reco jets, so JetMET's jtpt/jteta convention
+// applies; phi has no JME entry and stays local
 static const TString kRecoPtAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::jtpt, true);
 static const TString kRecoEtaAxisTitle =
@@ -107,8 +94,7 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
                            const TString &cone, bool includeIncl,
                            ProgressBar &pb) {
   {
-    // "_incl" is used purely as a marker that this is a Step-1 runAsymmetry
-    // file, independent of whether inclusive-jet plots are actually drawn below.
+    // "_incl" only marks this as a Step-1 file, regardless of includeIncl
     TH3D *hTest = (TH3D *)fIn->Get(cone + "/" + cone + "_incl");
     if (!hTest) {
       return;
