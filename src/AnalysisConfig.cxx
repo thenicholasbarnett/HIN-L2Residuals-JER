@@ -60,8 +60,8 @@ TString ResolvePath(const TString &path, const std::string &root) {
 
 } // namespace
 
-// which TOML loads is a physics-affecting choice (main config vs. a closure
-// config with different residual_files) -- always explicit, never a default.
+// Main config vs. a closure config with different residual_files load
+// different physics, so this is always explicit, no default.
 // L2RESIDUALS_HOME is separate: relative-path resolution within an
 // already-chosen TOML (see ConfigRoot() below), not a config selector.
 std::string DefaultConfigPath() {
@@ -120,7 +120,7 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
     cfg.jecFilesPerCone.push_back(std::move(files));
   }
 
-  // Optional — absent entirely, or empty per-cone, both mean "no residual
+  // Optional: absent entirely, or empty per-cone, both mean "no residual
   // correction chained in for this cone yet."
   if (auto *residualArr = doc["jec"]["residual_files"].as_array()) {
     for (const auto &row : *residualArr) {

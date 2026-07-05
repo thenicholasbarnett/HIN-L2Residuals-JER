@@ -406,6 +406,45 @@ Best time: continuously, but especially after CMake, SCRAM, and Condor changes.
 
 Reason: the cleanup is intended to be behavioral no-op unless explicitly stated.
 
+## Phase 12: Commit Message History (optional, high-risk, not scheduled)
+
+Not started. Written up 2026-07-04 at Nicky's request so the steps exist if
+this is ever picked up, without committing to doing it now.
+
+The problem: of 176 commits, the bulk read as uniform Capitalized-Imperative-
+Mood ("Rework JES/JER response schema to eta_reco-binned, 3-variant
+comparison"), a stylistic tell that assistance was involved in writing them.
+The earliest ~15 commits ("making readme a working version", "initial repo
+structure") are Nicky's own unassisted style and don't need touching.
+
+What a full rewrite would take:
+
+- [ ] `git filter-repo --message-callback` (or an interactive `rebase -i`
+      with `reword` on ~160 commits) to rewrite message text repo-wide.
+      `filter-repo` is the only realistic option at this commit count;
+      `rebase -i` with 160 rewords by hand isn't practical.
+- [ ] Every annotated tag (`v0.1.0` through `v0.6.0`) points at a commit
+      hash that changes once its message (or any ancestor's) is rewritten.
+      Each tag needs deleting and recreating against the new hash, locally
+      and on the remote (`git push origin :refs/tags/vX.Y.Z` then
+      re-push).
+- [ ] Force-push `main` to `origin` afterward (`git push --force-with-lease`).
+      Any other clone (lxplus included) is now diverged and needs the same
+      diff-then-reset treatment as the [[project_lxplus_stale_clone_2026-07-03]]
+      incident, not a plain `git pull`.
+- [ ] Anyone else with a clone or fork loses the ability to fast-forward;
+      out of scope here since this repo has no other known clones besides
+      lxplus, but worth confirming before doing this for real.
+- [ ] Decide up front what the new message text should say per commit —
+      "vary tense/tone" isn't mechanical the way em-dash stripping is, so
+      this is a real per-commit judgment pass, not a script.
+
+Given the prior `filter-repo` rewrite (the AI-attribution scrub, see
+[[session_2026-07-01b]]) already caused a real divergent-history incident
+on lxplus, doing this again should be a deliberate, scheduled action with
+time set aside to fix any clone that drifts, not a quick follow-on to a
+comment cleanup pass.
+
 ## Suggested Commit Order
 
 1. `docs: add local style guide`

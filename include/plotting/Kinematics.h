@@ -33,7 +33,7 @@
 //
 // includeIncl: when false, skips the inclusive-jet collection (both its own
 // per-collection plots and its contribution to the incl/probe/tag overview
-// overlays) — used by runPlotting's curated smart-default flag set, which
+// overlays), used by runPlotting's curated smart-default flag set, which
 // only wants tag+probe by default; explicit "kinematics" or "all" still get
 // all three collections.
 // ============================================================

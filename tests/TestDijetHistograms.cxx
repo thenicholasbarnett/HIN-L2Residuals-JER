@@ -76,7 +76,7 @@ int main() {
     Check(before == after, "unmatched jet (refPt<0) does not add a filled bin");
   }
 
-  // ── FillResp: tag matched, probe unmatched — independent per-leg ────────
+  // ── FillResp: tag matched, probe unmatched, independent per-leg ────────
   std::cout << "\n[5] FillResp: tag matched, probe unmatched" << std::endl;
   {
     float pt[] = {117.0f, 80.0f}; // corrPt

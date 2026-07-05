@@ -32,13 +32,13 @@
 // ResponseExtractor.h/.cxx.
 //
 // Per (cone, collection = incl/tag/probe, variant = corr/reco/raw):
-//   response_dist    — per pT_gen bin: the raw response distribution with a
+//   response_dist    : per pT_gen bin: the raw response distribution with a
 //                       Gaussian guide fit redone at plot time. The
 //                       extraction step (ResponseExtractor.cxx) writes only
 //                       the raw histogram, never an embedded fit -- same
 //                       split as Step 2's QA_data/QA_mc +
 //                       AsymmetryDistributions.h's FitGaussianGuide.
-//   response_summary — JES and JER vs pT_gen, one canvas per (quantity,
+//   response_summary : JES and JER vs pT_gen, one canvas per (quantity,
 //                       variant) with all three collections overlaid (same
 //                       incl/tag/probe 3-color scheme as Kinematics.h's
 //                       overview overlay).

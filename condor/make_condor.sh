@@ -12,9 +12,9 @@
 #   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value]
 #   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value]
 #
-# -output dir       — required; absolute EOS/AFS path where output ROOT files are written
-# -alltxt           — bare switch; submit every .txt filelist found in data/txt/ (default off)
-# -filelists ...    — one or more filelists and/or directories to submit, as separate
+# -output dir       : required; absolute EOS/AFS path where output ROOT files are written
+# -alltxt           : bare switch; submit every .txt filelist found in data/txt/ (default off)
+# -filelists ...    : one or more filelists and/or directories to submit, as separate
 #                      words (e.g. -filelists a.txt b.txt, or -filelists data/txt/2026-07-03).
 #                      Consumes every following word up to the next "-flag". A directory
 #                      entry expands to every *.txt file directly inside it (non-recursive),
@@ -24,21 +24,21 @@
 #                      filelist's basename only, not its path, so this works with no TOML
 #                      changes regardless of which directory a filelist lives in. Mutually
 #                      exclusive with -alltxt; exactly one of the two is required.
-# -nosubmit         — bare switch; generate submission files without submitting (default off)
-# -tag value        — optional label for this pass (e.g. -tag abs_eta, -tag clos_dir_eta).
+# -nosubmit         : bare switch; generate submission files without submitting (default off)
+# -tag value        : optional label for this pass (e.g. -tag abs_eta, -tag clos_dir_eta).
 #                      Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
-#                      instead of OUTPUT_DIR/condor/asymmetry/<timestamp> — use this to
-#                      keep separate closure/reprocessing passes from landing in the
+#                      instead of OUTPUT_DIR/condor/asymmetry/<timestamp>, to keep
+#                      separate closure/reprocessing passes from landing in the
 #                      same output tree. No slashes allowed in value. Independent of
-#                      -config below — mix and match freely, neither implies the other.
-# -config path      — required; TOML to submit with. Which TOML gets submitted is a
-#                      physics-affecting choice (e.g. main run-period config vs. a
-#                      closure config with different residual_files), so there is no
-#                      implicit default — pass -config cfg/2024ppRef.toml explicitly
-#                      for the standard run-period config. Whatever is selected is
+#                      -config below; mix and match freely, neither implies the other.
+# -config path      : required; TOML to submit with. Different run periods or a
+#                      closure config with different residual_files select different
+#                      physics, so there is no implicit default. Pass
+#                      -config cfg/2024ppRef.toml explicitly for the standard
+#                      run-period config. Whatever is selected is
 #                      transferred to the sandbox under a fixed name
 #                      (analysis_config.toml), so runtime_wrapper.sh never needs to
-#                      know the source filename — pointing this at a different run
+#                      know the source filename. Pointing this at a different run
 #                      period/collision system's TOML needs no other change here.
 #
 # Mode for each filelist is looked up from [condor.filelist_modes] in the
@@ -49,9 +49,9 @@
 #   filelist_HiForest_2024ppref_MC       = "mc"
 # Comment out (or simply omit) a filelist's entry to skip submitting jobs for
 # it without moving or renaming the file. Values: triggered | non-triggered | mc.
-# The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form —
-# only the mapped mode value matters; the key just has to match the filelist's
-# basename exactly.
+# The physical dataset name (HP0, ZB0, MinBias, Jet80, ...) is free-form;
+# only the mapped mode value matters, and the key just has to match the
+# filelist's basename exactly.
 #
 # Note: the condor Arguments= line generated later in this script (runAsymmetry
 # INPUT OUTPUT MODE CMSSW_SRC) stays positional on purpose -- it's an internal,
@@ -254,7 +254,7 @@ choose_binary() {
     exit 1
   fi
   if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
-    echo "ERROR: ${LIBRARY} not found — run: cmake --build build" >&2
+    echo "ERROR: ${LIBRARY} not found, run: cmake --build build" >&2
     exit 1
   fi
 
@@ -414,11 +414,11 @@ submit_filelist() {
       mode="${filelist_mode}"
       ;;
     "")
-      echo "  SKIP  ${basename} — no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
+      echo "  SKIP  ${basename}: no [condor.filelist_modes] entry in ${CONFIG_PATH} (missing or commented out)" >&2
       return
       ;;
     *)
-      echo "  SKIP  ${basename} — unknown mode \"${filelist_mode}\" in [condor.filelist_modes] (expected triggered|non-triggered|mc)" >&2
+      echo "  SKIP  ${basename}: unknown mode \"${filelist_mode}\" in [condor.filelist_modes] (expected triggered|non-triggered|mc)" >&2
       return
       ;;
   esac

@@ -22,11 +22,11 @@
 #include <vector>
 
 // ============================================================
-// Plot type 6: Final extrapolated values — all pT slices overlaid
+// Plot type 6: Final extrapolated values, all pT slices overlaid
 //
 // For each (cone, method): two canvases
-//   finals_{cone}_{method}_abseta  — R_data/R_MC at alpha→0 vs |eta|, all pT bins overlaid
-//   finals_{cone}_{method}_fulleta — same vs full eta
+//   finals_{cone}_{method}_abseta  : R_data/R_MC at alpha→0 vs |eta|, all pT bins overlaid
+//   finals_{cone}_{method}_fulleta : same vs full eta
 // PlotEtaSym does the |eta|-vs-fulleta symmetry check per pT slice; this overlays pT slices.
 //
 // Uses the vendored JetMET setTDRStyle()/CMS_lumi() (external/jetmet/
@@ -76,15 +76,15 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         }
 
       // Step 3 output stores one TH2D grid (eta vs pT_avg) per (cone, etaMode,
-      // method) instead of per-slice histograms — project each pT slice's row
+      // method) instead of per-slice histograms. Project each pT slice's row
       // as a fallback. Y-bin (ip+1) maps 1:1 to bins.ptavgSlices[ip] since the
       // grid's Y edges are built from exactly those slices in order. No JER SF
       // equivalent exists yet (runTextFile doesn't write one) -- this fallback
       // is JEC-only regardless of useJer, so a JER request against a Step 3
       // file simply finds nothing, same as any other unmet flag.
       if (!anyValid && !useJer) {
-        // Step 3 stores only whichever of direct/kFSR-norm it was run with —
-        // try norm first (matches PlotAlphaFit's convention), then direct.
+        // Step 3 stores only whichever of direct/kFSR-norm it was run with.
+        // Try norm first (matches PlotAlphaFit's convention), then direct.
         TString gridName =
             L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[m]});
         TString gridNormName = gridName + "_norm";

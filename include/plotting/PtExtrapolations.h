@@ -21,7 +21,7 @@
 // For each (cone, method, eta mode, eta bin): one canvas showing the merged
 // HP/ZB correction points vs pT_avg with the 3-parameter fit curve drawn
 // (the fit function is embedded in the graph by TextFileWriter.cxx, so it
-// draws automatically — never re-fit here).
+// draws automatically, never re-fit here).
 // ============================================================
 
 inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
@@ -41,8 +41,8 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
                                            {kMethodKeys[m]});
         TString gnorm = gname + "_norm";
 
-        // Step 3 stores only whichever of direct/kFSR-norm it was run with —
-        // try norm first (matches PlotAlphaFit's convention), then direct.
+        // Step 3 stores only whichever of direct/kFSR-norm it was run with.
+        // Try norm first (matches PlotAlphaFit's convention), then direct.
         TGraphErrors *gr = GetGraphAny(dGraphs, {gnorm, gname});
         if (!gr || gr->GetN() < 2) {
           continue;

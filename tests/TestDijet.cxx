@@ -54,7 +54,7 @@ void TestFindLeadingJets() {
     Check(s.lead == 1 && s.sublead == 0, "2 jets reversed: lead=1 sublead=0");
   }
 
-  // 3 jets, mixed order — jet 2 is leading, jet 0 is sublead, jet 1 is third
+  // 3 jets, mixed order: jet 2 is leading, jet 0 is sublead, jet 1 is third
   {
     float pt[] = {80.0f, 30.0f, 120.0f};
     SortedJets s = FindLeadingJets(pt, 3);
@@ -63,7 +63,7 @@ void TestFindLeadingJets() {
     Check(s.third == 1, "3 jets mixed: third=1 (pt=30)");
   }
 
-  // 4 jets — only top 3 matter
+  // 4 jets: only top 3 matter
   {
     float pt[] = {40.0f, 100.0f, 70.0f, 55.0f};
     SortedJets s = FindLeadingJets(pt, 4);
@@ -110,7 +110,7 @@ void TestMakeDijet() {
     Check(d.probeIdx == 0, "sublead-only barrel: probeIdx = 0 (lead)");
   }
 
-  // neither in barrel — invalid
+  // neither in barrel: invalid
   {
     float pt[] = {120.0f, 100.0f};
     float eta[] = {2.0f, 2.5f};
@@ -121,7 +121,7 @@ void TestMakeDijet() {
     Check(!d.valid, "neither in barrel: invalid");
   }
 
-  // both in barrel — even event → lead is tag
+  // both in barrel, even event: lead is tag
   {
     float pt[] = {120.0f, 100.0f};
     float eta[] = {0.3f, -0.3f};
@@ -134,7 +134,7 @@ void TestMakeDijet() {
     Check(d.probeIdx == 1, "both barrel even event: probeIdx = 1 (sublead)");
   }
 
-  // both in barrel — odd event → sublead is tag
+  // both in barrel, odd event: sublead is tag
   {
     float pt[] = {120.0f, 100.0f};
     float eta[] = {0.3f, -0.3f};
@@ -147,7 +147,7 @@ void TestMakeDijet() {
     Check(d.probeIdx == 0, "both barrel odd event: probeIdx = 0 (lead)");
   }
 
-  // dphi too small — invalid
+  // dphi too small: invalid
   {
     float pt[] = {120.0f, 100.0f};
     float eta[] = {0.3f, 2.5f};
@@ -158,7 +158,7 @@ void TestMakeDijet() {
     Check(!d.valid, "dphi < 2.7: invalid");
   }
 
-  // sublead pT too low — invalid
+  // sublead pT too low: invalid
   {
     float pt[] = {120.0f, 5.0f};
     float eta[] = {0.3f, 2.5f};

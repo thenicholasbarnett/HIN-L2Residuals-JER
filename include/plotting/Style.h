@@ -14,7 +14,7 @@
 #include <cmath>
 
 // ============================================================
-// Method palette — shared across every plot family that compares
+// Method palette: shared across every plot family that compares
 // Gauss / double-Gauss / trunc90 / trunc95.
 // ============================================================
 
@@ -87,7 +87,7 @@ inline void RefLine(TPad *p, double x0, double x1, double ref = 1.0) {
   l->Draw();
 }
 
-// Vertical line placeholder — actual y range set by caller after drawing histogram.
+// Vertical line placeholder, actual y range set by caller after drawing histogram.
 inline TLine *VLine(double x, Color_t col, int style = 3) {
   TLine *l = new TLine(x, 0, x, 1);
   l->SetLineColor(col);

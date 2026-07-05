@@ -243,7 +243,7 @@ inline TString MakePlotDir(const TString &prefix = "plots") {
 }
 
 // ============================================================
-// Transplanted from top-level include/Utilities.h — plotting
+// Transplanted from top-level include/Utilities.h: plotting
 // presentation infrastructure, not general analysis infrastructure.
 // ============================================================
 

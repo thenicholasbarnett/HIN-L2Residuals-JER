@@ -15,8 +15,8 @@
 
 //
 // For each (cone, method, ptavg slice): one canvas with
-//   top panel  — full-eta corrections + |eta| reflected, reference at 1
-//   bottom panel — (full eta) / (reflected |eta|)
+//   top panel  : full-eta corrections + |eta| reflected, reference at 1
+//   bottom panel : (full eta) / (reflected |eta|)
 // ============================================================
 
 inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
@@ -106,9 +106,9 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
       SavePlot(cv.c, outDir, cone, "etasym", {calibKey, ptKey}, cvName);
       pb.Update();
 
-      // hAbs was not drawn — delete manually
+      // hAbs was not drawn, delete manually
       delete hAbs;
-      // hFull, hRefl, hRatio, leg, tex drawn on pads — canvas cascade deletes them
+      // hFull, hRefl, hRatio, leg, tex drawn on pads: canvas cascade deletes them
       delete cv.c;
     }
   }

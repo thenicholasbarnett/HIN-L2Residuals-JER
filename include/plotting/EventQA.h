@@ -20,10 +20,10 @@
 // Plot type: Event-level QA
 //
 // Reads event-level control histograms written by runAsymmetry:
-//   hvz_all   — vz before any cuts
-//   hvz       — vz after vz + vertex filter cuts
-//   hfilt     — pprimaryVertexFilter (DATA only)
-//   h_hlt_j80 — HLT_AK4PFJet80 bits (hard-probe DATA only)
+//   hvz_all   : vz before any cuts
+//   hvz       : vz after vz + vertex filter cuts
+//   hfilt     : pprimaryVertexFilter (DATA only)
+//   h_hlt_j80 : HLT_AK4PFJet80 bits (hard-probe DATA only)
 //
 // Expects a Step-1 runAsymmetry output file; gracefully skips
 // histograms that are absent (e.g. hfilt/h_hlt_j80 on MC).

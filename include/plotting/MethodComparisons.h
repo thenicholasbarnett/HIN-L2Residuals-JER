@@ -19,8 +19,8 @@
 // Plot type 2: method comparison (gauss vs trunc90 vs trunc95)
 //
 // For each (cone, ptavg slice, eta type): one canvas with
-//   top panel  — all three methods overlaid
-//   bottom panel — trunc90/gauss and trunc95/gauss
+//   top panel  : all three methods overlaid
+//   bottom panel : trunc90/gauss and trunc95/gauss
 // ============================================================
 
 inline void PlotMethodComp(TFile *fIn, const TString &outDir,
@@ -138,8 +138,8 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
     SavePlot(cv.c, outDir, cone, "methods", {calibKey, etaMode, ptKey}, cvName);
     pb.Update();
 
-    // ratios and hists were drawn on pads — canvas cascade deletes them
-    // rleg, leg, tex also drawn — also cascade-deleted
+    // ratios and hists were drawn on pads, canvas cascade deletes them
+    // rleg, leg, tex also drawn, also cascade-deleted
     delete cv.c;
   }
 }

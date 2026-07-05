@@ -8,9 +8,9 @@
 // JES/JER for three response ratios read off the 5D (eta_reco, pT_gen,
 // corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen) response THnSparse (see
 // DijetHistograms.h):
-//   corr — this framework's L2Relative+L2Residual-corrected pT
-//   reco — the ntuple's own baked-in "jtpt" correction
-//   raw  — the ntuple's uncorrected "rawpt"
+//   corr : this framework's L2Relative+L2Residual-corrected pT
+//   reco : the ntuple's own baked-in "jtpt" correction
+//   raw  : the ntuple's uncorrected "rawpt"
 // JES = mean of a Gaussian fit to the ratio, JER = sigma/mean of the same
 // fit (fractional resolution, standard CMS convention), as a function of
 // pT_gen (marginal over eta_reco and the other two ratio axes). Binning is

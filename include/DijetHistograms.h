@@ -10,33 +10,33 @@
 #include "Dijet.h"
 
 // One instance per cone size. Each instance owns:
-//   hAsym    — 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet event
-//   hInclJet — TH3D (eta, phi, pT) for all corrected jets passing cfg.minPt
-//   hTagJet  — TH3D (eta, phi, pT) for the tag jet of each valid dijet
-//   hProbeJet — TH3D (eta, phi, pT) for the probe jet of each valid dijet
+//   hAsym    : 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet event
+//   hInclJet : TH3D (eta, phi, pT) for all corrected jets passing cfg.minPt
+//   hTagJet  : TH3D (eta, phi, pT) for the tag jet of each valid dijet
+//   hProbeJet : TH3D (eta, phi, pT) for the probe jet of each valid dijet
 //
 // The TH3Ds use variable-width CMS JEC eta bins on X, enabling eta-phi maps
 // at arbitrary pT thresholds via SetRangeUser on Z + Project3D("yx").
 //
-// MC-only (Init's isMC flag), JES/JER inputs — parallel to the TH3Ds above,
+// MC-only (Init's isMC flag), JES/JER inputs, parallel to the TH3Ds above,
 // not a replacement:
-//   hInclJetResp  — 5D THnSparse (eta_reco, pT_gen, corrPt/pT_gen,
+//   hInclJetResp  : 5D THnSparse (eta_reco, pT_gen, corrPt/pT_gen,
 //                    rawPt/pT_gen, jtPt/pT_gen) for corrected jets passing
 //                    cfg.minPt, ref-matched only
-//   hTagJetResp   — same, for the tag jet of each valid dijet
-//   hProbeJetResp — same, for the probe jet of each valid dijet
+//   hTagJetResp   : same, for the tag jet of each valid dijet
+//   hProbeJetResp : same, for the probe jet of each valid dijet
 // ref-matched: refpt[j] (index-aligned to reco jet j) >= 0; unmatched jets
 // (refpt < 0) are dropped entirely, never filled with a bogus ratio. No phi
-// axis — correction here is eta-only, and phi is uncorrelated enough with
+// axis: correction here is eta-only, and phi is uncorrelated enough with
 // the other axes that it would push sparse storage close to one bin per jet
-// for little use; a TProfile2D is the right tool if phi-uniformity QA is
+// for little use. A TProfile2D is the right tool if phi-uniformity QA is
 // ever needed.
 // eta_reco, not eta_gen, is the binning axis: the L2Residual correction is
 // applied by a jet's reconstructed eta in data, so this measures "how
 // well-corrected is a jet reconstructed at this eta," not a pure gen-binned
 // resolution. pT stays gen-binned to avoid falling-spectrum migration bias.
-// Three ratios ride together — corrPt (this framework's correction), rawPt
-// (uncorrected), jtPt (the ntuple's own baked-in correction) — each over
+// Three ratios ride together: corrPt (this framework's correction), rawPt
+// (uncorrected), and jtPt (the ntuple's own baked-in correction), each over
 // pT_gen, so one pass shows how much response corrPt buys over the others.
 
 struct ConeHistograms {
@@ -96,7 +96,7 @@ struct ConeHistograms {
     hInclJet->Fill(jetEta, jetPhi, corrPt, weight);
   }
 
-  // MC only — corrPt is this framework's L2Relative+L2Residual-corrected
+  // MC only. corrPt is this framework's L2Relative+L2Residual-corrected
   // pT, rawPt is the ntuple's uncorrected "rawpt", jtPt is the ntuple's own
   // baked-in "jtpt" correction; refPt is the ntuple's refpt[j] for this
   // jet. refPt < 0 means no matched GenJet, so the jet is dropped rather
@@ -109,7 +109,7 @@ struct ConeHistograms {
     hInclJetResp->Fill(x, weight);
   }
 
-  // MC only — pt/rawPt/jtPt/eta/refPt are index-aligned to the ntuple's
+  // MC only. pt/rawPt/jtPt/eta/refPt are index-aligned to the ntuple's
   // per-jet arrays. Tag and probe are matched independently: one being
   // unmatched does not drop the other.
   void FillResp(const DijetResult &d, const float *pt, const float *rawPt,
@@ -146,11 +146,11 @@ struct ConeHistograms {
   }
 
 private:
-  // eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen — variable-
+  // eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen. Variable-
   // width CMS JEC eta bins on eta_reco (matching the TH3Ds' X axis,
   // kEtaEdges); pT_gen uses the same uniform binning as the other pT axes
   // (bins.pt); all three response ratios share bins.response (0-2.0,
-  // centered on 1.0 — wide enough to cover the uncorrected rawPt ratio too).
+  // centered on 1.0, wide enough to cover the uncorrected rawPt ratio too).
   static THnSparse *MakeRespSparse(const TString &name,
                                    const BinningConfig &bins) {
     THnSparse *h = MakeTHnSparse<THnSparseD>(
