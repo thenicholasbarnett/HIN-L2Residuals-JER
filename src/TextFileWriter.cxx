@@ -26,7 +26,7 @@
 // Minimum valid pT slices needed to attempt a 3-parameter fit.
 static constexpr int kMinSlices = 3;
 
-// outputTag default and fixed output location — see TextFileWriter.h.
+// outputTag default and fixed output location, see TextFileWriter.h.
 static const char *const kDefaultTag = "L2Residual";
 static const char *const kTextOutputSubdir = "data/jec/preliminary";
 
@@ -42,7 +42,7 @@ static Double_t FitFunc(Double_t *x, Double_t *par) {
   return (denom != 0.0) ? 1.0 / denom : 1.0;
 }
 
-// Level label and JEC formula declaration — must match FitFunc exactly.
+// Level label and JEC formula declaration; keep in sync with FitFunc.
 static const char *const kJECHeader =
     "{1 JetEta 1 JetPt 1./([p0]+[p1]*log10(0.01*x)+[p2]/(x/10.0)) Correction "
     "L2Residual}";
@@ -52,7 +52,7 @@ struct FitResult {
   bool valid = false;
 };
 
-// Arithmetic midpoint of a pT slice — used as the fit x-value for that slice.
+// Arithmetic midpoint of a pT slice, used as the fit x-value for that slice.
 static double SliceCenter(const RangeBin &sl) { return 0.5 * (sl.lo + sl.hi); }
 
 // Fetch an intercept histogram from the current cone TDirectory layout.
@@ -62,8 +62,8 @@ static TH1D *FetchIntercept(TFile *f, const TString &cone,
   return coneDir ? (TH1D *)coneDir->Get(name) : nullptr;
 }
 
-// Fit corr(pT_avg) at one eta bin, write the TGraphErrors — with the TF1
-// embedded so it draws later — into dGraphs, and return the fit parameters.
+// Fit corr(pT_avg) at one eta bin, write the TGraphErrors (with the TF1
+// embedded so it draws later) into dGraphs, and return the fit parameters.
 // The graph and the text-file output are always derived from this single
 // fit; never re-fit the same points twice elsewhere.
 static FitResult FitPtSlices(const std::vector<double> &ptCenters,
@@ -82,7 +82,7 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
   gr->SetTitle(";p_{T,avg} [GeV];Correction factor");
 
   TF1 *f = new TF1(graphName + "_fit", FitFunc, kPtLo, kPtHi, kNPar);
-  // Start at the unity correction (1/(1+0+0)=1) — physically close for all eta.
+  // Start at the unity correction (1/(1+0+0)=1), close for all eta.
   // Starting at (1.5,1.5,1.5) gives a negative denominator at low pT.
   f->SetParameter(0, 1.0);
   f->SetParameter(1, 0.0);
@@ -136,7 +136,7 @@ static bool WriteAbsEtaTextFile(const TString &path,
 }
 
 // Independent full-eta text file: kEtaEdges is already ascending -5.191→5.191,
-// so this is a single direct pass — no mirroring, each bin has its own fit.
+// so this is a single direct pass, no mirroring, each bin has its own fit.
 static bool WriteFullEtaTextFile(const TString &path,
                                  const std::vector<FitResult> &fits) {
   std::ofstream out(path.Data());
@@ -302,7 +302,7 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
   PrintConfigSummary(cfg);
 
   // Correction text files always land here, not wherever the caller points
-  // OUTPUT= — see TextFileWriter.h. Gitignored; created if missing.
+  // OUTPUT=, see TextFileWriter.h. Gitignored; created if missing.
   const TString textDir =
       TString(cfg.repoRoot.c_str()) + "/" + kTextOutputSubdir;
   if (gSystem->mkdir(textDir, kTRUE) < 0 && gSystem->AccessPathName(textDir)) {
@@ -343,7 +343,7 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
   BinningConfig bins;
   const int nPt = (int)bins.ptavgSlices.size();
 
-  // pT_avg bin edges for the corrfinal grid — bins.ptavgSlices are contiguous.
+  // pT_avg bin edges for the corrfinal grid: bins.ptavgSlices are contiguous.
   std::vector<Double_t> ptEdges(nPt + 1);
   ptEdges[0] = bins.ptavgSlices[0].lo;
   for (int ip = 0; ip < nPt; ip++)

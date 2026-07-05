@@ -1,6 +1,6 @@
 # Template for a new collision system / dataset.
 #
-# This is a scaffold, not a runnable config — copy it to a new file
+# This is a scaffold, not a runnable config: copy it to a new file
 # (e.g. cfg/2025OO.toml) and fill in every REQUIRED_* placeholder before
 # pointing L2RESIDUALS_CONFIG at it. 
 
@@ -15,7 +15,7 @@ golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 # would submit here; comment out (or omit) an entry to skip submitting jobs
 # for that filelist without moving or renaming the file. The physical dataset
 # name is free-form (e.g. a triggered jet dataset, a MinBias/ZeroBias
-# non-triggered dataset) — only the mapped mode matters.
+# non-triggered dataset); only the mapped mode matters.
 [condor.filelist_modes]
 # REQUIRED_SET_ME_filelist_basename = "triggered"
 # REQUIRED_SET_ME_filelist_basename = "non-triggered"

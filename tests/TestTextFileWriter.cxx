@@ -35,7 +35,7 @@ void Check(bool cond, const char *msg) {
 
 // Build a synthetic residuals ROOT file for cone "ak4PF", populating only the
 // given pT-slice indices (into BinningConfig::ptavgSlices) with intercept
-// histograms — both abseta and fulleta — set to corrValue ± corrErr in every
+// histograms (both abseta and fulleta) set to corrValue ± corrErr in every
 // bin. The ak4PF TDirectory always exists, even if sliceIndices is empty.
 // norm appends "_norm" to the histogram names; recreate=false appends to an
 // existing file (opened "update") instead of overwriting it, so a norm
@@ -319,7 +319,7 @@ void TestSingleFileMode() {
   Check(hGrid != nullptr, "corrfinal_abseta_gauss TH2D exists in output");
   if (hGrid) {
     // y-bin 1 = ptavg_30_70 (below threshold, would be NonTriggered in two-file mode);
-    // y-bin 3 = ptavg_100_175 (at/above threshold, would be Triggered) — both must
+    // y-bin 3 = ptavg_100_175 (at/above threshold, would be Triggered); both must
     // come from the single file regardless, so both equal 3.0.
     Check(std::fabs(hGrid->GetBinContent(1, 1) - 3.0) < 1e-6,
           "low-pT slice reads from the single file");
@@ -473,7 +473,7 @@ void TestEtaFileOrdering() {
 
 // [5] Unity fallback: fewer than kMinSlices (3) valid pT slices across the merge
 void TestUnityFallback_TooFewSlices() {
-  std::cout << "\n[5] Unity fallback — fewer than kMinSlices pT slices\n";
+  std::cout << "\n[5] Unity fallback, fewer than kMinSlices pT slices\n";
 
   const char *trigPath = "/tmp/tw_trig5.root";
   const char *notrigPath = "/tmp/tw_notrig5.root";
@@ -504,7 +504,7 @@ void TestUnityFallback_TooFewSlices() {
 
 // [6] Unity fallback for empty histograms (all bins zero)
 void TestUnityFallback_EmptyBins() {
-  std::cout << "\n[6] Unity fallback — empty histograms\n";
+  std::cout << "\n[6] Unity fallback, empty histograms\n";
 
   const char *trigPath = "/tmp/tw_trig6.root";
   const char *notrigPath = "/tmp/tw_notrig6.root";

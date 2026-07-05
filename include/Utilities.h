@@ -198,11 +198,11 @@ inline void DrawRefLine(float xmin, float xmax, float y = 1.0) {
   line->Draw("same");
 }
 
-// Fit guards — check whether a histogram or graph has enough data before fitting.
-//   CanFit(obj)              — at least 1 entry/point anywhere
-//   CanFit(obj, n)           — at least n entries/points anywhere
-//   CanFit(obj, {lo, hi})    — at least 1 entry/point in [lo, hi]
-//   CanFit(obj, {lo, hi}, n) — at least n entries/points in [lo, hi]
+// Fit guards: check whether a histogram or graph has enough data before fitting.
+//   CanFit(obj)              : at least 1 entry/point anywhere
+//   CanFit(obj, n)           : at least n entries/points anywhere
+//   CanFit(obj, {lo, hi})    : at least 1 entry/point in [lo, hi]
+//   CanFit(obj, {lo, hi}, n) : at least n entries/points in [lo, hi]
 
 inline bool CanFit(const TH1 *h, int minEntries = 1) {
   return h && h->GetEntries() >= minEntries;

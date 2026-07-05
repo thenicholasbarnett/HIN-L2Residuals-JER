@@ -7,7 +7,7 @@ golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 # triggered | non-triggered | mc. make_condor.sh looks up each filelist it
 # would submit here; comment out (or omit) an entry to skip submitting jobs
 # for that filelist without moving or renaming the file. The physical dataset
-# name (HP0, ZB0, ...) is free-form — only the mapped mode matters.
+# name (HP0, ZB0, ...) is free-form; only the mapped mode matters.
 [condor.filelist_modes]
 filelist_HiForest_2024ppref_DATA_HP0 = "triggered"
 filelist_HiForest_2024ppref_DATA_ZB0 = "non-triggered"

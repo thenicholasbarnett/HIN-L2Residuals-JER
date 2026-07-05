@@ -19,8 +19,8 @@
 // Plot type 4: R_data and R_MC overlay with ratio panel
 //
 // For each (cone, method, alpha slice, pT slice): one two-panel canvas with
-//   top panel  — R_data (blue) and R_MC (red) vs |eta|, reference at 1
-//   bottom panel — R_data/R_MC vs |eta|, reference at 1
+//   top panel  : R_data (blue) and R_MC (red) vs |eta|, reference at 1
+//   bottom panel : R_data/R_MC vs |eta|, reference at 1
 // ============================================================
 
 inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,

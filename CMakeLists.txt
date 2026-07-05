@@ -33,7 +33,7 @@ include(${ROOT_USE_FILE})
 set(CMAKE_BUILD_RPATH "${ROOT_LIBRARY_DIR}")
 
 # nlohmann-json (required by JSON_handler.h for golden JSON support)
-# Vendored single header takes priority — no network dependency
+# Vendored single header takes priority, no network dependency
 set(NLOHMANN_JSON_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 # Shared library built from src/*.cxx only -- vendored .cc files needing

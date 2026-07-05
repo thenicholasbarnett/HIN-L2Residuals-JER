@@ -89,7 +89,7 @@ static GaussResult FitGauss(TH1D *h, const ResidualFitControls &controls) {
 
 // ---- Double-Gaussian fit (narrow core + wide component) in the configured fit window ----
 //
-// Reports the amplitude*sigma-weighted mean of the two components — i.e. the
+// Reports the amplitude*sigma-weighted mean of the two components: the
 // mean of the fitted mixture distribution (each component's contribution
 // weighted by its integral, amp*sigma), not just the core. meanErr treats the
 // two component means as independent, which is an approximation but standard
@@ -393,7 +393,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
   const bool fullEta = !nameSuffix.IsNull();
   const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-  // rpts[method][ipt][ieta] — all nAlpha bins; "QR" fit selects only those within the configured fit range.
+  // rpts[method][ipt][ieta]: all nAlpha bins; "QR" fit selects only those within the configured fit range.
   // rptsJer mirrors rpts exactly, fed stddev-derived R points instead of mean-derived ones.
   std::vector<std::vector<std::vector<std::vector<RPoint>>>> rpts(
       kNMethods, std::vector<std::vector<std::vector<RPoint>>>(
@@ -402,7 +402,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
       kNMethods, std::vector<std::vector<std::vector<RPoint>>>(
                      nPt, std::vector<std::vector<RPoint>>(nEta)));
 
-  // R_data and R_mc TH1Ds per (method, ialpha, ipt) — eta on x-axis
+  // R_data and R_mc TH1Ds per (method, ialpha, ipt): eta on x-axis
   using RH = std::vector<std::vector<std::vector<TH1D *>>>;
   RH hRd(kNMethods, std::vector<std::vector<TH1D *>>(
                         nAlpha, std::vector<TH1D *>(nPt, nullptr)));

@@ -9,13 +9,13 @@
 # Usage:
 #   bash condor/batch_hadd.sh -output out.root -input "IN_FILES" [-batchsize N] [-njobs N] [-zombiecheck]
 #
-# -output out.root  — required; path for the final merged ROOT file
-# -input pattern    — required; a quoted glob (e.g. "/eos/.../asym_*.root") or
+# -output out.root  : required; path for the final merged ROOT file
+# -input pattern    : required; a quoted glob (e.g. "/eos/.../asym_*.root") or
 #                      a directory (matches every *.root directly inside it,
 #                      non-recursive). Must be quoted to prevent shell expansion.
-# -batchsize N      — optional, default 5; files merged together per hadd job
-# -njobs N          — optional, default 2; parallel hadd batches per level
-# -zombiecheck      — bare switch; scan every input with rootls first and skip
+# -batchsize N      : optional, default 5; files merged together per hadd job
+# -njobs N          : optional, default 2; parallel hadd batches per level
+# -zombiecheck      : bare switch; scan every input with rootls first and skip
 #                      any that fail, before merging starts (default off)
 set -euo pipefail
 
@@ -113,7 +113,7 @@ cleanup() {
     rm -f "$LOG_FILE"
   else
     if [[ -s "$LOG_FILE" ]]; then
-      echo "Failure — log written to ${LOG_FILE}" >&2
+      echo "Failure: log written to ${LOG_FILE}" >&2
     fi
     echo "Leaving ${MY_TMPDIR} intact for inspection" >&2
   fi
@@ -147,7 +147,7 @@ elif [[ "$IN_PAT" == *root && "$IN_PAT" != *.root ]]; then
 fi
 
 if [[ "$IN_DIR" == *'*'* || "$IN_DIR" == *'?'* ]]; then
-  # Directory component contains a glob — expand it, then search each match
+  # Directory component contains a glob: expand it, then search each match
   mapfile -t FILES < <(
     for d in $IN_DIR; do
       [[ -d "$d" ]] && find "$d" -maxdepth 1 -type f -name "$IN_PAT"
@@ -277,7 +277,7 @@ while ((${#current_files[@]} > 1)); do
       if [[ -z "${collected_hadd[$p]+x}" ]] && [[ -f "${tmpdir_hadd}/${p}" ]]; then
         if [[ $(<"${tmpdir_hadd}/${p}") != "0" ]]; then
           printf "\n"
-          echo "A hadd batch failed at level ${level} — check ${LOG_FILE}" >&2
+          echo "A hadd batch failed at level ${level}: check ${LOG_FILE}" >&2
           exit 1
         fi
         rm -f "${tmpdir_hadd}/${p}"

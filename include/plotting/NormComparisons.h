@@ -19,9 +19,9 @@
 // Plot type: Direct vs kFSR-norm correction factor overlay
 //
 // For each (cone, method, eta mode): one two-panel canvas with
-//   top panel  — direct intercept (filled circles) and kFSR-norm (open circles) vs eta,
+//   top panel  : direct intercept (filled circles) and kFSR-norm (open circles) vs eta,
 //                all pT slices overlaid, same color per pT slice
-//   bottom panel — (kFSR-norm) / direct ratio per pT slice
+//   bottom panel : (kFSR-norm) / direct ratio per pT slice
 // ============================================================
 
 inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
@@ -186,7 +186,7 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
 
     delete dummyD;
     delete dummyN;
-    // hDirect and hNorm entries where one is null were not drawn — delete explicitly
+    // hDirect and hNorm entries where one is null were not drawn, delete explicitly
     for (int ip = 0; ip < nPt; ip++) {
       if (!hDirect[ip] && hNorm[ip])
         delete hNorm[ip];
