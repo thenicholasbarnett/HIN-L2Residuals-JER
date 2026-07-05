@@ -3,11 +3,11 @@
 //
 // Binary:      
 //
-// ./build/bin/runCalibration \
-//   -data data.root \
-//   -mc mc.root \
-//   -output out.root \
-//   -mode jec \
+// ./build/bin/runCalibration
+//   -data data.root
+//   -mc mc.root
+//   -output out.root
+//   -mode jec
 //   -config path
 //
 //./build/bin/runCalibration args.config  # config file lines: key = value

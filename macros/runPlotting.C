@@ -3,13 +3,13 @@
 //
 // Binary:
 //
-// ./build/bin/runPlotting \
-//   -input residuals.root \
-//   [-outdir dir] \
-//   [-flags "..."] \
-//   [-closure true] \
-//   [-calibration JEC|JER] \
-//   [-tag name] \
+// ./build/bin/runPlotting
+//   -input residuals.root
+//   [-outdir dir]
+//   [-flags "..."]
+//   [-closure true]
+//   [-calibration JEC|JER]
+//   [-tag name]
 //   -config path
 //
 // ./build/bin/runPlotting args.config  # config file lines: key = value

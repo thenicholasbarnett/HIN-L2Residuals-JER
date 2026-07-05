@@ -3,13 +3,13 @@
 //
 // Binary:
 //
-// ./build/bin/runTextFile \
-//   -triggered trig.root \
-//   -nontriggered notrig.root \
-//   -output out.root \
-//   # [-tag name] \
-//   # [-method gauss] \
-//   # [-norm true] \
+// ./build/bin/runTextFile
+//   -triggered trig.root
+//   -nontriggered notrig.root
+//   -output out.root
+//   # [-tag name]
+//   # [-method gauss]
+//   # [-norm true]
 //   -config path
 //
 // ./build/bin/runTextFile args.config  # config file lines: key = value

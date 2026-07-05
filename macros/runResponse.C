@@ -3,9 +3,9 @@
 //
 // Binary:
 //
-// ./build/bin/runResponse \
-//   -input mc_asymmetry.root \
-//   -output response.root \
+// ./build/bin/runResponse
+//   -input mc_asymmetry.root
+//   -output response.root
 //   -config path
 //
 // ./build/bin/runResponse args.config  # config file lines: key = value

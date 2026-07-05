@@ -3,11 +3,11 @@
 //
 // Binary:
 //
-// ./build/bin/runAsymmetry \
-//   -input in.root \
-//   -output out.root \
-//   -mode triggered|non-triggered|mc \
-//   # -maxevents n \
+// ./build/bin/runAsymmetry
+//   -input in.root
+//   -output out.root
+//   -mode triggered|non-triggered|mc
+//   # -maxevents n
 //   -config path
 // 
 // ./build/bin/runAsymmetry args.config  # config file lines: key = value
