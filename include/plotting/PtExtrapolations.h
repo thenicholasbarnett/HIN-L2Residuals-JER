@@ -51,6 +51,7 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
         c->SetLeftMargin(0.13);
         c->SetGridx();
         c->SetGridy();
+        c->SetLogx();
 
         // single series (markers + one fit line): always kBlue/kRed
         gc->SetMarkerStyle(20);

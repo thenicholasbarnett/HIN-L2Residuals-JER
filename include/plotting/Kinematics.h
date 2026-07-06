@@ -133,6 +133,7 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
       c->SetLeftMargin(0.14);
       c->SetGridx();
       c->SetGridy();
+      c->SetLogx();
       DrawKinematics1D(h, kRecoPtAxisTitle, "1/N  dN/dp_{T}", true);
       hPtAll[ic] = (TH1D *)h->Clone(Form("hPtAll_%d", ic));
       hPtAll[ic]->SetDirectory(0);
@@ -250,7 +251,7 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
   // Overview: all three collections overlaid on a single canvas per variable
   auto DrawOverview1D = [&](TH1D *hArr[], const TString &xTitle,
                             const TString &yTitle, const TString &varName,
-                            bool logy) {
+                            bool logy, bool logx = false) {
     bool anyValid = false;
     for (int ic = 0; ic < kNKinematicsCollections; ic++)
       if (hArr[ic])
@@ -301,6 +302,8 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
     c->SetLeftMargin(0.14);
     c->SetGridx();
     c->SetGridy();
+    if (logx)
+      c->SetLogx();
     hFrame->Draw("hist");
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
       if (hArr[ic] && hArr[ic] != hFrame)
@@ -309,10 +312,13 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
     if (logy)
       gPad->SetLogy();
 
-    TLegend *leg = new TLegend(0.55, 0.72, 0.88, 0.87);
+    // cone (the clustering algorithm) rides in the same legend as the
+    // incl/probe/tag entries instead of its own separate box
+    TLegend *leg = new TLegend(0.64, 0.68, 0.895, 0.87);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.034);
+    leg->AddEntry((TObject *)nullptr, cone.Data(), "");
     for (int ic = 0; ic < kNKinematicsCollections; ic++) {
       if (hArr[ic])
         leg->AddEntry(hArr[ic], kKinematicsCollections[ic].plotKey, "l");
@@ -320,14 +326,13 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
     leg->Draw();
 
     DrawCMSInternalHeader(0.14, 0.90);
-    DrawInfoLegend(0.17, 0.80, 0.40, 0.885, {cone});
 
     SaveKinematicsPlot(c, outDir, cone, "overview", cvName);
     delete c;
     pb.Update();
   };
 
-  DrawOverview1D(hPtAll, kRecoPtAxisTitle, "1/N  dN/dp_{T}", "pt", true);
+  DrawOverview1D(hPtAll, kRecoPtAxisTitle, "1/N  dN/dp_{T}", "pt", true, true);
   DrawOverview1D(hEtaAll, kRecoEtaAxisTitle, "1/N  dN/d#eta", "eta", false);
   DrawOverview1D(hPhiAll, "#phi", "1/N  dN/d#phi", "phi", false);
 
