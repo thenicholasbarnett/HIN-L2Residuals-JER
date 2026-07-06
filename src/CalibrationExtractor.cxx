@@ -58,6 +58,21 @@ struct RPoint {
   double alpha, val, err;
 };
 
+// x-error for an alpha-threshold marker: half the local spacing to its
+// neighbors on the threshold axis. Not a physical bin width (the alpha
+// slices are cumulative "alpha < threshold" cuts, not a partition) -- just
+// conveys the threshold sweep's step size on the plot.
+static double AlphaPointHalfWidth(const std::vector<double> &x, int k) {
+  const int n = (int)x.size();
+  if (n < 2)
+    return 0.025; // fallback: half the alphaSlices' nominal 0.05 step
+  if (k == 0)
+    return 0.5 * (x[1] - x[0]);
+  if (k == n - 1)
+    return 0.5 * (x[n - 1] - x[n - 2]);
+  return 0.25 * (x[k + 1] - x[k - 1]);
+}
+
 // gauss fitting
 static GaussResult FitGauss(TH1D *h, const ResidualFitControls &controls) {
   GaussResult r;
@@ -263,6 +278,13 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   fitFn->SetLineColor(color);
   gr->Fit(fitFn, "QR");
 
+  // x-error set only after the fit runs: TGraphErrors::Fit uses the
+  // effective-variance method when ex is nonzero, so setting these before
+  // fitting would quietly perturb the extrapolated intercept. These are
+  // purely a plotting aid for PlotAlphaFit.
+  for (int k = 0; k < n; k++)
+    gr->SetPointError(k, AlphaPointHalfWidth(x, k), ey[k]);
+
   out.c0 = fitFn->GetParameter(0);
   out.ec0 = fitFn->GetParError(0);
   out.valid = true;
@@ -309,6 +331,9 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
       fn->SetParameter(1, 0.0);
       fn->SetLineColor(color);
       grn->Fit(fn, "QR");
+
+      for (int k = 0; k < nfit; k++)
+        grn->SetPointError(k, AlphaPointHalfWidth(xn, k), eyn[k]);
 
       const double c0n = fn->GetParameter(0);
       const double ec0n = fn->GetParError(0);

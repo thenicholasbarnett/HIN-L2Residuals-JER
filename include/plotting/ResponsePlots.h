@@ -111,24 +111,26 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
   const Long64_t nEntries = (Long64_t)h->GetEntries();
   NormalizeDensity(h); // 1/N dN/d(ratio) -- Scale() leaves GetEntries() alone
 
-  StyleH(h, HiroshigeNightBlue(), 20, 1.5f);
+  // single series (markers + one fit line): always kBlue/kRed
+  StyleH(h, kBlue, 20, 1.5f);
   h->SetTitle("");
   h->GetXaxis()->SetTitle(xTitle);
   h->GetXaxis()->CenterTitle();
   h->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{d(" + xTitle + ")}");
   h->GetYaxis()->CenterTitle();
   h->GetXaxis()->SetTitleOffset(1.25);
+  h->GetYaxis()->SetTitleOffset(1.7);
 
   TString cvName = "response_" + objName;
   TCanvas *c = new TCanvas(cvName, "", 800, 800);
   RealAspectRatio(c);
-  c->SetLeftMargin(0.13);
+  c->SetLeftMargin(0.17);
   c->SetLogy();
 
   h->Draw("E1");
 
-  TF1 *fit = FitResponseGuide(h, cvName + "_fit", HiroshigeLightRed(),
-                              halfWidth, minEntries);
+  TF1 *fit =
+      FitResponseGuide(h, cvName + "_fit", kRed, halfWidth, minEntries);
   if (fit)
     fit->Draw("same");
 
@@ -143,19 +145,20 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
     xhi = std::min(xhi, m + 6.0 * s);
   }
   h->GetXaxis()->SetRangeUser(xlo, xhi);
+  h->SetMinimum(0.1); // normalized density -- the far tail below this is noise
 
-  DrawCMSInternalHeader(0.13, 0.95);
+  DrawCMSInternalHeader(0.17, 0.90);
   TLatex *tex = new TLatex();
   tex->SetNDC();
   tex->SetTextSize(0.033);
   tex->SetTextFont(42);
   tex->SetTextAlign(31);
-  tex->DrawLatex(0.93, 0.84, label);
+  tex->DrawLatex(0.90, 0.84, label);
 
-  TLegend *leg = new TLegend(0.62, 0.60, 0.90, 0.79);
+  TLegend *leg = new TLegend(0.55, 0.58, 0.86, 0.79);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
-  leg->SetTextSize(0.032);
+  leg->SetTextSize(0.030);
   leg->SetTextFont(42);
   leg->AddEntry((TObject *)nullptr, cone.Data(), "");
   leg->AddEntry((TObject *)nullptr, collection.Data(), "");
@@ -265,12 +268,7 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab = new TLatex(0.17, 0.855,
-                           Form("%s  |  all #eta_{reco}", cone.Data()));
-  lab->SetNDC();
-  lab->SetTextFont(42);
-  lab->SetTextSize(0.035);
-  lab->Draw();
+  DrawInfoLegend(0.16, 0.80, 0.40, 0.885, {cone, "all #eta_{reco}"});
 
   SavePlot(c, outDir, cone, "response_summary", {tag}, c->GetName());
   pb.Update();
@@ -369,14 +367,8 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab =
-      new TLatex(0.17, 0.855,
-                Form("%s  |  %s  |  all #eta_{reco}", cone.Data(),
-                     collection.Data()));
-  lab->SetNDC();
-  lab->SetTextFont(42);
-  lab->SetTextSize(0.035);
-  lab->Draw();
+  DrawInfoLegend(0.16, 0.75, 0.42, 0.885,
+                 {cone, collection, "all #eta_{reco}"});
 
   SavePlot(c, outDir, cone, "response_variants", {collection, quantity},
            c->GetName());
@@ -415,8 +407,8 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
           TString objName =
               L2Name::ObjectName(cone, "response_" + variant,
                                  {L2Name::PtGenKey(lo, hi)}, {collection});
-          TString label = Form("p_{T}^{gen} bin: [%.0f, %.0f) GeV  (%s)", lo,
-                               hi, variant.Data());
+          TString label =
+              Form("%.0f #leq p_{T}^{gen} < %.0f GeV", lo, hi);
           DrawResponseDist(
               fIn, outDir, cone, "QA_response_ptgen", objName, collection,
               label,

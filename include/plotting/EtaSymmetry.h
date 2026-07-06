@@ -54,8 +54,9 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
       cv.main->SetGridx();
       cv.main->SetGridy();
 
-      StyleH(hFull, kColFull, 20, 2.f);
-      StyleH(hRefl, kColRefl, 21, 2.f);
+      // two series only: always kBlue/kRed
+      StyleH(hFull, kBlue, 20, 2.f);
+      StyleH(hRefl, kRed, 21, 2.f);
       hRefl->SetLineStyle(2);
 
       auto [ylo, yhi] = YRange({hFull, hRefl});
@@ -80,14 +81,8 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
       leg->AddEntry(hRefl, "|#eta| reflected", "lp");
       leg->Draw();
 
-      TLatex *tex = new TLatex();
-      tex->SetNDC();
-      tex->SetTextSize(0.051);
-      tex->SetTextFont(62);
-      tex->DrawLatex(0.16, 0.91,
-                     Form("%s   |   %s   |   %s   |   %s", cone.Data(),
-                          kMethodLabels[m], sl.title.Data(),
-                          CalibTag(useJer).Data()));
+      DrawInfoLegend(0.60, 0.68, 0.94, 0.90,
+                     {cone, kMethodLabels[m], sl.title, CalibTag(useJer)});
 
       // ratio pad
       cv.ratio->cd();

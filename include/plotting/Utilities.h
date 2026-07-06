@@ -7,6 +7,7 @@
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TGraphErrors.h"
+#include "TF1.h"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "TLegend.h"
@@ -135,6 +136,14 @@ inline TGraphErrors *GetGraphAny(TDirectory *d,
   return nullptr;
 }
 
+// A TGraphErrors built by CalibrationExtractor.cxx/TextFileWriter.cxx carries
+// at most one embedded fit function; this is that function, if any.
+inline TF1 *GetGraphFit(TGraphErrors *g) {
+  if (!g || !g->GetListOfFunctions() || g->GetListOfFunctions()->GetSize() == 0)
+    return nullptr;
+  return (TF1 *)g->GetListOfFunctions()->At(0);
+}
+
 // Clone a TH2D from file, disassociate from directory. 2D analog of GetHAny(TFile*, ...).
 inline TH2D *GetH2Any(TFile *f, const std::vector<TString> &names) {
   for (const auto &name : names) {
@@ -224,6 +233,25 @@ inline void SavePlot(TCanvas *c, const TString &outDir, const TString &cone,
   c->SaveAs(Form("%s/%s.png", dir.Data(), fileBase.Data()));
 }
 
+// Small borderless/fill-less legend of label-only lines. Replaces the old
+// convention of one oversized bold TLatex line concatenating cone/method/
+// slice/etc with "|" -- that line ran off the canvas edge for anything with
+// more than two or three fields, since a single TLatex has no wrapping or
+// bounds checking the way a TLegend's box does.
+inline TLegend *DrawInfoLegend(double x1, double y1, double x2, double y2,
+                               const std::vector<TString> &lines,
+                               double textSize = 0.032) {
+  TLegend *leg = new TLegend(x1, y1, x2, y2);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextFont(42);
+  leg->SetTextSize(textSize);
+  for (const auto &line : lines)
+    leg->AddEntry((TObject *)nullptr, line.Data(), "");
+  leg->Draw();
+  return leg;
+}
+
 inline TString MakePlotDir(const TString &prefix = "plots") {
   TDatime now;
   TString timestamp =
@@ -289,6 +317,7 @@ inline SplitCanvas MakeSplitPadCanvas(const TString &name,
                                       const PlotConfig &cfg) {
   SplitCanvas sc;
   sc.c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+  RealAspectRatio(sc.c);
   sc.c->cd();
 
   sc.legpad = new TPad(name + "_legpad", "", 0.0, 1.0 - cfg.legfrac, 1.0, 1.0);

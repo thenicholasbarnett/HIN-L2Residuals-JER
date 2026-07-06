@@ -161,14 +161,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       // y=0.86 still collided)
       CMS_lumi(c, 16, 11);
 
-      TLatex *tex = new TLatex();
-      tex->SetNDC();
-      tex->SetTextSize(0.048);
-      tex->SetTextFont(62);
-      tex->DrawLatex(0.14, 0.78,
-                     Form("%s  |  %s  |  %s  |  %s", cone.Data(),
-                          kMethodLabels[m], xTitle.Data(),
-                          CalibTag(useJer).Data()));
+      DrawInfoLegend(0.14, 0.56, 0.46, 0.78,
+                     {cone, kMethodLabels[m], xTitle, CalibTag(useJer)});
 
       SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
       pb.Update();

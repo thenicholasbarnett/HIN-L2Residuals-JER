@@ -106,12 +106,7 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
   TH1D *hPhiAll[kNKinematicsCollections] = {};
 
   auto drawConeLabel = [&](const TString &collPlot, double xLeft) {
-    TLatex *lab = new TLatex(xLeft + 0.03, 0.855,
-                             Form("%s  |  %s", cone.Data(), collPlot.Data()));
-    lab->SetNDC();
-    lab->SetTextFont(42);
-    lab->SetTextSize(0.035);
-    lab->Draw();
+    DrawInfoLegend(xLeft + 0.03, 0.78, xLeft + 0.28, 0.885, {cone, collPlot});
   };
 
   for (int ic = 0; ic < kNKinematicsCollections; ic++) {
@@ -325,11 +320,7 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
     leg->Draw();
 
     DrawCMSInternalHeader(0.14, 0.90);
-    TLatex *lab = new TLatex(0.17, 0.855, cone.Data());
-    lab->SetNDC();
-    lab->SetTextFont(42);
-    lab->SetTextSize(0.035);
-    lab->Draw();
+    DrawInfoLegend(0.17, 0.80, 0.40, 0.885, {cone});
 
     SaveKinematicsPlot(c, outDir, cone, "overview", cvName);
     delete c;

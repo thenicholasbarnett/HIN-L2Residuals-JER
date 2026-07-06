@@ -70,8 +70,9 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         cv.main->SetGridx();
         cv.main->SetGridy();
 
-        StyleH(hRdc, kBlue + 1, 20, 1.5f);
-        StyleH(hRmc, kRed + 1, 21, 1.5f);
+        // two series only: always kBlue/kRed
+        StyleH(hRdc, kBlue, 20, 1.5f);
+        StyleH(hRmc, kRed, 21, 1.5f);
 
         auto [ylo, yhi] = YRange({hRdc, hRmc});
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
@@ -96,14 +97,9 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         leg->AddEntry(hRdc, "R_{data}", "lp");
         leg->Draw();
 
-        TLatex *tex = new TLatex();
-        tex->SetNDC();
-        tex->SetTextSize(0.050);
-        tex->SetTextFont(62);
-        tex->DrawLatex(0.16, 0.91,
-                       Form("%s  |  %s  |  %s  |  %s  |  %s", cone.Data(),
-                            kMethodLabels[m], ptSl.title.Data(),
-                            aSl.title.Data(), CalibTag(useJer).Data()));
+        DrawInfoLegend(0.58, 0.60, 0.94, 0.90,
+                       {cone, kMethodLabels[m], ptSl.title, aSl.title,
+                        CalibTag(useJer)});
 
         // ratio pad
         cv.ratio->cd();

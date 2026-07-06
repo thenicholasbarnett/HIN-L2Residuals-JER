@@ -77,12 +77,6 @@ inline void StyleGuideLine(TLine *l, Color_t col) {
   l->SetLineWidth(1);
 }
 
-inline void StyleFit(TF1 *f, Color_t col) {
-  f->SetLineColorAlpha(col, 0.70);
-  f->SetLineStyle(3);
-  f->SetLineWidth(2);
-}
-
 inline void DrawTruncLines(TH1D *h, double fraction, Color_t col, double yMin,
                            double yMax, TLine *&loLine, TLine *&hiLine) {
   auto [xlo, xhi] = TruncBounds(h, fraction);
@@ -109,8 +103,8 @@ inline TF1 *FitGaussianGuide(TH1D *h, const TString &name, Color_t col,
 
 inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
                          double yMin, double yMax) {
-  StyleH(hData, kBlack, 20, 1.5f);
-  StyleH(hMC, kRed + 1, 24, 1.5f);
+  StyleH(hData, kBlue, 20, 1.5f);
+  StyleH(hMC, kRed, 24, 1.5f);
 
   hData->SetTitle("");
   hData->GetXaxis()->SetTitle(xTitle);
@@ -125,7 +119,7 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
 }
 
 // Asymmetry distributions. Three canvases per (cone, pT slice, alpha slice,
-// eta bin), data (black) vs MC (red), log-y: trunc90/trunc95 truncation
+// eta bin), data (blue) vs MC (red), log-y: trunc90/trunc95 truncation
 // bounds, gauss fit guides. Skips bins under minEntries -- same threshold
 // ([cuts] min_entries_per_bin) extraction itself requires to fit a bin, so
 // plotting never re-fits something extraction already wrote off as too thin.
@@ -227,8 +221,8 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
 
           TLine *ldLo = nullptr, *ldHi = nullptr, *lmLo = nullptr,
                 *lmHi = nullptr;
-          DrawTruncLines(hdc, fraction, kBlack, ymin, ymax, ldLo, ldHi);
-          DrawTruncLines(hmc, fraction, kRed + 1, ymin, ymax, lmLo, lmHi);
+          DrawTruncLines(hdc, fraction, kBlue, ymin, ymax, ldLo, ldHi);
+          DrawTruncLines(hmc, fraction, kRed, ymin, ymax, lmLo, lmHi);
 
           TLegend *leg = makeLegend();
           leg->AddEntry(ldLo, Form("Data %s", label.Data()), "l");
@@ -257,9 +251,9 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           drawInfo();
 
           TF1 *fd =
-              FitGaussianGuide(hdc, cvName + "_data_fit", kBlack, minEntries);
+              FitGaussianGuide(hdc, cvName + "_data_fit", kBlue, minEntries);
           TF1 *fm =
-              FitGaussianGuide(hmc, cvName + "_mc_fit", kRed + 1, minEntries);
+              FitGaussianGuide(hmc, cvName + "_mc_fit", kRed, minEntries);
           if (fd)
             fd->Draw("same");
           if (fm)

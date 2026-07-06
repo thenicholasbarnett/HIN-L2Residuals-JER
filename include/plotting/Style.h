@@ -2,6 +2,7 @@
 #define L2RESIDUALS_PLOTTING_STYLE_H
 
 #include "TH1D.h"
+#include "TF1.h"
 #include "TLatex.h"
 #include "TLine.h"
 #include "TPad.h"
@@ -25,10 +26,6 @@ static const Color_t kMethodColors[] = {HiroshigeNightBlue(), KlimtGreen(),
 static const int kMethodStyles[] = {
     20, 34, 21, 22}; // circle / cross / square / triangle-up
 static constexpr int kNMethods = 4;
-
-// colors for the eta-symmetry comparison
-static const Color_t kColFull = HiroshigeLightRed();
-static const Color_t kColRefl = HiroshigeNightBlue();
 
 // JEC vs JER SF selector for Step 2 plots reading intercept/R/R_data/R_mc
 // objects (runCalibration's CALIBRATION=JEC|JER token); names differ by a
@@ -65,6 +62,15 @@ inline void StyleH(TH1D *h, Color_t col, int mstyle, float lw = 2.0f) {
   h->SetMarkerStyle(mstyle);
   h->SetMarkerSize(0.85f);
   h->SetLineWidth((Width_t)lw);
+}
+
+// Fit-curve style shared by every Gaussian-guide overlay (adist, response
+// distributions): solid, slightly thick, fully opaque -- a dotted, thin,
+// half-transparent line reads as a guess, not a fit.
+inline void StyleFit(TF1 *f, Color_t col) {
+  f->SetLineColor(col);
+  f->SetLineStyle(1);
+  f->SetLineWidth(3);
 }
 
 // Horizontal dashed reference line at y=ref drawn on pad p.

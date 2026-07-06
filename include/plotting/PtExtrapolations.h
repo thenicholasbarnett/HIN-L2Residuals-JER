@@ -52,9 +52,10 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
         c->SetGridx();
         c->SetGridy();
 
+        // single series (markers + one fit line): always kBlue/kRed
         gc->SetMarkerStyle(20);
-        gc->SetMarkerColor(kMethodColors[m]);
-        gc->SetLineColor(kMethodColors[m]);
+        gc->SetMarkerColor(kBlue);
+        gc->SetLineColor(kBlue);
         gc->SetMarkerSize(0.9);
 
         gc->GetXaxis()->SetTitle("p_{T,avg} [GeV]");
@@ -65,6 +66,13 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
 
         gc->Draw("AP"); // embedded fit function draws automatically
 
+        TF1 *fitFn = GetGraphFit(gc);
+        if (fitFn) {
+          fitFn->SetLineColor(kRed);
+          fitFn->SetLineStyle(1);
+          fitFn->SetLineWidth(3);
+        }
+
         // horizontal reference at y=1
         double xlo = gc->GetXaxis()->GetXmin();
         double xhi = gc->GetXaxis()->GetXmax();
@@ -74,13 +82,9 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
         hl->SetLineWidth(1);
         hl->Draw();
 
-        TLatex *tex = new TLatex();
-        tex->SetNDC();
-        tex->SetTextSize(0.042);
-        tex->SetTextFont(62);
-        tex->DrawLatex(0.14, 0.92,
-                       Form("%s  |  %s  |  %s  |  eta bin %d", cone.Data(),
-                            kMethodLabels[m], etaMode.Data(), ie));
+        DrawInfoLegend(0.60, 0.68, 0.92, 0.90,
+                       {cone, kMethodLabels[m], etaMode,
+                        Form("eta bin %d", ie)});
 
         SavePlot(c, outDir, cone, "ptfit", {etaMode, etaKey}, cvName);
         pb.Update();
