@@ -19,10 +19,10 @@
 #include <vector>
 
 static const TString kFinalsYTitle =
-    "k_{FSR} #bullet #frac{R_{MC}}{R_{Data}} |_{#alpha#rightarrow0}";
+    "k_{FSR} #scale[0.35]{#bullet} #frac{R_{MC}}{R_{Data}} |_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
-// finals_{cone}_{method}_abseta/fulleta: R_data/R_MC at alpha->0 vs eta.
+// finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
 
 inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
@@ -33,7 +33,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       if (!pb.ShouldKeep())
         continue;
       const bool fullEta = (ieta == 1);
-      const TString xTitle = fullEta ? "#eta" : "|#eta|";
+      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
       const double xFullMin =
           fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
       const double xFullMax =
@@ -104,18 +104,25 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         xMax = xFullMax;
       }
 
-      double ylo = 0.9, yhi = 2.0;
+      double ylo = 0.9, yhi = 1.6;
       // closure passes check R_MC/R_data ~= 1 to a tight tolerance
       if (isClosure) {
         ylo = 0.95;
         yhi = 1.05;
       }
 
-      TLegend *leg = new TLegend(0.50, 0.64, 0.93, 0.88);
+      // one legend (cone/method + all pT slices) instead of two separate
+      // boxes -- upper-left for |eta|, upper-middle for full eta so it
+      // doesn't sit over the eta<0 half of the data
+      const double legX1 = fullEta ? 0.34 : 0.19;
+      const double legX2 = fullEta ? 0.67 : 0.52;
+      TLegend *leg = new TLegend(legX1, 0.50, legX2, 0.88);
       leg->SetBorderSize(0);
       leg->SetFillStyle(0);
       leg->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
       leg->SetTextSize(0.028);
+      leg->AddEntry((TObject *)nullptr, cone.Data(), "");
+      leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
 
       bool first = true;
       for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
@@ -165,8 +172,6 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
 
       leg->Draw();
       DrawAsymHeader(0.16);
-      DrawInfoLegend(0.16, 0.68, 0.40, 0.80,
-                     {cone, CalibMethodLabel(m, useJer)});
 
       SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
       pb.Update();

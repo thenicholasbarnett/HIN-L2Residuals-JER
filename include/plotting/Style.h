@@ -151,9 +151,11 @@ inline void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
 }
 
 // xLeft should match the canvas's actual left margin, or "CMS Internal"
-// won't sit flush with the frame's left edge.
+// won't sit flush with the frame's left edge. xRight matches the 0.90 every
+// other plot family already passes explicitly (Kinematics.h/ResponsePlots.h)
+// -- the bare 0.95 default sits too close to the canvas edge and clips.
 inline void DrawAsymHeader(double xLeft = 0.13) {
-  DrawCMSInternalHeader(xLeft);
+  DrawCMSInternalHeader(xLeft, 0.90);
 }
 
 inline TString FormatEntriesText(Long64_t entries) {
@@ -161,7 +163,7 @@ inline TString FormatEntriesText(Long64_t entries) {
     return Form("%lld Entries", entries);
   const int exponent = (int)std::floor(std::log10((double)entries));
   const double mantissa = entries / std::pow(10.0, exponent);
-  return Form("%.3g #bullet 10^{%d} Entries", mantissa, exponent);
+  return Form("%.3g #scale[0.45]{#bullet} 10^{%d} Entries", mantissa, exponent);
 }
 
 inline void DrawEntriesLabel(Long64_t entries, double x = 0.88,

@@ -14,6 +14,7 @@
 
 #include "plotting/Style.h"
 #include "plotting/Utilities.h"
+#include "AnalysisConfig.h"
 #include "Colors.h"
 #include "ProgressBar.h"
 #include "jetmet/Variables.h" // JME-standard axis titles for reco jet pT/eta
@@ -46,6 +47,15 @@ static const TString kRecoPtAxisTitle =
 static const TString kRecoEtaAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::jteta, false);
 
+// below cfg.minJetPt there's no real jet to speak of. For a triggered
+// (hard-probe) dataset, the meaningful floor is the trigger's own pT
+// threshold instead, since every event is already preselected on it.
+inline double KinematicsPtMin(const TAxis *xaxis, bool isTriggered) {
+  const double cutoff =
+      isTriggered ? Config().hltJ80Thresh : Config().minJetPt;
+  return (cutoff > 0.0) ? std::max(cutoff, xaxis->GetXmin()) : xaxis->GetXmin();
+}
+
 inline TH1D *ProjectTH3D1D(TH3D *h3, const char *axis, const TString &name) {
   TDirectory::TContext nodir(nullptr);
   TH1D *h = (TH1D *)h3->Project3D(axis);
@@ -65,7 +75,8 @@ inline TH2D *ProjectEtaPhi(TH3D *h3, double ptMin, const TString &name) {
 }
 
 inline void DrawKinematics1D(TH1D *h, const TString &xTitle,
-                             const TString &yTitle, bool logy) {
+                             const TString &yTitle, bool logy,
+                             double xMin = -1.0) {
   if (h->Integral() > 0)
     h->Scale(1.0 / h->Integral());
   h->SetTitle("");
@@ -74,6 +85,8 @@ inline void DrawKinematics1D(TH1D *h, const TString &xTitle,
   h->GetXaxis()->CenterTitle();
   h->GetYaxis()->CenterTitle();
   h->GetXaxis()->SetTitleOffset(1.25);
+  if (xMin >= 0.0)
+    h->GetXaxis()->SetRangeUser(xMin, h->GetXaxis()->GetXmax());
   StyleH(h, HiroshigeNightBlue(), 20);
   h->Draw("hist");
   if (logy && h->GetMaximum() > 0) {
@@ -100,6 +113,10 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
       return;
     }
   }
+
+  // h_hlt_j80 only exists for a triggered (hard-probe) dataset -- see
+  // EventQA.h's identical detection
+  const bool isTriggered = (fIn->Get("h_hlt_j80") != nullptr);
 
   TH1D *hPtAll[kNKinematicsCollections] = {};
   TH1D *hEtaAll[kNKinematicsCollections] = {};
@@ -134,7 +151,8 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
       c->SetGridx();
       c->SetGridy();
       c->SetLogx();
-      DrawKinematics1D(h, kRecoPtAxisTitle, "1/N  dN/dp_{T}", true);
+      DrawKinematics1D(h, kRecoPtAxisTitle, "1/N  dN/dp_{T}", true,
+                       KinematicsPtMin(h->GetXaxis(), isTriggered));
       hPtAll[ic] = (TH1D *)h->Clone(Form("hPtAll_%d", ic));
       hPtAll[ic]->SetDirectory(0);
       DrawCMSInternalHeader(0.14, 0.90);
