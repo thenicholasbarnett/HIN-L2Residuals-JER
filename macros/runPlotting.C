@@ -10,6 +10,7 @@
 //   [-closure true]
 //   [-calibration JEC|JER]
 //   [-tag name]
+//   [-sample true]
 //   [-flags "..."]
 //
 // ./build/bin/runPlotting args.config  # config file lines: key = value
@@ -114,7 +115,18 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 // and ignore CALIBRATION= entirely. finals' Step 3 corrfinal-grid fallback
 // has no JER equivalent yet -- CALIBRATION=JER only ever finds Step 2's
 // native intercept_jer_* objects there.
+//
+// -sample true (default false): stops after kSampleMaxPlots plots or
+// kSampleMaxSeconds seconds, whichever comes first, instead of running the
+// full FLAGS= selection to completion. For previewing a cosmetic change
+// (axis titles, colors, legend layout, ...) against a couple of real plots
+// without waiting out a full run. No effect on which plots are counted for
+// the progress bar's total, only on how many actually get saved.
 // ============================================================
+
+// -sample true's cap: whichever comes first.
+constexpr int kSampleMaxPlots = 1000;
+constexpr int kSampleMaxSeconds = 60;
 
 // Smart-default "finals" inclusion. PlotFinals draws from Step 2's native
 // intercept histograms when present, falling back to Step 3's corrfinal grid
@@ -145,7 +157,7 @@ bool WantsFinalsByDefault(TFile *fIn, const TString &cone,
 
 void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
                  bool isClosure = false, bool useJer = false,
-                 TString tag = "") {
+                 TString tag = "", bool sample = false) {
   const AnalysisConfig &cfg = Config();
   PrintConfigSummary(cfg);
 
@@ -245,36 +257,44 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   }
 
   ProgressBar pb("Saving plots:", totalPlots);
+  if (sample)
+    pb.EnableSample(kSampleMaxPlots, kSampleMaxSeconds);
 
-  if (doEvent)
-    PlotEvent(fIn, outDir, pb);
+  try {
+    if (doEvent)
+      PlotEvent(fIn, outDir, pb);
 
-  for (const TString &cone : cfg.coneLabels) {
-    if (doEtaSym)
-      PlotEtaSym(fIn, outDir, cone, bins, pb, useJer);
-    if (doMethods)
-      PlotMethodComp(fIn, outDir, cone, bins, false, pb, useJer);
-    if (doMethods)
-      PlotMethodComp(fIn, outDir, cone, bins, true, pb, useJer);
-    if (doFinals)
-      PlotFinals(fIn, outDir, cone, bins, pb, isClosure, useJer);
-    if (doNormComp)
-      PlotNormComp(fIn, outDir, cone, bins, false, pb, useJer);
-    if (doNormComp)
-      PlotNormComp(fIn, outDir, cone, bins, true, pb, useJer);
-    if (doAdist)
-      PlotAsymDist(fIn, outDir, cone, bins, minEntriesPlot, pb);
-    if (doRover)
-      PlotROverlay(fIn, outDir, cone, bins, pb, useJer);
-    if (doAlpha)
-      PlotAlphaFit(fIn, outDir, cone, bins, pb, useJer);
-    if (doPtFit)
-      PlotPtFit(fIn, outDir, cone, pb);
-    if (doKine)
-      PlotKinematics(fIn, outDir, cone, kineIncludeIncl, pb);
-    if (doResponse)
-      PlotResponse(fIn, outDir, cone, cfg.responseGausFitHalfWidth,
-                   minEntriesPlot, pb);
+    for (const TString &cone : cfg.coneLabels) {
+      if (doEtaSym)
+        PlotEtaSym(fIn, outDir, cone, bins, pb, useJer);
+      if (doMethods)
+        PlotMethodComp(fIn, outDir, cone, bins, false, pb, useJer);
+      if (doMethods)
+        PlotMethodComp(fIn, outDir, cone, bins, true, pb, useJer);
+      if (doFinals)
+        PlotFinals(fIn, outDir, cone, bins, pb, isClosure, useJer);
+      if (doNormComp)
+        PlotNormComp(fIn, outDir, cone, bins, false, pb, useJer);
+      if (doNormComp)
+        PlotNormComp(fIn, outDir, cone, bins, true, pb, useJer);
+      if (doAdist)
+        PlotAsymDist(fIn, outDir, cone, bins, minEntriesPlot, pb);
+      if (doRover)
+        PlotROverlay(fIn, outDir, cone, bins, pb, useJer);
+      if (doAlpha)
+        PlotAlphaFit(fIn, outDir, cone, bins, pb, useJer);
+      if (doPtFit)
+        PlotPtFit(fIn, outDir, cone, pb);
+      if (doKine)
+        PlotKinematics(fIn, outDir, cone, kineIncludeIncl, pb);
+      if (doResponse)
+        PlotResponse(fIn, outDir, cone, cfg.responseGausFitHalfWidth,
+                     minEntriesPlot, pb);
+    }
+  } catch (const SampleLimitReached &) {
+    std::cout << "\n-sample true: stopped after " << pb.current << "/"
+              << totalPlots << " plots (cap: " << kSampleMaxPlots
+              << " plots or " << kSampleMaxSeconds << "s, whichever first)\n";
   }
 
   pb.Finish();
@@ -288,8 +308,8 @@ int main(int argc, char *argv[]) {
   static const char *const kUsage =
       "Usage: runPlotting -input file.root -config path [-outdir dir] "
       "[-closure true]\n"
-      "                    [-calibration JEC|JER] [-tag name] [-flags "
-      "\"...\"]\n"
+      "                    [-calibration JEC|JER] [-tag name] [-sample "
+      "true] [-flags \"...\"]\n"
       "       runPlotting args.config   # config file lines use: key = value\n"
       "  IMPORTANT: put -flags LAST. The vendored CommandLine parser "
       "greedily\n"
@@ -319,7 +339,12 @@ int main(int argc, char *argv[]) {
       "instead of\n"
       "         outdir/ directly, so separate runs against the same outdir "
       "don't\n"
-      "         overwrite each other's PNGs.\n";
+      "         overwrite each other's PNGs.\n"
+      "  -sample true (default false): stop after 1000 plots or 60s, "
+      "whichever\n"
+      "         comes first, instead of running the full -flags selection. "
+      "For\n"
+      "         previewing a cosmetic change against a few real plots.\n";
 
   CommandLine cl;
   if (!cl.parse(argc, argv))
@@ -332,6 +357,7 @@ int main(int argc, char *argv[]) {
   std::string calibration =
       cl.getValue<std::string>("calibration", std::string("JEC"));
   std::string tag = cl.getValue<std::string>("tag", std::string(""));
+  bool sample = cl.getValue<bool>("sample", false);
   std::string config = cl.getValue<std::string>("config");
 
   if (!cl.check()) {
@@ -349,7 +375,7 @@ int main(int argc, char *argv[]) {
   }
   bool useJer = (calibration == "JER");
 
-  runPlotting(input, outDir, flags, isClosure, useJer, tag);
+  runPlotting(input, outDir, flags, isClosure, useJer, tag, sample);
   return 0;
 }
 #endif
