@@ -45,14 +45,49 @@ static constexpr int kNResponseVariants = 3;
 static const TString kPtGenAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::refpt, true);
 
+// generic ratio label for plots overlaying all 3 variants at once (the
+// legend, not the axis, names which pT is which there)
+static const TString kGenericRatioLabel = "p_{T}/p_{T}^{gen}";
+
+// JES = mean of the response ratio, JER = its fractional resolution
+// (sigma/mean) -- distinct from runCalibration's data/MC JER scale factor
+// (Style.h::CalibYTitle), this is a pure-MC quantity.
+inline TString ResponseYTitle(const TString &quantity,
+                              const TString &ratioLabel) {
+  if (quantity == "JES")
+    return "#LT " + ratioLabel + " #GT";
+  return "#sigma(" + ratioLabel + ") / #LT " + ratioLabel + " #GT";
+}
+
+// below cfg.minJetPt there's no real jet to speak of; start the pT_gen axis
+// there instead of at 0 (also keeps the log-x axis away from a zero edge)
+inline double ResponsePtGenMin(const TAxis *xaxis) {
+  double cutoff = Config().minJetPt;
+  return (cutoff > 0.0) ? std::max(cutoff, xaxis->GetXmin())
+                        : xaxis->GetXmin();
+}
+
+// Two-pass fit: an initial Gaussian within [1-halfWidth, 1+halfWidth] locates
+// the real peak, then a second Gaussian refit narrows to +-2 sigma of that
+// first pass's own mean -- keeps a single unconstrained pass from chasing
+// the long non-Gaussian tail toward the response axis's [0,2] edge.
 inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
                              double halfWidth, int minEntries) {
   if (!h || h->GetEntries() < minEntries)
     return nullptr;
-  TF1 *fit = new TF1(name, "gaus", 1.0 - halfWidth, 1.0 + halfWidth);
-  fit->SetParameter(0, h->GetMaximum());
-  fit->SetParameter(1, h->GetMean());
-  fit->SetParameter(2, std::max(h->GetRMS(), 1e-3));
+
+  TF1 pass1(name + "_pass1", "gaus", 1.0 - halfWidth, 1.0 + halfWidth);
+  pass1.SetParameter(0, h->GetMaximum());
+  pass1.SetParameter(1, h->GetMean());
+  pass1.SetParameter(2, std::max(h->GetRMS(), 1e-3));
+  h->Fit(&pass1, "NQR");
+
+  const double c = pass1.GetParameter(0);
+  const double m = pass1.GetParameter(1);
+  const double s = std::max(pass1.GetParameter(2), 1e-3);
+
+  TF1 *fit = new TF1(name, "gaus", m - 2.0 * s, m + 2.0 * s);
+  fit->SetParameters(c, m, s);
   StyleFit(fit, col);
   h->Fit(fit, "NQSR");
   return fit;
@@ -73,35 +108,66 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
     return;
   }
 
-  StyleH(h, HiroshigeNightBlue(), 20, 1.5f);
+  const Long64_t nEntries = (Long64_t)h->GetEntries();
+  NormalizeDensity(h); // 1/N dN/d(ratio) -- Scale() leaves GetEntries() alone
+
+  // single series (markers + one fit line): always kBlue/kRed
+  StyleH(h, kBlue, 20, 1.5f);
   h->SetTitle("");
   h->GetXaxis()->SetTitle(xTitle);
   h->GetXaxis()->CenterTitle();
-  h->GetYaxis()->SetTitle("Jets");
+  h->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{d(" + xTitle + ")}");
   h->GetYaxis()->CenterTitle();
   h->GetXaxis()->SetTitleOffset(1.25);
+  h->GetYaxis()->SetTitleOffset(1.7);
 
   TString cvName = "response_" + objName;
   TCanvas *c = new TCanvas(cvName, "", 800, 800);
   RealAspectRatio(c);
-  c->SetLeftMargin(0.13);
+  c->SetLeftMargin(0.17);
+  c->SetLogy();
 
   h->Draw("E1");
 
-  TF1 *fit = FitResponseGuide(h, cvName + "_fit", HiroshigeLightRed(),
-                              halfWidth, minEntries);
+  TF1 *fit =
+      FitResponseGuide(h, cvName + "_fit", kRed, halfWidth, minEntries);
   if (fit)
     fit->Draw("same");
 
-  DrawCMSInternalHeader(0.13, 0.95);
+  // zoom around the fit peak -- the response axis's hard [0,2] edge leaves a
+  // long, sparsely-filled tail that otherwise dominates the drawn range
+  double xlo = h->GetXaxis()->GetXmin();
+  double xhi = h->GetXaxis()->GetXmax();
+  if (fit) {
+    const double m = fit->GetParameter(1);
+    const double s = std::max(fit->GetParameter(2), 1e-3);
+    xlo = std::max(xlo, m - 6.0 * s);
+    xhi = std::min(xhi, m + 6.0 * s);
+  }
+  h->GetXaxis()->SetRangeUser(xlo, xhi);
+  h->SetMinimum(0.1); // normalized density -- the far tail below this is noise
+
+  DrawCMSInternalHeader(0.17, 0.90);
   TLatex *tex = new TLatex();
   tex->SetNDC();
   tex->SetTextSize(0.033);
   tex->SetTextFont(42);
   tex->SetTextAlign(31);
-  tex->DrawLatex(0.93, 0.84, Form("%s  |  %s", cone.Data(), collection.Data()));
-  tex->DrawLatex(0.93, 0.79, label);
-  DrawEntriesLabel((Long64_t)h->GetEntries(), 0.93, 0.74);
+  tex->DrawLatex(0.90, 0.84, label);
+
+  TLegend *leg = new TLegend(0.55, 0.58, 0.86, 0.79);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(0.030);
+  leg->SetTextFont(42);
+  leg->AddEntry((TObject *)nullptr, cone.Data(), "");
+  leg->AddEntry((TObject *)nullptr, collection.Data(), "");
+  leg->AddEntry((TObject *)nullptr, FormatEntriesText(nEntries).Data(), "");
+  if (fit)
+    leg->AddEntry(
+        fit, Form("#chi^{2}/ndf = %.1f/%d", fit->GetChisquare(), fit->GetNDF()),
+        "l");
+  leg->Draw();
 
   SavePlot(c, outDir, cone, "response_dist", plotKeys, cvName);
   pb.Update();
@@ -115,7 +181,8 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
                                 const TString &cone,
                                 const TString &quantity, // "JES" or "JER"
                                 const std::vector<TString> &orderedKeys,
-                                const TString &xTitle, const TString &tag,
+                                const TString &xTitle,
+                                const TString &ratioLabel, const TString &tag,
                                 ProgressBar &pb) {
   TH1D *h[kNResponseCollections] = {};
   bool any = false;
@@ -141,22 +208,28 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
     }
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
-  const double xMin = frame->GetXaxis()->GetXmin();
+  if (quantity == "JES") {
+    ylo = 0.95;
+    yhi = 1.05;
+  }
+  const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
   TCanvas *c =
       new TCanvas("response_summary_" + cone + "_" + tag, "", 800, 800);
   RealAspectRatio(c);
+  c->SetLogx();
   c->SetLeftMargin(0.14);
   c->SetGridx();
   c->SetGridy();
 
   frame->SetTitle("");
   frame->GetXaxis()->SetTitle(xTitle);
-  frame->GetYaxis()->SetTitle(quantity);
+  frame->GetYaxis()->SetTitle(ResponseYTitle(quantity, ratioLabel));
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
+  frame->GetXaxis()->SetRangeUser(xMin, xMax);
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
@@ -180,14 +253,22 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
     rl->SetLineColor(kGray + 2);
     rl->SetLineWidth(1);
     rl->Draw();
+
+    TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+    rl99->SetLineStyle(3);
+    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineWidth(2);
+    rl99->Draw();
+
+    TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+    rl101->SetLineStyle(3);
+    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineWidth(2);
+    rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab = new TLatex(0.17, 0.855, cone.Data());
-  lab->SetNDC();
-  lab->SetTextFont(42);
-  lab->SetTextSize(0.035);
-  lab->Draw();
+  DrawInfoLegend(0.16, 0.80, 0.40, 0.885, {cone, "all #eta_{reco}"});
 
   SavePlot(c, outDir, cone, "response_summary", {tag}, c->GetName());
   pb.Update();
@@ -225,27 +306,33 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
     }
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
-  const double xMin = frame->GetXaxis()->GetXmin();
+  if (quantity == "JES") {
+    ylo = 0.95;
+    yhi = 1.05;
+  }
+  const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
   TCanvas *c = new TCanvas("response_variants_" + cone + "_" + collection +
                                "_" + quantity,
                            "", 800, 800);
   RealAspectRatio(c);
+  c->SetLogx();
   c->SetLeftMargin(0.14);
   c->SetGridx();
   c->SetGridy();
 
   frame->SetTitle("");
   frame->GetXaxis()->SetTitle(kPtGenAxisTitle);
-  frame->GetYaxis()->SetTitle(quantity);
+  frame->GetYaxis()->SetTitle(ResponseYTitle(quantity, kGenericRatioLabel));
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
+  frame->GetXaxis()->SetRangeUser(xMin, xMax);
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
-  TLegend *leg = new TLegend(0.60, 0.72, 0.88, 0.88);
+  TLegend *leg = new TLegend(0.68, 0.72, 0.895, 0.88);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(0.034);
@@ -265,15 +352,23 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
     rl->SetLineColor(kGray + 2);
     rl->SetLineWidth(1);
     rl->Draw();
+
+    TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+    rl99->SetLineStyle(3);
+    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineWidth(2);
+    rl99->Draw();
+
+    TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+    rl101->SetLineStyle(3);
+    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineWidth(2);
+    rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab = new TLatex(0.17, 0.855,
-                           Form("%s  |  %s", cone.Data(), collection.Data()));
-  lab->SetNDC();
-  lab->SetTextFont(42);
-  lab->SetTextSize(0.035);
-  lab->Draw();
+  DrawInfoLegend(0.16, 0.75, 0.42, 0.885,
+                 {cone, collection, "all #eta_{reco}"});
 
   SavePlot(c, outDir, cone, "response_variants", {collection, quantity},
            c->GetName());
@@ -307,17 +402,20 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
       TH1D *hJes = GetHAny(fIn, {cone + "/" + jesName});
       if (hJes) {
         for (int ip = 1; ip <= hJes->GetNbinsX(); ip++) {
+          if (!pb.ShouldKeep())
+            continue;
           const double lo = hJes->GetXaxis()->GetBinLowEdge(ip);
           const double hi = hJes->GetXaxis()->GetBinUpEdge(ip);
           TString objName =
               L2Name::ObjectName(cone, "response_" + variant,
                                  {L2Name::PtGenKey(lo, hi)}, {collection});
-          TString label = Form("p_{T}^{gen} bin: [%.0f, %.0f) GeV  (%s)", lo,
-                               hi, variant.Data());
-          DrawResponseDist(fIn, outDir, cone, "QA_response_ptgen", objName,
-                           collection, label, {collection, variant, "vs_ptgen"},
-                           kResponseVariantLabels[iv], halfWidth, minEntries,
-                           pb);
+          TString label =
+              Form("%.0f #leq p_{T}^{gen} < %.0f GeV", lo, hi);
+          DrawResponseDist(
+              fIn, outDir, cone, "QA_response_ptgen", objName, collection,
+              label,
+              {collection, variant, "vs_ptgen", L2Name::PtGenKey(lo, hi)},
+              kResponseVariantLabels[iv], halfWidth, minEntries, pb);
         }
         delete hJes;
       }
@@ -328,9 +426,11 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
   for (int iv = 0; iv < kNResponseVariants; iv++) {
     const TString variant = kResponseVariants[iv];
     DrawResponseSummary(fIn, outDir, cone, "JES", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, "JES_" + variant + "_vs_ptgen", pb);
+                        kPtGenAxisTitle, kResponseVariantLabels[iv],
+                        "JES_" + variant + "_vs_ptgen", pb);
     DrawResponseSummary(fIn, outDir, cone, "JER", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, "JER_" + variant + "_vs_ptgen", pb);
+                        kPtGenAxisTitle, kResponseVariantLabels[iv],
+                        "JER_" + variant + "_vs_ptgen", pb);
   }
 
   // variant comparison: corr/reco/raw overlaid, one per collection

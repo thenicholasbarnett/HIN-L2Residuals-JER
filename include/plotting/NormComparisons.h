@@ -30,6 +30,8 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
   const TString calibKey = useJer ? "jer" : "jec";
   const int nPt = (int)bins.ptavgSlices.size();
   for (int m = 0; m < kNMethods; m++) {
+    if (!pb.ShouldKeep())
+      continue;
     std::vector<TH1D *> hDirect(nPt, nullptr);
     std::vector<TH1D *> hNorm(nPt, nullptr);
 
@@ -143,14 +145,10 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
     legStyle->Draw();
     legPt->Draw();
 
-    TLatex *tex = new TLatex();
-    tex->SetNDC();
-    tex->SetTextSize(0.051);
-    tex->SetTextFont(62);
-    tex->DrawLatex(0.16, 0.91,
-                   Form("%s   |   %s   |   %s   |   %s", cone.Data(),
-                        kMethodLabels[m], xTitle.Data(),
-                        CalibTag(useJer).Data()));
+    // legStyle (bottom-left) and legPt (top-right) already occupy those
+    // corners -- top-left is the free one
+    DrawInfoLegend(0.16, 0.68, 0.50, 0.90,
+                   {cone, kMethodLabels[m], xTitle, CalibTag(useJer)});
 
     // ratio pad
     cv.ratio->cd();

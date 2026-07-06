@@ -7,6 +7,7 @@
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TGraphErrors.h"
+#include "TF1.h"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "TLegend.h"
@@ -135,6 +136,14 @@ inline TGraphErrors *GetGraphAny(TDirectory *d,
   return nullptr;
 }
 
+// A TGraphErrors built by CalibrationExtractor.cxx/TextFileWriter.cxx carries
+// at most one embedded fit function; this is that function, if any.
+inline TF1 *GetGraphFit(TGraphErrors *g) {
+  if (!g || !g->GetListOfFunctions() || g->GetListOfFunctions()->GetSize() == 0)
+    return nullptr;
+  return (TF1 *)g->GetListOfFunctions()->At(0);
+}
+
 // Clone a TH2D from file, disassociate from directory. 2D analog of GetHAny(TFile*, ...).
 inline TH2D *GetH2Any(TFile *f, const std::vector<TString> &names) {
   for (const auto &name : names) {
@@ -203,6 +212,39 @@ inline std::pair<double, double> YRange(const std::vector<TH1D *> &hv,
   return {lo - pad * span, hi + pad * span};
 }
 
+// Widest occupied bin range across a set of histograms sharing the same
+// axis binning, extended by one empty bin on each side that has content --
+// so the axis ends just past the real data instead of running out to the
+// full binning's extent when the data itself stops well short of it (e.g.
+// a central pT slice with limited jet reach in eta). Returns {0,0} if none
+// of the histograms have any content.
+inline std::pair<double, double> OccupiedRangeWithMargin(
+    const std::vector<TH1D *> &hv) {
+  int loBin = -1, hiBin = -1;
+  TH1D *ref = nullptr;
+  for (auto *h : hv) {
+    if (!h)
+      continue;
+    if (!ref)
+      ref = h;
+    for (int i = 1; i <= h->GetNbinsX(); i++) {
+      if (h->GetBinContent(i) != 0 || h->GetBinError(i) != 0) {
+        if (loBin < 0 || i < loBin)
+          loBin = i;
+        if (i > hiBin)
+          hiBin = i;
+      }
+    }
+  }
+  if (!ref || loBin < 0)
+    return {0.0, 0.0};
+  const int nBins = ref->GetNbinsX();
+  const int loMargin = std::max(1, loBin - 1);
+  const int hiMargin = std::min(nBins, hiBin + 1);
+  return {ref->GetXaxis()->GetBinLowEdge(loMargin),
+          ref->GetXaxis()->GetBinUpEdge(hiMargin)};
+}
+
 // plot path helpers
 
 inline TString PlotDir(const TString &outDir, const TString &cone,
@@ -222,6 +264,25 @@ inline void SavePlot(TCanvas *c, const TString &outDir, const TString &cone,
                      const TString &fileBase) {
   TString dir = PlotDir(outDir, cone, plotType, orderedKeys);
   c->SaveAs(Form("%s/%s.png", dir.Data(), fileBase.Data()));
+}
+
+// Small borderless/fill-less legend of label-only lines. Replaces the old
+// convention of one oversized bold TLatex line concatenating cone/method/
+// slice/etc with "|" -- that line ran off the canvas edge for anything with
+// more than two or three fields, since a single TLatex has no wrapping or
+// bounds checking the way a TLegend's box does.
+inline TLegend *DrawInfoLegend(double x1, double y1, double x2, double y2,
+                               const std::vector<TString> &lines,
+                               double textSize = 0.032) {
+  TLegend *leg = new TLegend(x1, y1, x2, y2);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextFont(42);
+  leg->SetTextSize(textSize);
+  for (const auto &line : lines)
+    leg->AddEntry((TObject *)nullptr, line.Data(), "");
+  leg->Draw();
+  return leg;
 }
 
 inline TString MakePlotDir(const TString &prefix = "plots") {
@@ -289,6 +350,7 @@ inline SplitCanvas MakeSplitPadCanvas(const TString &name,
                                       const PlotConfig &cfg) {
   SplitCanvas sc;
   sc.c = new TCanvas(name, "", cfg.canvasSize, cfg.canvasSize);
+  RealAspectRatio(sc.c);
   sc.c->cd();
 
   sc.legpad = new TPad(name + "_legpad", "", 0.0, 1.0 - cfg.legfrac, 1.0, 1.0);

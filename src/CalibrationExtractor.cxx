@@ -58,6 +58,21 @@ struct RPoint {
   double alpha, val, err;
 };
 
+// x-error for an alpha-threshold marker: half the local spacing to its
+// neighbors on the threshold axis. Not a physical bin width (the alpha
+// slices are cumulative "alpha < threshold" cuts, not a partition) -- just
+// conveys the threshold sweep's step size on the plot.
+static double AlphaPointHalfWidth(const std::vector<double> &x, int k) {
+  const int n = (int)x.size();
+  if (n < 2)
+    return 0.025; // fallback: half the alphaSlices' nominal 0.05 step
+  if (k == 0)
+    return 0.5 * (x[1] - x[0]);
+  if (k == n - 1)
+    return 0.5 * (x[n - 1] - x[n - 2]);
+  return 0.25 * (x[k + 1] - x[k - 1]);
+}
+
 // gauss fitting
 static GaussResult FitGauss(TH1D *h, const ResidualFitControls &controls) {
   GaussResult r;
@@ -169,8 +184,8 @@ static TruncResult TruncMeanInRange(TH1D *h, int binLo, int binHi) {
   double hTotal = h->Integral();
   double nEffEntries =
       (hTotal > 1e-10) ? h->GetEntries() * nEff / hTotal : nEff;
-  if (nEffEntries < 10)
-    return r;
+  // no separate entries gate here: FindTruncBins already required
+  // h's raw (pre-truncation) entries >= min_entries_per_bin
   h->GetXaxis()->SetRange(binLo, binHi);
   double mean = h->GetMean();
   double rms = h->GetRMS();
@@ -263,6 +278,13 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   fitFn->SetLineColor(color);
   gr->Fit(fitFn, "QR");
 
+  // x-error set only after the fit runs: TGraphErrors::Fit uses the
+  // effective-variance method when ex is nonzero, so setting these before
+  // fitting would quietly perturb the extrapolated intercept. These are
+  // purely a plotting aid for PlotAlphaFit.
+  for (int k = 0; k < n; k++)
+    gr->SetPointError(k, AlphaPointHalfWidth(x, k), ey[k]);
+
   out.c0 = fitFn->GetParameter(0);
   out.ec0 = fitFn->GetParError(0);
   out.valid = true;
@@ -279,23 +301,40 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
     }
   }
   if (normVal > 1e-6) {
-    int nfit = 0;
-    for (int k = 0; k < n && pts[k].alpha <= controls.alphaFitHi + 1e-4; k++)
-      nfit++;
-
-    std::vector<double> xn(nfit), yn(nfit), exn(nfit, 0.0), eyn(nfit);
+    // Every point gets normalized and kept, not just the ones the fit
+    // uses -- above-alphaFitHi points are real measurements, just not part
+    // of the extrapolation (same convention as the direct graph above,
+    // which already carries all n points through an "R"-ranged fit). Only
+    // abort the whole normalized graph on a degenerate in-range point,
+    // matching the original behavior; a bad out-of-range point is just
+    // skipped since it was never going into the fit anyway.
+    std::vector<double> xn, yn, exn, eyn;
+    xn.reserve(n);
+    yn.reserve(n);
+    exn.reserve(n);
+    eyn.reserve(n);
     bool bad = false;
-    for (int k = 0; k < nfit; k++) {
+    int nInRange = 0;
+    for (int k = 0; k < n; k++) {
+      const bool inRange = pts[k].alpha <= controls.alphaFitHi + 1e-4;
       if (std::abs(pts[k].val) < 1e-6) {
-        bad = true;
-        break;
+        if (inRange) {
+          bad = true;
+          break;
+        }
+        continue;
       }
-      xn[k] = pts[k].alpha;
-      yn[k] = pts[k].val / normVal;
-      eyn[k] = yn[k] * TMath::Sqrt(TMath::Power(pts[k].err / pts[k].val, 2.0) +
-                                   TMath::Power(normErr / normVal, 2.0));
+      const double y = pts[k].val / normVal;
+      xn.push_back(pts[k].alpha);
+      yn.push_back(y);
+      exn.push_back(0.0);
+      eyn.push_back(y * TMath::Sqrt(TMath::Power(pts[k].err / pts[k].val, 2.0) +
+                                    TMath::Power(normErr / normVal, 2.0)));
+      if (inRange)
+        nInRange++;
     }
-    if (!bad && nfit >= 2) {
+    const int nfit = (int)xn.size();
+    if (!bad && nInRange >= 2) {
       TString gnorm = gname + "_norm";
       TGraphErrors *grn =
           new TGraphErrors(nfit, xn.data(), yn.data(), exn.data(), eyn.data());
@@ -309,6 +348,9 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
       fn->SetParameter(1, 0.0);
       fn->SetLineColor(color);
       grn->Fit(fn, "QR");
+
+      for (int k = 0; k < nfit; k++)
+        grn->SetPointError(k, AlphaPointHalfWidth(xn, k), eyn[k]);
 
       const double c0n = fn->GetParameter(0);
       const double ec0n = fn->GetParError(0);

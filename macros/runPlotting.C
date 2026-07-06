@@ -1,21 +1,28 @@
 
-// USAGE       
+// USAGE
 //
 // Binary:
 //
 // ./build/bin/runPlotting
 //   -input residuals.root
+//   -config path
 //   [-outdir dir]
-//   [-flags "..."]
 //   [-closure true]
 //   [-calibration JEC|JER]
 //   [-tag name]
 //   [-sample true]
-//   -config path
+//   [-flags "..."]
 //
 // ./build/bin/runPlotting args.config  # config file lines: key = value
 //
-// Interpreted: 
+// -flags is last on purpose: the vendored CommandLine parser greedily
+// absorbs every following bare word into whichever flag precedes it until
+// it hits a token that starts with '-' -- a single-value flag placed after
+// -flags (or any typo'd flag missing its leading '-') silently gets eaten
+// into -flags's value instead of raising an error. Put single-value flags
+// like -config before -flags, or leave nothing after it.
+//
+// Interpreted:
 //
 // export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
 // root -l -b -q 'macros/runPlotting.C("residuals.root")'
@@ -253,6 +260,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   if (sample)
     pb.EnableSample(kSampleMaxPlots, kSampleMaxSeconds);
 
+  bool sampleStopped = false;
   try {
     if (doEvent)
       PlotEvent(fIn, outDir, pb);
@@ -285,12 +293,21 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
                      minEntriesPlot, pb);
     }
   } catch (const SampleLimitReached &) {
+    sampleStopped = true;
     std::cout << "\n-sample true: stopped after " << pb.current << "/"
               << totalPlots << " plots (cap: " << kSampleMaxPlots
               << " plots or " << kSampleMaxSeconds << "s, whichever first)\n";
   }
 
-  pb.Finish();
+  // Finish() forces current=total before its final draw -- correct for a
+  // real completion, but would repaint a false "100%" bar under the stopped
+  // message above if the sample cap cut the run short.
+  if (sampleStopped) {
+    printf("\n");
+    fflush(stdout);
+  } else {
+    pb.Finish();
+  }
   fIn->Close();
 }
 
@@ -299,10 +316,21 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
 #include <iostream>
 int main(int argc, char *argv[]) {
   static const char *const kUsage =
-      "Usage: runPlotting -input file.root [-outdir dir] [-flags \"...\"] "
-      "[-closure true] [-calibration JEC|JER] [-tag name] [-sample true] "
-      "-config path\n"
+      "Usage: runPlotting -input file.root -config path [-outdir dir] "
+      "[-closure true]\n"
+      "                    [-calibration JEC|JER] [-tag name] [-sample "
+      "true] [-flags \"...\"]\n"
       "       runPlotting args.config   # config file lines use: key = value\n"
+      "  IMPORTANT: put -flags LAST. The vendored CommandLine parser "
+      "greedily\n"
+      "         absorbs every following bare word into whichever flag "
+      "precedes it,\n"
+      "         until it hits a token starting with '-'. A single-value "
+      "flag placed\n"
+      "         after -flags -- or any flag typo'd without its leading '-' "
+      "-- is\n"
+      "         silently swallowed into -flags's value instead of raising "
+      "an error.\n"
       "  -flags: omit for the curated smart default, \"all\" for every plot\n"
       "         unconditionally, or a space-separated list of:\n"
       "         etasym methods finals normcomp adist roverlay alpha ptfit "

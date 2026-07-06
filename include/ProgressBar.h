@@ -113,6 +113,36 @@ struct ProgressBar {
     sampleDeadline = startTime + maxSeconds;
   }
 
+  // Call once per candidate item, before doing its expensive work, and skip
+  // (continue) the iteration if this returns false. Unlike the maxCount cap
+  // in Update() -- which only stops the run once that many items have
+  // already been fully built, biasing a sample toward whatever comes first
+  // in the plotting loops' fixed nesting order (one cone, one family, low
+  // bin indices) -- this is an independent Bernoulli trial per candidate
+  // with keep-probability sampleLimit/total, so a sample touches every
+  // cone/eta range/pT slice instead of just a prefix of them.
+  //
+  // Deliberately not an exact evenly-spaced/stride selection: that needs
+  // `seen` to land exactly on `total`, which breaks the moment one candidate
+  // yields more than one Update() (e.g. adist's 3 sub-plots per eta bin) --
+  // `seen` would only ever reach total/3, never crossing the stride's later
+  // thresholds. A per-candidate independent probability doesn't care how
+  // many Update() calls one kept candidate produces: since `total` already
+  // has that multiplicity baked in (it's summed straight from the same
+  // Count*Plots functions used to size the bar), the expected number of
+  // kept plots works out to sampleLimit regardless. Also enforces the
+  // wall-clock deadline here, since a long run of skipped (cheap)
+  // candidates never reaches Update() to check it there.
+  bool ShouldKeep() {
+    if (sampleLimit < 0)
+      return true;
+    if (time(nullptr) >= sampleDeadline)
+      throw SampleLimitReached{};
+    if (total <= 0)
+      return true;
+    return (rand() % total) < sampleLimit;
+  }
+
   void Finish() {
     current = total;
     Draw();

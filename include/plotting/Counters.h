@@ -93,6 +93,25 @@ inline int CountAlphaFitPlots(TFile *fIn, const TString &cone,
       }
     }
   }
+
+  // combined all-methods overlay: one more plot per (pT slice, eta bin)
+  // wherever at least one method has a valid graph
+  for (const auto &ptSl : bins.ptavgSlices) {
+    const TString ptKey = L2Name::PtKey(ptSl);
+    for (int ie = 0; ie < nEta; ie++) {
+      const TString etaKey = L2Name::EtaKey(ie, false);
+      bool any = false;
+      for (int m = 0; m < kNMethods && !any; m++) {
+        const TString gname = L2Name::ObjectName(
+            cone, CalibKind("R", useJer),
+            {L2Name::EtaModeKey(false), etaKey, ptKey}, {kMethodKeys[m]});
+        if (HasGraphWithN(dGraphs, {gname + "_norm", gname}, 2))
+          any = true;
+      }
+      if (any)
+        n++;
+    }
+  }
   return n;
 }
 

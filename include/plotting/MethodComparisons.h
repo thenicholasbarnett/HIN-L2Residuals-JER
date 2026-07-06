@@ -30,6 +30,8 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
   const TString calibKey = useJer ? "jer" : "jec";
 
   for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+    if (!pb.ShouldKeep())
+      continue;
     const auto &sl = bins.ptavgSlices[ip];
 
     std::vector<TH1D *> hists(kNMethods, nullptr);
@@ -96,14 +98,8 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
     RefLine(cv.main, xMin, xMax, 1.0);
     leg->Draw();
 
-    TLatex *tex = new TLatex();
-    tex->SetNDC();
-    tex->SetTextSize(0.051);
-    tex->SetTextFont(62);
-    tex->DrawLatex(0.16, 0.91,
-                   Form("%s   |   %s   |   %s   |   %s", cone.Data(),
-                        etaLabel.Data(), sl.title.Data(),
-                        CalibTag(useJer).Data()));
+    DrawInfoLegend(0.60, 0.68, 0.94, 0.90,
+                   {cone, etaLabel, sl.title, CalibTag(useJer)});
 
     // ratio pad
     cv.ratio->cd();
