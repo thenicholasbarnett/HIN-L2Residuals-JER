@@ -301,23 +301,40 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
     }
   }
   if (normVal > 1e-6) {
-    int nfit = 0;
-    for (int k = 0; k < n && pts[k].alpha <= controls.alphaFitHi + 1e-4; k++)
-      nfit++;
-
-    std::vector<double> xn(nfit), yn(nfit), exn(nfit, 0.0), eyn(nfit);
+    // Every point gets normalized and kept, not just the ones the fit
+    // uses -- above-alphaFitHi points are real measurements, just not part
+    // of the extrapolation (same convention as the direct graph above,
+    // which already carries all n points through an "R"-ranged fit). Only
+    // abort the whole normalized graph on a degenerate in-range point,
+    // matching the original behavior; a bad out-of-range point is just
+    // skipped since it was never going into the fit anyway.
+    std::vector<double> xn, yn, exn, eyn;
+    xn.reserve(n);
+    yn.reserve(n);
+    exn.reserve(n);
+    eyn.reserve(n);
     bool bad = false;
-    for (int k = 0; k < nfit; k++) {
+    int nInRange = 0;
+    for (int k = 0; k < n; k++) {
+      const bool inRange = pts[k].alpha <= controls.alphaFitHi + 1e-4;
       if (std::abs(pts[k].val) < 1e-6) {
-        bad = true;
-        break;
+        if (inRange) {
+          bad = true;
+          break;
+        }
+        continue;
       }
-      xn[k] = pts[k].alpha;
-      yn[k] = pts[k].val / normVal;
-      eyn[k] = yn[k] * TMath::Sqrt(TMath::Power(pts[k].err / pts[k].val, 2.0) +
-                                   TMath::Power(normErr / normVal, 2.0));
+      const double y = pts[k].val / normVal;
+      xn.push_back(pts[k].alpha);
+      yn.push_back(y);
+      exn.push_back(0.0);
+      eyn.push_back(y * TMath::Sqrt(TMath::Power(pts[k].err / pts[k].val, 2.0) +
+                                    TMath::Power(normErr / normVal, 2.0)));
+      if (inRange)
+        nInRange++;
     }
-    if (!bad && nfit >= 2) {
+    const int nfit = (int)xn.size();
+    if (!bad && nInRange >= 2) {
       TString gnorm = gname + "_norm";
       TGraphErrors *grn =
           new TGraphErrors(nfit, xn.data(), yn.data(), exn.data(), eyn.data());

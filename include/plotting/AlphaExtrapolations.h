@@ -19,7 +19,12 @@
 #include <algorithm>
 
 static const TString kAlphaYTitle =
-    "R_{MC}/R_{data}|_{#alpha} / R_{MC}/R_{data}|_{#alpha=0.30}";
+    "#frac{R_{MC}/R_{data}|_{#alpha}}{R_{MC}/R_{data}|_{#alpha=0.30}}";
+
+inline TString AlphaEtaBinLabel(int ie) {
+  return Form("%.3f < |#eta_{reco}| < %.3f", kAbsEtaEdges[ie],
+             kAbsEtaEdges[ie + 1]);
+}
 
 // Alpha fit plots. One canvas per (cone, method, pT slice, eta bin): all
 // alpha threshold points, fit line drawn only through [0, 0.30]. A second
@@ -102,9 +107,10 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
         hl->SetLineWidth(1);
         hl->Draw();
 
-        DrawInfoLegend(0.62, 0.68, 0.92, 0.90,
-                       {cone, kMethodLabels[m], ptSl.title,
-                        Form("|#eta| bin %d", ie), CalibTag(useJer)});
+        DrawInfoLegend(0.48, 0.66, 0.92, 0.90,
+                       {cone, CalibMethodLabel(m, useJer), ptSl.title,
+                        AlphaEtaBinLabel(ie)},
+                       0.028);
 
         SavePlot(c, outDir, cone, "alpha", {calibKey, etaKey, ptKey}, cvName);
         pb.Update();
@@ -207,7 +213,7 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
           fitFn->Draw("same");
         }
 
-        leg->AddEntry(gc[m], kMethodLabels[m], "lp");
+        leg->AddEntry(gc[m], CalibMethodLabel(m, useJer), "lp");
         first = false;
       }
       leg->Draw();
@@ -226,9 +232,8 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
       hl->SetLineWidth(1);
       hl->Draw();
 
-      DrawInfoLegend(
-          0.62, 0.75, 0.92, 0.90,
-          {cone, ptSl.title, Form("|#eta| bin %d", ie), CalibTag(useJer)});
+      DrawInfoLegend(0.48, 0.75, 0.92, 0.90,
+                     {cone, ptSl.title, AlphaEtaBinLabel(ie)}, 0.028);
 
       SavePlot(c, outDir, cone, "alpha", {calibKey, etaKey, ptKey}, cvName);
       pb.Update();

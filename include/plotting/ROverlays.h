@@ -76,7 +76,7 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
 
         // main pad
         cv.main->cd();
-        cv.main->SetLeftMargin(0.19); // wider than TwoPad's default 0.13 --
+        cv.main->SetLeftMargin(0.16); // wider than TwoPad's default 0.13 --
                                       // the explicit fraction title needs it
         cv.main->SetGridx();
         cv.main->SetGridy();
@@ -89,8 +89,8 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         hRmc->GetXaxis()->SetRangeUser(xMin, xMax);
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
         hRmc->GetYaxis()->SetTitle(kAsymFractionTitle);
-        hRmc->GetYaxis()->SetTitleSize(0.055);
-        hRmc->GetYaxis()->SetTitleOffset(1.4);
+        hRmc->GetYaxis()->SetTitleSize(0.045);
+        hRmc->GetYaxis()->SetTitleOffset(1.35);
         hRmc->GetYaxis()->SetLabelSize(0.055);
         hRmc->GetYaxis()->CenterTitle();
         hRmc->GetXaxis()->SetLabelSize(0.0);
@@ -101,7 +101,9 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         hRdc->Draw("E1 same");
         RefLine(cv.main, xMin, xMax, 1.0);
 
-        TLegend *leg = new TLegend(0.16, 0.14, 0.50, 0.28);
+        // close to the left border/barrel, where R sits flat near 1 and
+        // stays out of the markers' way
+        TLegend *leg = new TLegend(0.18, 0.14, 0.40, 0.28);
         leg->SetBorderSize(0);
         leg->SetFillStyle(0);
         leg->SetTextSize(0.048);
@@ -115,13 +117,13 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
 
         // ratio pad
         cv.ratio->cd();
-        cv.ratio->SetLeftMargin(0.19); // match the main pad so the x-axes align
+        cv.ratio->SetLeftMargin(0.16); // match the main pad so the x-axes align
         cv.ratio->SetGridx();
         cv.ratio->SetGridy();
 
         StyleH(hRat, kBlack, 20, 1.5f);
         hRat->GetXaxis()->SetRangeUser(xMin, xMax);
-        TuneRatio(hRat, "|#eta|", "MC/Data", 0.93, 1.07);
+        TuneRatio(hRat, "|#eta_{reco}|", "MC/Data", 0.93, 1.07);
         hRat->Draw("E1");
         RefLine(cv.ratio, xMin, xMax, 1.0);
 
