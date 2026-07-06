@@ -67,14 +67,27 @@ inline double ResponsePtGenMin(const TAxis *xaxis) {
                         : xaxis->GetXmin();
 }
 
+// Two-pass fit: an initial Gaussian within [1-halfWidth, 1+halfWidth] locates
+// the real peak, then a second Gaussian refit narrows to +-2 sigma of that
+// first pass's own mean -- keeps a single unconstrained pass from chasing
+// the long non-Gaussian tail toward the response axis's [0,2] edge.
 inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
                              double halfWidth, int minEntries) {
   if (!h || h->GetEntries() < minEntries)
     return nullptr;
-  TF1 *fit = new TF1(name, "gaus", 1.0 - halfWidth, 1.0 + halfWidth);
-  fit->SetParameter(0, h->GetMaximum());
-  fit->SetParameter(1, h->GetMean());
-  fit->SetParameter(2, std::max(h->GetRMS(), 1e-3));
+
+  TF1 pass1(name + "_pass1", "gaus", 1.0 - halfWidth, 1.0 + halfWidth);
+  pass1.SetParameter(0, h->GetMaximum());
+  pass1.SetParameter(1, h->GetMean());
+  pass1.SetParameter(2, std::max(h->GetRMS(), 1e-3));
+  h->Fit(&pass1, "NQR");
+
+  const double c = pass1.GetParameter(0);
+  const double m = pass1.GetParameter(1);
+  const double s = std::max(pass1.GetParameter(2), 1e-3);
+
+  TF1 *fit = new TF1(name, "gaus", m - 2.0 * s, m + 2.0 * s);
+  fit->SetParameters(c, m, s);
   StyleFit(fit, col);
   h->Fit(fit, "NQSR");
   return fit;
@@ -95,11 +108,14 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
     return;
   }
 
+  const Long64_t nEntries = (Long64_t)h->GetEntries();
+  NormalizeDensity(h); // 1/N dN/d(ratio) -- Scale() leaves GetEntries() alone
+
   StyleH(h, HiroshigeNightBlue(), 20, 1.5f);
   h->SetTitle("");
   h->GetXaxis()->SetTitle(xTitle);
   h->GetXaxis()->CenterTitle();
-  h->GetYaxis()->SetTitle("Jets");
+  h->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{d(" + xTitle + ")}");
   h->GetYaxis()->CenterTitle();
   h->GetXaxis()->SetTitleOffset(1.25);
 
@@ -107,6 +123,7 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
   TCanvas *c = new TCanvas(cvName, "", 800, 800);
   RealAspectRatio(c);
   c->SetLeftMargin(0.13);
+  c->SetLogy();
 
   h->Draw("E1");
 
@@ -115,15 +132,39 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
   if (fit)
     fit->Draw("same");
 
+  // zoom around the fit peak -- the response axis's hard [0,2] edge leaves a
+  // long, sparsely-filled tail that otherwise dominates the drawn range
+  double xlo = h->GetXaxis()->GetXmin();
+  double xhi = h->GetXaxis()->GetXmax();
+  if (fit) {
+    const double m = fit->GetParameter(1);
+    const double s = std::max(fit->GetParameter(2), 1e-3);
+    xlo = std::max(xlo, m - 6.0 * s);
+    xhi = std::min(xhi, m + 6.0 * s);
+  }
+  h->GetXaxis()->SetRangeUser(xlo, xhi);
+
   DrawCMSInternalHeader(0.13, 0.95);
   TLatex *tex = new TLatex();
   tex->SetNDC();
   tex->SetTextSize(0.033);
   tex->SetTextFont(42);
   tex->SetTextAlign(31);
-  tex->DrawLatex(0.93, 0.84, Form("%s  |  %s", cone.Data(), collection.Data()));
-  tex->DrawLatex(0.93, 0.79, label);
-  DrawEntriesLabel((Long64_t)h->GetEntries(), 0.93, 0.74);
+  tex->DrawLatex(0.93, 0.84, label);
+
+  TLegend *leg = new TLegend(0.62, 0.60, 0.90, 0.79);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(0.032);
+  leg->SetTextFont(42);
+  leg->AddEntry((TObject *)nullptr, cone.Data(), "");
+  leg->AddEntry((TObject *)nullptr, collection.Data(), "");
+  leg->AddEntry((TObject *)nullptr, FormatEntriesText(nEntries).Data(), "");
+  if (fit)
+    leg->AddEntry(
+        fit, Form("#chi^{2}/ndf = %.1f/%d", fit->GetChisquare(), fit->GetNDF()),
+        "l");
+  leg->Draw();
 
   SavePlot(c, outDir, cone, "response_dist", plotKeys, cvName);
   pb.Update();
@@ -376,10 +417,11 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                                  {L2Name::PtGenKey(lo, hi)}, {collection});
           TString label = Form("p_{T}^{gen} bin: [%.0f, %.0f) GeV  (%s)", lo,
                                hi, variant.Data());
-          DrawResponseDist(fIn, outDir, cone, "QA_response_ptgen", objName,
-                           collection, label, {collection, variant, "vs_ptgen"},
-                           kResponseVariantLabels[iv], halfWidth, minEntries,
-                           pb);
+          DrawResponseDist(
+              fIn, outDir, cone, "QA_response_ptgen", objName, collection,
+              label,
+              {collection, variant, "vs_ptgen", L2Name::PtGenKey(lo, hi)},
+              kResponseVariantLabels[iv], halfWidth, minEntries, pb);
         }
         delete hJes;
       }
