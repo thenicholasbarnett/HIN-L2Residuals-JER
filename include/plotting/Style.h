@@ -42,6 +42,19 @@ inline TString CalibYTitle(bool useJer) {
                 : "R_{MC}/R_{data} at #alpha#rightarrow0";
 }
 
+// Method label naming the statistic actually shown: JEC reads the mean of
+// each method's A-distribution fit/truncation, JER SF reads the same fits'
+// width (see CalibrationExtractor.cxx) -- the generic kMethodLabels
+// ("Gauss fit", ...) don't say which.
+inline TString CalibMethodLabel(int m, bool useJer) {
+  static const char *const kMeanLabels[] = {"Gauss mean", "Double-Gauss mean",
+                                            "Trunc. mean 90%",
+                                            "Trunc. mean 95%"};
+  static const char *const kRmsLabels[] = {"Gauss RMS", "Double-Gauss RMS",
+                                           "Trunc. RMS 90%", "Trunc. RMS 95%"};
+  return useJer ? kRmsLabels[m] : kMeanLabels[m];
+}
+
 // global plotting style
 
 inline void SetupPlotStyle() {

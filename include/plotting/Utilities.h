@@ -212,6 +212,39 @@ inline std::pair<double, double> YRange(const std::vector<TH1D *> &hv,
   return {lo - pad * span, hi + pad * span};
 }
 
+// Widest occupied bin range across a set of histograms sharing the same
+// axis binning, extended by one empty bin on each side that has content --
+// so the axis ends just past the real data instead of running out to the
+// full binning's extent when the data itself stops well short of it (e.g.
+// a central pT slice with limited jet reach in eta). Returns {0,0} if none
+// of the histograms have any content.
+inline std::pair<double, double> OccupiedRangeWithMargin(
+    const std::vector<TH1D *> &hv) {
+  int loBin = -1, hiBin = -1;
+  TH1D *ref = nullptr;
+  for (auto *h : hv) {
+    if (!h)
+      continue;
+    if (!ref)
+      ref = h;
+    for (int i = 1; i <= h->GetNbinsX(); i++) {
+      if (h->GetBinContent(i) != 0 || h->GetBinError(i) != 0) {
+        if (loBin < 0 || i < loBin)
+          loBin = i;
+        if (i > hiBin)
+          hiBin = i;
+      }
+    }
+  }
+  if (!ref || loBin < 0)
+    return {0.0, 0.0};
+  const int nBins = ref->GetNbinsX();
+  const int loMargin = std::max(1, loBin - 1);
+  const int hiMargin = std::min(nBins, hiBin + 1);
+  return {ref->GetXaxis()->GetBinLowEdge(loMargin),
+          ref->GetXaxis()->GetBinUpEdge(hiMargin)};
+}
+
 // plot path helpers
 
 inline TString PlotDir(const TString &outDir, const TString &cone,

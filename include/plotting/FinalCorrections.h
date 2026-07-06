@@ -8,7 +8,6 @@
 #include "TCanvas.h"
 #include "TLegend.h"
 #include "TLine.h"
-#include "TLatex.h"
 #include "TString.h"
 
 #include "plotting/Style.h"
@@ -16,24 +15,18 @@
 #include "Binning.h"
 #include "Naming.h"
 #include "ProgressBar.h"
-#include "jetmet/RootStyle.h"
-#include "jetmet/Style.h"
 
 #include <vector>
 
+static const TString kFinalsYTitle =
+    "k_{FSR} #bullet #frac{R_{MC}}{R_{Data}} |_{#alpha#rightarrow0}";
+
 // Final extrapolated values, all pT slices overlaid.
 // finals_{cone}_{method}_abseta/fulleta: R_data/R_MC at alpha->0 vs eta.
-// Uses the vendored JetMET setTDRStyle()/CMS_lumi() instead of this repo's
-// SetupPlotStyle() (piloted here and in EventQA.h); gStyle is saved/restored
-// around the call so it doesn't leak into other plot families.
 
 inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
                        bool isClosure = false, bool useJer = false) {
-  TStyle *prevStyle = gStyle;
-  setTDRStyle();
-  SetupPlotStyle();
-
   const TString calibKey = useJer ? "jer" : "jec";
   for (int m = 0; m < kNMethods; m++) {
     for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
@@ -41,9 +34,9 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         continue;
       const bool fullEta = (ieta == 1);
       const TString xTitle = fullEta ? "#eta" : "|#eta|";
-      const double xMin =
+      const double xFullMin =
           fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
-      const double xMax =
+      const double xFullMax =
           fullEta ? kEtaEdges.back() : (double)kAbsEtaEdges.back();
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
@@ -98,21 +91,31 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                kMethodKeys[m], etaMode.Data());
       TCanvas *c = new TCanvas(cvName, "", 800, 800);
       RealAspectRatio(c);
-      c->SetLeftMargin(0.13);
+      c->SetLeftMargin(0.16);
       c->SetGridx();
       c->SetGridy();
 
-      auto [ylo, yhi] = YRange(hists);
+      // end the axis one bin past the last populated one instead of running
+      // out to the binning's full extent, which is often much wider than
+      // where jets actually get reconstructed
+      auto [xMin, xMax] = OccupiedRangeWithMargin(hists);
+      if (xMin >= xMax) {
+        xMin = xFullMin;
+        xMax = xFullMax;
+      }
+
+      double ylo = 0.9, yhi = 2.0;
       // closure passes check R_MC/R_data ~= 1 to a tight tolerance
       if (isClosure) {
         ylo = 0.95;
         yhi = 1.05;
       }
 
-      TLegend *leg = new TLegend(0.60, 0.68, 0.93, 0.88);
+      TLegend *leg = new TLegend(0.50, 0.64, 0.93, 0.88);
       leg->SetBorderSize(0);
       leg->SetFillStyle(0);
-      leg->SetTextSize(0.038);
+      leg->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
+      leg->SetTextSize(0.028);
 
       bool first = true;
       for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
@@ -120,10 +123,11 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
           continue;
         const auto &ptSl = bins.ptavgSlices[ip];
         StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
+        hists[ip]->GetXaxis()->SetRangeUser(xMin, xMax);
         hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
-        hists[ip]->GetYaxis()->SetTitle(CalibYTitle(useJer));
-        hists[ip]->GetYaxis()->SetTitleSize(0.052);
-        hists[ip]->GetYaxis()->SetTitleOffset(1.15);
+        hists[ip]->GetYaxis()->SetTitle(kFinalsYTitle);
+        hists[ip]->GetYaxis()->SetTitleSize(0.048);
+        hists[ip]->GetYaxis()->SetTitleOffset(1.35);
         hists[ip]->GetYaxis()->SetLabelSize(0.048);
         hists[ip]->GetXaxis()->SetTitle(xTitle);
         hists[ip]->GetXaxis()->SetTitleSize(0.052);
@@ -133,7 +137,9 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         hists[ip]->SetTitle("");
         hists[ip]->Draw(first ? "E1" : "E1 same");
         first = false;
-        leg->AddEntry(hists[ip], ptSl.title, "lp");
+        TString label = ptSl.title;
+        label.ReplaceAll(" GeV", "");
+        leg->AddEntry(hists[ip], label, "lp");
       }
 
       TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
@@ -158,22 +164,16 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       }
 
       leg->Draw();
-
-      // y=0.78 clears CMS_lumi's "CMS"/"Internal" block (verified visually;
-      // y=0.86 still collided)
-      CMS_lumi(c, 16, 11);
-
-      DrawInfoLegend(0.14, 0.56, 0.46, 0.78,
-                     {cone, kMethodLabels[m], xTitle, CalibTag(useJer)});
+      DrawAsymHeader();
+      DrawInfoLegend(0.16, 0.68, 0.40, 0.80,
+                     {cone, CalibMethodLabel(m, useJer)});
 
       SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
       pb.Update();
 
-      delete c; // cascade-deletes hists, leg, tex, rl (and rl99/rl101 if drawn)
+      delete c; // cascade-deletes hists, leg, rl (and rl99/rl101 if drawn)
     }
   }
-
-  gStyle = prevStyle;
 }
 
 #endif
