@@ -45,6 +45,20 @@ static constexpr int kNResponseVariants = 3;
 static const TString kPtGenAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::refpt, true);
 
+// generic ratio label for plots overlaying all 3 variants at once (the
+// legend, not the axis, names which pT is which there)
+static const TString kGenericRatioLabel = "p_{T}/p_{T}^{gen}";
+
+// JES = mean of the response ratio, JER = its fractional resolution
+// (sigma/mean) -- distinct from runCalibration's data/MC JER scale factor
+// (Style.h::CalibYTitle), this is a pure-MC quantity.
+inline TString ResponseYTitle(const TString &quantity,
+                              const TString &ratioLabel) {
+  if (quantity == "JES")
+    return "#LT " + ratioLabel + " #GT";
+  return "#sigma(" + ratioLabel + ") / #LT " + ratioLabel + " #GT";
+}
+
 inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
                              double halfWidth, int minEntries) {
   if (!h || h->GetEntries() < minEntries)
@@ -115,7 +129,8 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
                                 const TString &cone,
                                 const TString &quantity, // "JES" or "JER"
                                 const std::vector<TString> &orderedKeys,
-                                const TString &xTitle, const TString &tag,
+                                const TString &xTitle,
+                                const TString &ratioLabel, const TString &tag,
                                 ProgressBar &pb) {
   TH1D *h[kNResponseCollections] = {};
   bool any = false;
@@ -141,19 +156,24 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
     }
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
+  if (quantity == "JES") {
+    ylo = 0.95;
+    yhi = 1.05;
+  }
   const double xMin = frame->GetXaxis()->GetXmin();
   const double xMax = frame->GetXaxis()->GetXmax();
 
   TCanvas *c =
       new TCanvas("response_summary_" + cone + "_" + tag, "", 800, 800);
   RealAspectRatio(c);
+  c->SetLogx();
   c->SetLeftMargin(0.14);
   c->SetGridx();
   c->SetGridy();
 
   frame->SetTitle("");
   frame->GetXaxis()->SetTitle(xTitle);
-  frame->GetYaxis()->SetTitle(quantity);
+  frame->GetYaxis()->SetTitle(ResponseYTitle(quantity, ratioLabel));
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
@@ -180,6 +200,18 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
     rl->SetLineColor(kGray + 2);
     rl->SetLineWidth(1);
     rl->Draw();
+
+    TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+    rl99->SetLineStyle(3);
+    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineWidth(2);
+    rl99->Draw();
+
+    TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+    rl101->SetLineStyle(3);
+    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineWidth(2);
+    rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
@@ -225,6 +257,10 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
     }
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
+  if (quantity == "JES") {
+    ylo = 0.95;
+    yhi = 1.05;
+  }
   const double xMin = frame->GetXaxis()->GetXmin();
   const double xMax = frame->GetXaxis()->GetXmax();
 
@@ -232,13 +268,14 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
                                "_" + quantity,
                            "", 800, 800);
   RealAspectRatio(c);
+  c->SetLogx();
   c->SetLeftMargin(0.14);
   c->SetGridx();
   c->SetGridy();
 
   frame->SetTitle("");
   frame->GetXaxis()->SetTitle(kPtGenAxisTitle);
-  frame->GetYaxis()->SetTitle(quantity);
+  frame->GetYaxis()->SetTitle(ResponseYTitle(quantity, kGenericRatioLabel));
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
@@ -265,6 +302,18 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
     rl->SetLineColor(kGray + 2);
     rl->SetLineWidth(1);
     rl->Draw();
+
+    TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+    rl99->SetLineStyle(3);
+    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineWidth(2);
+    rl99->Draw();
+
+    TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+    rl101->SetLineStyle(3);
+    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineWidth(2);
+    rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
@@ -328,9 +377,11 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
   for (int iv = 0; iv < kNResponseVariants; iv++) {
     const TString variant = kResponseVariants[iv];
     DrawResponseSummary(fIn, outDir, cone, "JES", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, "JES_" + variant + "_vs_ptgen", pb);
+                        kPtGenAxisTitle, kResponseVariantLabels[iv],
+                        "JES_" + variant + "_vs_ptgen", pb);
     DrawResponseSummary(fIn, outDir, cone, "JER", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, "JER_" + variant + "_vs_ptgen", pb);
+                        kPtGenAxisTitle, kResponseVariantLabels[iv],
+                        "JER_" + variant + "_vs_ptgen", pb);
   }
 
   // variant comparison: corr/reco/raw overlaid, one per collection
