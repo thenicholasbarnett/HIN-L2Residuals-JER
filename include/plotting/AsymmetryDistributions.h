@@ -100,6 +100,7 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
   hData->GetXaxis()->SetTitleOffset(1.5);
   hData->GetYaxis()->SetTitle("1/N  dN/dA");
   hData->GetYaxis()->CenterTitle();
+  hData->GetYaxis()->SetTitleOffset(1.1);
   hData->SetMinimum(yMin);
   hData->SetMaximum(yMax);
 
