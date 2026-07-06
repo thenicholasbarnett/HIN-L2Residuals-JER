@@ -60,7 +60,7 @@ inline void NormalizeDensity(TH1D *h) {
 inline void StyleGuideLine(TLine *l, Color_t col) {
   l->SetLineColorAlpha(col, 0.65);
   l->SetLineStyle(3);
-  l->SetLineWidth(1);
+  l->SetLineWidth(2);
 }
 
 inline void DrawTruncLines(TH1D *h, double fraction, Color_t col, double yMin,
@@ -96,11 +96,10 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
   hData->SetTitle("");
   hData->GetXaxis()->SetTitle(xTitle);
   hData->GetXaxis()->CenterTitle();
-  hData->GetXaxis()->SetTitleSize(0.026);
+  hData->GetXaxis()->SetTitleSize(0.020);
   hData->GetXaxis()->SetTitleOffset(1.5);
   hData->GetYaxis()->SetTitle("1/N  dN/dA");
   hData->GetYaxis()->CenterTitle();
-  hData->GetYaxis()->SetTitleOffset(1.3);
   hData->SetMinimum(yMin);
   hData->SetMaximum(yMax);
 

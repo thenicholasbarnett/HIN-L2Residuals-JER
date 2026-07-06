@@ -19,7 +19,7 @@
 #include <vector>
 
 static const TString kFinalsYTitle =
-    "k_{FSR} #scale[0.6]{#bullet} #frac{R_{MC}}{R_{Data}} |_{#alpha=0.30}";
+    "k_{FSR} #scale[0.45]{#bullet} #frac{R_{MC}}{R_{Data}} |_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
 // finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
