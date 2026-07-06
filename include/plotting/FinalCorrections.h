@@ -164,7 +164,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       }
 
       leg->Draw();
-      DrawAsymHeader();
+      DrawAsymHeader(0.16);
       DrawInfoLegend(0.16, 0.68, 0.40, 0.80,
                      {cone, CalibMethodLabel(m, useJer)});
 

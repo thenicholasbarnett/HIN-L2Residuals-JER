@@ -89,7 +89,7 @@ inline void StyleH(TH1D *h, Color_t col, int mstyle, float lw = 2.0f) {
 inline void StyleFit(TF1 *f, Color_t col) {
   f->SetLineColor(col);
   f->SetLineStyle(1);
-  f->SetLineWidth(3);
+  f->SetLineWidth(2);
 }
 
 // Horizontal dashed reference line at y=ref drawn on pad p.
@@ -150,7 +150,11 @@ inline void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
   lumi->Draw();
 }
 
-inline void DrawAsymHeader() { DrawCMSInternalHeader(); }
+// xLeft should match the canvas's actual left margin, or "CMS Internal"
+// won't sit flush with the frame's left edge.
+inline void DrawAsymHeader(double xLeft = 0.13) {
+  DrawCMSInternalHeader(xLeft);
+}
 
 inline TString FormatEntriesText(Long64_t entries) {
   if (entries < 100)
