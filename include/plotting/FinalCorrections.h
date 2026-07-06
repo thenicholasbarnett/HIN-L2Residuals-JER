@@ -19,10 +19,10 @@
 #include <vector>
 
 static const TString kFinalsYTitle =
-    "k_{FSR} #bullet #frac{R_{MC}}{R_{Data}} |_{#alpha#rightarrow0}";
+    "k_{FSR} #scale[0.6]{#bullet} #frac{R_{MC}}{R_{Data}} |_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
-// finals_{cone}_{method}_abseta/fulleta: R_data/R_MC at alpha->0 vs eta.
+// finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
 
 inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
@@ -33,7 +33,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       if (!pb.ShouldKeep())
         continue;
       const bool fullEta = (ieta == 1);
-      const TString xTitle = fullEta ? "#eta" : "|#eta|";
+      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
       const double xFullMin =
           fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
       const double xFullMax =
@@ -104,7 +104,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         xMax = xFullMax;
       }
 
-      double ylo = 0.9, yhi = 2.0;
+      double ylo = 0.9, yhi = 1.5;
       // closure passes check R_MC/R_data ~= 1 to a tight tolerance
       if (isClosure) {
         ylo = 0.95;
