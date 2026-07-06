@@ -96,11 +96,11 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
   hData->SetTitle("");
   hData->GetXaxis()->SetTitle(xTitle);
   hData->GetXaxis()->CenterTitle();
-  hData->GetXaxis()->SetTitleSize(0.032);
-  hData->GetXaxis()->SetTitleOffset(1.7);
-  hData->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{dA}");
+  hData->GetXaxis()->SetTitleSize(0.026);
+  hData->GetXaxis()->SetTitleOffset(1.5);
+  hData->GetYaxis()->SetTitle("1/N  dN/dA");
   hData->GetYaxis()->CenterTitle();
-  hData->GetYaxis()->SetTitleOffset(1.9);
+  hData->GetYaxis()->SetTitleOffset(1.3);
   hData->SetMinimum(yMin);
   hData->SetMaximum(yMax);
 
@@ -204,12 +204,12 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           TCanvas *c = new TCanvas(cvName, "", 800, 800);
           RealAspectRatio(c);
           c->SetLogy();
-          c->SetLeftMargin(0.19);
+          c->SetLeftMargin(0.14);
           c->SetRightMargin(0.05);
-          c->SetBottomMargin(0.13);
+          c->SetBottomMargin(0.11);
 
           DrawAsymBase(hdc, hmc, kAsymFractionTitle, ymin, ymax);
-          DrawAsymHeader(0.19);
+          DrawAsymHeader(0.14);
           drawInfo();
 
           TLine *ldLo = nullptr, *ldHi = nullptr, *lmLo = nullptr,
@@ -236,12 +236,12 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           TCanvas *c = new TCanvas(cvName, "", 800, 800);
           RealAspectRatio(c);
           c->SetLogy();
-          c->SetLeftMargin(0.19);
+          c->SetLeftMargin(0.14);
           c->SetRightMargin(0.05);
-          c->SetBottomMargin(0.13);
+          c->SetBottomMargin(0.11);
 
           DrawAsymBase(hdc, hmc, kAsymFractionTitle, ymin, ymax);
-          DrawAsymHeader(0.19);
+          DrawAsymHeader(0.14);
           drawInfo();
 
           TF1 *fd =

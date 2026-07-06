@@ -161,7 +161,7 @@ inline TString FormatEntriesText(Long64_t entries) {
     return Form("%lld Entries", entries);
   const int exponent = (int)std::floor(std::log10((double)entries));
   const double mantissa = entries / std::pow(10.0, exponent);
-  return Form("%.3g #bullet 10^{%d} Entries", mantissa, exponent);
+  return Form("%.3g #scale[0.6]{#bullet} 10^{%d} Entries", mantissa, exponent);
 }
 
 inline void DrawEntriesLabel(Long64_t entries, double x = 0.88,

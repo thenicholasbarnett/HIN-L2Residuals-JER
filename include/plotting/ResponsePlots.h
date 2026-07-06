@@ -7,7 +7,6 @@
 #include "TF1.h"
 #include "TCanvas.h"
 #include "TLegend.h"
-#include "TLatex.h"
 #include "TLine.h"
 #include "TString.h"
 
@@ -95,8 +94,7 @@ inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
 
 inline void DrawResponseDist(TFile *fIn, const TString &outDir,
                              const TString &cone, const TString &dirName,
-                             const TString &objName, const TString &collection,
-                             const TString &label,
+                             const TString &objName, const TString &label,
                              const std::vector<TString> &plotKeys,
                              const TString &xTitle, double halfWidth,
                              int minEntries, ProgressBar &pb) {
@@ -148,25 +146,22 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
   h->SetMinimum(0.1); // normalized density -- the far tail below this is noise
 
   DrawCMSInternalHeader(0.17, 0.90);
-  TLatex *tex = new TLatex();
-  tex->SetNDC();
-  tex->SetTextSize(0.033);
-  tex->SetTextFont(42);
-  tex->SetTextAlign(31);
-  tex->DrawLatex(0.90, 0.84, label);
 
-  TLegend *leg = new TLegend(0.55, 0.58, 0.86, 0.79);
+  // one legend, hugging the left frame border, upper-left (clear of the
+  // Gaussian's peak, which sits centered)
+  TLegend *leg = new TLegend(0.17, 0.66, 0.52, 0.855);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(0.030);
   leg->SetTextFont(42);
+  leg->AddEntry((TObject *)nullptr, label.Data(), "");
   leg->AddEntry((TObject *)nullptr, cone.Data(), "");
-  leg->AddEntry((TObject *)nullptr, collection.Data(), "");
   leg->AddEntry((TObject *)nullptr, FormatEntriesText(nEntries).Data(), "");
-  if (fit)
-    leg->AddEntry(
-        fit, Form("#chi^{2}/ndf = %.1f/%d", fit->GetChisquare(), fit->GetNDF()),
-        "l");
+  if (fit) {
+    const double chi2Ndf =
+        (fit->GetNDF() > 0) ? fit->GetChisquare() / fit->GetNDF() : 0.0;
+    leg->AddEntry(fit, Form("#chi^{2}/ndf = %.1f", chi2Ndf), "l");
+  }
   leg->Draw();
 
   SavePlot(c, outDir, cone, "response_dist", plotKeys, cvName);
@@ -209,8 +204,8 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
   if (quantity == "JES") {
-    ylo = 0.95;
-    yhi = 1.05;
+    ylo = 0.97;
+    yhi = 1.02;
   }
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
@@ -233,10 +228,13 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
-  TLegend *leg = new TLegend(0.60, 0.72, 0.88, 0.88);
+  TLegend *leg = new TLegend(0.60, 0.68, 0.88, 0.88);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(0.034);
+  // cone (the clustering algorithm) rides in the same legend as the
+  // incl/tag/probe marker entries instead of its own separate box
+  leg->AddEntry((TObject *)nullptr, cone.Data(), "");
   for (int ic = 0; ic < kNResponseCollections; ic++) {
     if (!h[ic])
       continue;
@@ -256,19 +254,18 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
 
     TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
     rl99->SetLineStyle(3);
-    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineColor(kBlack);
     rl99->SetLineWidth(2);
     rl99->Draw();
 
     TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
     rl101->SetLineStyle(3);
-    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineColor(kBlack);
     rl101->SetLineWidth(2);
     rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  DrawInfoLegend(0.16, 0.80, 0.40, 0.885, {cone, "all #eta_{reco}"});
 
   SavePlot(c, outDir, cone, "response_summary", {tag}, c->GetName());
   pb.Update();
@@ -307,8 +304,8 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
 
   auto [ylo, yhi] = YRange({h[0], h[1], h[2]});
   if (quantity == "JES") {
-    ylo = 0.95;
-    yhi = 1.05;
+    ylo = 0.97;
+    yhi = 1.02;
   }
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
@@ -332,10 +329,13 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
-  TLegend *leg = new TLegend(0.68, 0.72, 0.895, 0.88);
+  TLegend *leg = new TLegend(0.68, 0.68, 0.895, 0.88);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(0.034);
+  // cone (the clustering algorithm) rides in the same legend as the
+  // corr/reco/raw marker entries instead of its own separate box
+  leg->AddEntry((TObject *)nullptr, cone.Data(), "");
   for (int iv = 0; iv < kNResponseVariants; iv++) {
     if (!h[iv])
       continue;
@@ -355,20 +355,19 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
 
     TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
     rl99->SetLineStyle(3);
-    rl99->SetLineColor(HiroshigeLightRed());
+    rl99->SetLineColor(kBlack);
     rl99->SetLineWidth(2);
     rl99->Draw();
 
     TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
     rl101->SetLineStyle(3);
-    rl101->SetLineColor(HiroshigeLightRed());
+    rl101->SetLineColor(kBlack);
     rl101->SetLineWidth(2);
     rl101->Draw();
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  DrawInfoLegend(0.16, 0.75, 0.42, 0.885,
-                 {cone, collection, "all #eta_{reco}"});
+  DrawInfoLegend(0.16, 0.80, 0.36, 0.885, {collection});
 
   SavePlot(c, outDir, cone, "response_variants", {collection, quantity},
            c->GetName());
@@ -412,8 +411,7 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
           TString label =
               Form("%.0f #leq p_{T}^{gen} < %.0f GeV", lo, hi);
           DrawResponseDist(
-              fIn, outDir, cone, "QA_response_ptgen", objName, collection,
-              label,
+              fIn, outDir, cone, "QA_response_ptgen", objName, label,
               {collection, variant, "vs_ptgen", L2Name::PtGenKey(lo, hi)},
               kResponseVariantLabels[iv], halfWidth, minEntries, pb);
         }
