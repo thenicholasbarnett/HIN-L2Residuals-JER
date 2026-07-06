@@ -260,6 +260,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   if (sample)
     pb.EnableSample(kSampleMaxPlots, kSampleMaxSeconds);
 
+  bool sampleStopped = false;
   try {
     if (doEvent)
       PlotEvent(fIn, outDir, pb);
@@ -292,12 +293,21 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
                      minEntriesPlot, pb);
     }
   } catch (const SampleLimitReached &) {
+    sampleStopped = true;
     std::cout << "\n-sample true: stopped after " << pb.current << "/"
               << totalPlots << " plots (cap: " << kSampleMaxPlots
               << " plots or " << kSampleMaxSeconds << "s, whichever first)\n";
   }
 
-  pb.Finish();
+  // Finish() forces current=total before its final draw -- correct for a
+  // real completion, but would repaint a false "100%" bar under the stopped
+  // message above if the sample cap cut the run short.
+  if (sampleStopped) {
+    printf("\n");
+    fflush(stdout);
+  } else {
+    pb.Finish();
+  }
   fIn->Close();
 }
 
