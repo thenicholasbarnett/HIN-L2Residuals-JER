@@ -87,10 +87,6 @@ inline TF1 *FitGaussianGuide(TH1D *h, const TString &name, Color_t col,
   return fit;
 }
 
-// A = (p_T^probe - p_T^tag) / (p_T^probe + p_T^tag), see Dijet.h::MakeDijet
-static const TString kAsymXTitle =
-    "#frac{p_{T}^{probe} - p_{T}^{tag}}{p_{T}^{probe} + p_{T}^{tag}}";
-
 inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
                          double yMin, double yMax) {
   // both open circles -- distinguished by color, not marker fill
@@ -209,7 +205,7 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           c->SetLeftMargin(0.15);
           c->SetRightMargin(0.05);
 
-          DrawAsymBase(hdc, hmc, kAsymXTitle, ymin, ymax);
+          DrawAsymBase(hdc, hmc, kAsymFractionTitle, ymin, ymax);
           DrawAsymHeader();
           drawInfo();
 
@@ -240,7 +236,7 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           c->SetLeftMargin(0.15);
           c->SetRightMargin(0.05);
 
-          DrawAsymBase(hdc, hmc, kAsymXTitle, ymin, ymax);
+          DrawAsymBase(hdc, hmc, kAsymFractionTitle, ymin, ymax);
           DrawAsymHeader();
           drawInfo();
 

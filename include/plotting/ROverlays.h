@@ -6,7 +6,6 @@
 #include "TH1D.h"
 #include "TCanvas.h"
 #include "TLegend.h"
-#include "TLatex.h"
 #include "TString.h"
 
 #include "plotting/Style.h"
@@ -67,8 +66,18 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
                  kMethodKeys[m], ptKey.Data(), alphaKey.Data());
         TwoPad cv = MakeTwoPad(cvName);
 
+        // end the axis one bin past the last populated one, same as finals
+        // (they share this |eta| binning)
+        auto [xMin, xMax] = OccupiedRangeWithMargin({hRdc, hRmc});
+        if (xMin >= xMax) {
+          xMin = (double)kAbsEtaEdges.front();
+          xMax = (double)kAbsEtaEdges.back();
+        }
+
         // main pad
         cv.main->cd();
+        cv.main->SetLeftMargin(0.19); // wider than TwoPad's default 0.13 --
+                                      // the explicit fraction title needs it
         cv.main->SetGridx();
         cv.main->SetGridy();
 
@@ -77,19 +86,20 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         StyleH(hRmc, kRed, 21, 1.5f);
 
         auto [ylo, yhi] = YRange({hRdc, hRmc});
+        hRmc->GetXaxis()->SetRangeUser(xMin, xMax);
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
-        hRmc->GetYaxis()->SetTitle("R");
-        hRmc->GetYaxis()->SetTitleSize(0.065);
-        hRmc->GetYaxis()->SetTitleOffset(1.0);
+        hRmc->GetYaxis()->SetTitle(kAsymFractionTitle);
+        hRmc->GetYaxis()->SetTitleSize(0.055);
+        hRmc->GetYaxis()->SetTitleOffset(1.4);
         hRmc->GetYaxis()->SetLabelSize(0.055);
+        hRmc->GetYaxis()->CenterTitle();
         hRmc->GetXaxis()->SetLabelSize(0.0);
         hRmc->GetXaxis()->SetTitle("");
         hRmc->SetTitle("");
 
         hRmc->Draw("E1");
         hRdc->Draw("E1 same");
-        RefLine(cv.main, (double)kAbsEtaEdges.front(),
-                (double)kAbsEtaEdges.back(), 1.0);
+        RefLine(cv.main, xMin, xMax, 1.0);
 
         TLegend *leg = new TLegend(0.16, 0.14, 0.50, 0.28);
         leg->SetBorderSize(0);
@@ -99,20 +109,21 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         leg->AddEntry(hRdc, "R_{data}", "lp");
         leg->Draw();
 
-        DrawInfoLegend(0.58, 0.60, 0.94, 0.90,
-                       {cone, kMethodLabels[m], ptSl.title, aSl.title,
-                        CalibTag(useJer)});
+        DrawInfoLegend(
+            0.58, 0.60, 0.94, 0.90,
+            {cone, CalibMethodLabel(m, useJer), ptSl.title, aSl.title});
 
         // ratio pad
         cv.ratio->cd();
+        cv.ratio->SetLeftMargin(0.19); // match the main pad so the x-axes align
         cv.ratio->SetGridx();
         cv.ratio->SetGridy();
 
         StyleH(hRat, kBlack, 20, 1.5f);
+        hRat->GetXaxis()->SetRangeUser(xMin, xMax);
         TuneRatio(hRat, "|#eta|", "MC/Data", 0.93, 1.07);
         hRat->Draw("E1");
-        RefLine(cv.ratio, (double)kAbsEtaEdges.front(),
-                (double)kAbsEtaEdges.back(), 1.0);
+        RefLine(cv.ratio, xMin, xMax, 1.0);
 
         cv.c->cd();
         SavePlot(cv.c, outDir, cone, "roverlay", {calibKey, ptKey, alphaKey},

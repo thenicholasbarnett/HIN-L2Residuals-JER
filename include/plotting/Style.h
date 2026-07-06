@@ -27,6 +27,12 @@ static const int kMethodStyles[] = {
     20, 34, 21, 22}; // circle / cross / square / triangle-up
 static constexpr int kNMethods = 4;
 
+// A = (p_T^probe - p_T^tag) / (p_T^probe + p_T^tag), see Dijet.h::MakeDijet.
+// R (roverlay/finals) is the same underlying quantity one step further
+// along (R = (1+A)/(1-A) = p_T^probe/p_T^tag), so it shares this label.
+static const TString kAsymFractionTitle =
+    "#frac{p_{T}^{probe} - p_{T}^{tag}}{p_{T}^{probe} + p_{T}^{tag}}";
+
 // JEC vs JER SF selector for Step 2 plots reading intercept/R/R_data/R_mc
 // objects (runCalibration's CALIBRATION=JEC|JER token); names differ by a
 // "_jer" suffix
@@ -114,6 +120,7 @@ inline void TuneRatio(TH1D *h, const TString &xTitle, const TString &yTitle,
   h->GetXaxis()->SetTitleSize(0.145);
   h->GetXaxis()->SetTitleOffset(0.85);
   h->GetXaxis()->SetLabelSize(0.120);
+  h->GetXaxis()->CenterTitle();
 
   h->GetYaxis()->SetTitle(yTitle);
   h->GetYaxis()->SetTitleSize(0.120);
@@ -121,6 +128,7 @@ inline void TuneRatio(TH1D *h, const TString &xTitle, const TString &yTitle,
   h->GetYaxis()->SetLabelSize(0.100);
   h->GetYaxis()->SetNdivisions(504);
   h->GetYaxis()->SetRangeUser(ylo, yhi);
+  h->GetYaxis()->CenterTitle();
 }
 
 // CMS/internal labels and common text labels
