@@ -166,6 +166,11 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
 
   BinningConfig bins;
 
+  // same fallback ResponseExtractor.cxx uses when the TOML key is absent --
+  // plotting must never re-fit a bin extraction already wrote off as too thin
+  const int minEntriesPlot =
+      (cfg.minEntriesPerBin > 0) ? cfg.minEntriesPerBin : 100;
+
   const bool doAllLiteral = (flags == "all");
   const bool doSmartDefault = flags.IsNull();
 
@@ -212,7 +217,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     if (doNormComp)
       totalPlots += CountNormCompPlots(fIn, cone, bins, true, useJer);
     if (doAdist)
-      totalPlots += CountAsymDistPlots(fIn, cone, bins);
+      totalPlots += CountAsymDistPlots(fIn, cone, bins, minEntriesPlot);
     if (doRover)
       totalPlots += CountROverlayPlots(fIn, cone, bins, useJer);
     if (doAlpha)
@@ -222,7 +227,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     if (doKine)
       totalPlots += CountKinematicsPlots(fIn, cone, kineIncludeIncl);
     if (doResponse)
-      totalPlots += CountResponsePlots(fIn, cone);
+      totalPlots += CountResponsePlots(fIn, cone, minEntriesPlot);
   }
 
   if (totalPlots == 0) {
@@ -251,7 +256,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     if (doNormComp)
       PlotNormComp(fIn, outDir, cone, bins, true, pb, useJer);
     if (doAdist)
-      PlotAsymDist(fIn, outDir, cone, bins, pb);
+      PlotAsymDist(fIn, outDir, cone, bins, minEntriesPlot, pb);
     if (doRover)
       PlotROverlay(fIn, outDir, cone, bins, pb, useJer);
     if (doAlpha)
@@ -261,7 +266,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     if (doKine)
       PlotKinematics(fIn, outDir, cone, kineIncludeIncl, pb);
     if (doResponse)
-      PlotResponse(fIn, outDir, cone, cfg.responseGausFitHalfWidth, pb);
+      PlotResponse(fIn, outDir, cone, cfg.responseGausFitHalfWidth,
+                   minEntriesPlot, pb);
   }
 
   pb.Finish();

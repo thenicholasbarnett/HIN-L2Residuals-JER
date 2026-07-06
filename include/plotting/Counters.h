@@ -8,7 +8,7 @@
 
 #include "plotting/Style.h"
 #include "plotting/Utilities.h"
-#include "plotting/AsymmetryDistributions.h" // kMinEntriesPlot
+#include "plotting/AsymmetryDistributions.h"
 #include "plotting/Kinematics.h" // kNKinematicsCollections, kKinematicsCollections, kNKinematicsPtMins
 #include "plotting/ResponsePlots.h" // kNResponseCollections, kResponseCollections, kNResponseVariants, kResponseVariants
 #include "Binning.h"
@@ -17,7 +17,7 @@
 // progress accounting
 
 inline int CountAsymDistPlots(TFile *fIn, const TString &cone,
-                              const BinningConfig &bins) {
+                              const BinningConfig &bins, int minEntries) {
   TDirectory *dData = (TDirectory *)fIn->Get(cone + "/QA_data");
   TDirectory *dMC = (TDirectory *)fIn->Get(cone + "/QA_mc");
   if (!dData || !dMC)
@@ -38,7 +38,7 @@ inline int CountAsymDistPlots(TFile *fIn, const TString &cone,
             cone, "A_mc", {L2Name::EtaModeKey(false), etaKey, ptKey, alphaKey});
         TH1D *hd = (TH1D *)dData->Get(dname);
         TH1D *hm = (TH1D *)dMC->Get(mname);
-        if (hd && hm && hd->GetEntries() >= kMinEntriesPlot)
+        if (hd && hm && hd->GetEntries() >= minEntries)
           n += 3;
       }
     }
@@ -245,7 +245,8 @@ inline int CountEventPlots(TFile *fIn) {
   return n;
 }
 
-inline int CountResponsePlots(TFile *fIn, const TString &cone) {
+inline int CountResponsePlots(TFile *fIn, const TString &cone,
+                              int minEntries) {
   bool any = false;
   for (int ic = 0; ic < kNResponseCollections && !any; ic++) {
     TString name = L2Name::ObjectName(cone, "JES", {"corr", "vs_ptgen"},
@@ -274,7 +275,7 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone) {
               L2Name::ObjectName(cone, "response_" + variant,
                                  {L2Name::PtGenKey(lo, hi)}, {collection});
           TH1D *h = dPt ? (TH1D *)dPt->Get(objName) : nullptr;
-          if (h && h->GetEntries() >= kMinEntriesPlot)
+          if (h && h->GetEntries() >= minEntries)
             n++;
         }
       }

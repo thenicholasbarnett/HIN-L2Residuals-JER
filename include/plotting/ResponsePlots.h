@@ -13,7 +13,7 @@
 
 #include "plotting/Style.h"
 #include "plotting/Utilities.h"
-#include "plotting/AsymmetryDistributions.h" // kMinEntriesPlot, StyleFit
+#include "plotting/AsymmetryDistributions.h" // StyleFit
 #include "Binning.h"
 #include "Naming.h"
 #include "ProgressBar.h"
@@ -46,8 +46,8 @@ static const TString kPtGenAxisTitle =
     VARIABLES::getVariableAxisTitleString(VARIABLES::refpt, true);
 
 inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
-                             double halfWidth) {
-  if (!h || h->GetEntries() < kMinEntriesPlot)
+                             double halfWidth, int minEntries) {
+  if (!h || h->GetEntries() < minEntries)
     return nullptr;
   TF1 *fit = new TF1(name, "gaus", 1.0 - halfWidth, 1.0 + halfWidth);
   fit->SetParameter(0, h->GetMaximum());
@@ -64,10 +64,10 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
                              const TString &label,
                              const std::vector<TString> &plotKeys,
                              const TString &xTitle, double halfWidth,
-                             ProgressBar &pb) {
+                             int minEntries, ProgressBar &pb) {
   TDirectory *d = (TDirectory *)fIn->Get(cone + "/" + dirName);
   TH1D *h = GetHAny(d, {objName});
-  if (!h || h->GetEntries() < kMinEntriesPlot) {
+  if (!h || h->GetEntries() < minEntries) {
     if (h)
       delete h;
     return;
@@ -88,8 +88,8 @@ inline void DrawResponseDist(TFile *fIn, const TString &outDir,
 
   h->Draw("E1");
 
-  TF1 *fit =
-      FitResponseGuide(h, cvName + "_fit", HiroshigeLightRed(), halfWidth);
+  TF1 *fit = FitResponseGuide(h, cvName + "_fit", HiroshigeLightRed(),
+                              halfWidth, minEntries);
   if (fit)
     fit->Draw("same");
 
@@ -283,7 +283,7 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
 }
 
 inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
-                         double halfWidth, ProgressBar &pb) {
+                         double halfWidth, int minEntries, ProgressBar &pb) {
   // sentinel: does this cone have runResponse output at all?
   bool any = false;
   for (int ic = 0; ic < kNResponseCollections && !any; ic++) {
@@ -316,7 +316,8 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                                hi, variant.Data());
           DrawResponseDist(fIn, outDir, cone, "QA_response_ptgen", objName,
                            collection, label, {collection, variant, "vs_ptgen"},
-                           kResponseVariantLabels[iv], halfWidth, pb);
+                           kResponseVariantLabels[iv], halfWidth, minEntries,
+                           pb);
         }
         delete hJes;
       }
