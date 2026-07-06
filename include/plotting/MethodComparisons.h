@@ -30,6 +30,8 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
   const TString calibKey = useJer ? "jer" : "jec";
 
   for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+    if (!pb.ShouldKeep())
+      continue;
     const auto &sl = bins.ptavgSlices[ip];
 
     std::vector<TH1D *> hists(kNMethods, nullptr);

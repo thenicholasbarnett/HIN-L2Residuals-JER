@@ -186,6 +186,8 @@ inline void PlotKinematics(TFile *fIn, const TString &outDir,
     }
 
     for (int ip = 0; ip < kNKinematicsPtMins; ip++) {
+      if (!pb.ShouldKeep())
+        continue;
       const double ptMin = kKinematicsPtMins[ip];
       const TString ptKey = PtMinKey(ptMin);
       TString cvName = Form("kinematics_%s_%s_eta_phi_%s", cone.Data(),

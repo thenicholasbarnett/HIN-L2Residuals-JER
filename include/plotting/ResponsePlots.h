@@ -402,6 +402,8 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
       TH1D *hJes = GetHAny(fIn, {cone + "/" + jesName});
       if (hJes) {
         for (int ip = 1; ip <= hJes->GetNbinsX(); ip++) {
+          if (!pb.ShouldKeep())
+            continue;
           const double lo = hJes->GetXaxis()->GetBinLowEdge(ip);
           const double hi = hJes->GetXaxis()->GetBinUpEdge(ip);
           TString objName =

@@ -37,6 +37,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
   const TString calibKey = useJer ? "jer" : "jec";
   for (int m = 0; m < kNMethods; m++) {
     for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
+      if (!pb.ShouldKeep())
+        continue;
       const bool fullEta = (ieta == 1);
       const TString xTitle = fullEta ? "#eta" : "|#eta|";
       const double xMin =

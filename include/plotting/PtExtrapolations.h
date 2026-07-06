@@ -31,6 +31,8 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
       for (int ie = 0; ie < nEta; ie++) {
+        if (!pb.ShouldKeep())
+          continue;
         TString etaKey = L2Name::EtaKey(ie, fullEta);
         TString gname = L2Name::ObjectName(cone, "ptcorr", {etaMode, etaKey},
                                            {kMethodKeys[m]});

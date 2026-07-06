@@ -30,6 +30,8 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
   const TString calibKey = useJer ? "jer" : "jec";
   const int nPt = (int)bins.ptavgSlices.size();
   for (int m = 0; m < kNMethods; m++) {
+    if (!pb.ShouldKeep())
+      continue;
     std::vector<TH1D *> hDirect(nPt, nullptr);
     std::vector<TH1D *> hNorm(nPt, nullptr);
 

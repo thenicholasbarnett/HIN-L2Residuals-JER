@@ -31,6 +31,8 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
     for (int ia = 0; ia < nAlpha; ia++) {
       const auto &aSl = bins.alphaSlices[ia];
       for (int ip = 0; ip < nPt; ip++) {
+        if (!pb.ShouldKeep())
+          continue;
         const auto &ptSl = bins.ptavgSlices[ip];
 
         TString ptKey = L2Name::PtKey(ptSl);

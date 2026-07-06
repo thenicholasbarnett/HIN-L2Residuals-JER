@@ -22,6 +22,8 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
   const TString calibKey = useJer ? "jer" : "jec";
   for (int m = 0; m < kNMethods; m++) {
     for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+      if (!pb.ShouldKeep())
+        continue;
       const auto &sl = bins.ptavgSlices[ip];
       TString ptKey = L2Name::PtKey(sl);
 

@@ -39,6 +39,8 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
     for (int ip = 0; ip < nPt; ip++) {
       const auto &ptSl = bins.ptavgSlices[ip];
       for (int ie = 0; ie < nEta; ie++) {
+        if (!pb.ShouldKeep())
+          continue;
         TString etaKey = L2Name::EtaKey(ie, false);
         TString ptKey = L2Name::PtKey(ptSl);
         TString gname = L2Name::ObjectName(
@@ -117,6 +119,8 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
   for (int ip = 0; ip < nPt; ip++) {
     const auto &ptSl = bins.ptavgSlices[ip];
     for (int ie = 0; ie < nEta; ie++) {
+      if (!pb.ShouldKeep())
+        continue;
       TString etaKey = L2Name::EtaKey(ie, false);
       TString ptKey = L2Name::PtKey(ptSl);
 

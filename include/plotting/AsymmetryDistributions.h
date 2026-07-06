@@ -131,6 +131,8 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
     for (int ia = 0; ia < nAlpha; ia++) {
       const auto &aSl = bins.alphaSlices[ia];
       for (int ie = 0; ie < nEta; ie++) {
+        if (!pb.ShouldKeep())
+          continue;
         TString etaKey = L2Name::EtaKey(ie, false);
         TString ptKey = L2Name::PtKey(ptSl);
         TString alphaKey = L2Name::AlphaKey(aSl);
