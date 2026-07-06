@@ -57,20 +57,6 @@ inline void NormalizeDensity(TH1D *h) {
     h->Scale(1.0 / norm);
 }
 
-inline double MinPositiveBin(const std::vector<TH1D *> &hv) {
-  double minPos = 1e9;
-  for (auto *h : hv) {
-    if (!h)
-      continue;
-    for (int i = 1; i <= h->GetNbinsX(); i++) {
-      const double v = h->GetBinContent(i);
-      if (v > 0)
-        minPos = std::min(minPos, v);
-    }
-  }
-  return (minPos < 1e9) ? minPos : 1e-6;
-}
-
 inline void StyleGuideLine(TLine *l, Color_t col) {
   l->SetLineColorAlpha(col, 0.65);
   l->SetLineStyle(3);
@@ -101,9 +87,14 @@ inline TF1 *FitGaussianGuide(TH1D *h, const TString &name, Color_t col,
   return fit;
 }
 
+// A = (p_T^probe - p_T^tag) / (p_T^probe + p_T^tag), see Dijet.h::MakeDijet
+static const TString kAsymXTitle =
+    "#frac{p_{T}^{probe} - p_{T}^{tag}}{p_{T}^{probe} + p_{T}^{tag}}";
+
 inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
                          double yMin, double yMax) {
-  StyleH(hData, kBlue, 20, 1.5f);
+  // both open circles -- distinguished by color, not marker fill
+  StyleH(hData, kBlue, 24, 1.5f);
   StyleH(hMC, kRed, 24, 1.5f);
 
   hData->SetTitle("");
@@ -111,6 +102,7 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
   hData->GetXaxis()->CenterTitle();
   hData->GetYaxis()->SetTitle("#frac{1}{N} #frac{dN}{dA}");
   hData->GetYaxis()->CenterTitle();
+  hData->GetYaxis()->SetTitleOffset(1.5);
   hData->SetMinimum(yMin);
   hData->SetMaximum(yMax);
 
@@ -172,7 +164,7 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
 
         const double ymax =
             std::max(hdc->GetMaximum(), hmc->GetMaximum()) * 5.0;
-        const double ymin = std::max(1e-6, MinPositiveBin({hdc, hmc}) * 0.5);
+        const double ymin = 1e-3;
 
         double etalo = kAbsEtaEdges[ie];
         double etahi = kAbsEtaEdges[ie + 1];
@@ -212,10 +204,10 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           TCanvas *c = new TCanvas(cvName, "", 800, 800);
           RealAspectRatio(c);
           c->SetLogy();
-          c->SetLeftMargin(0.13);
+          c->SetLeftMargin(0.15);
           c->SetRightMargin(0.05);
 
-          DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+          DrawAsymBase(hdc, hmc, kAsymXTitle, ymin, ymax);
           DrawAsymHeader();
           drawInfo();
 
@@ -243,10 +235,10 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           TCanvas *c = new TCanvas(cvName, "", 800, 800);
           RealAspectRatio(c);
           c->SetLogy();
-          c->SetLeftMargin(0.13);
+          c->SetLeftMargin(0.15);
           c->SetRightMargin(0.05);
 
-          DrawAsymBase(hdc, hmc, "A", ymin, ymax);
+          DrawAsymBase(hdc, hmc, kAsymXTitle, ymin, ymax);
           DrawAsymHeader();
           drawInfo();
 
