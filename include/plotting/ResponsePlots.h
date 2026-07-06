@@ -59,6 +59,14 @@ inline TString ResponseYTitle(const TString &quantity,
   return "#sigma(" + ratioLabel + ") / #LT " + ratioLabel + " #GT";
 }
 
+// below cfg.minJetPt there's no real jet to speak of; start the pT_gen axis
+// there instead of at 0 (also keeps the log-x axis away from a zero edge)
+inline double ResponsePtGenMin(const TAxis *xaxis) {
+  double cutoff = Config().minJetPt;
+  return (cutoff > 0.0) ? std::max(cutoff, xaxis->GetXmin())
+                        : xaxis->GetXmin();
+}
+
 inline TF1 *FitResponseGuide(TH1D *h, const TString &name, Color_t col,
                              double halfWidth, int minEntries) {
   if (!h || h->GetEntries() < minEntries)
@@ -160,7 +168,7 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
     ylo = 0.95;
     yhi = 1.05;
   }
-  const double xMin = frame->GetXaxis()->GetXmin();
+  const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
   TCanvas *c =
@@ -177,6 +185,7 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
+  frame->GetXaxis()->SetRangeUser(xMin, xMax);
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
@@ -215,7 +224,8 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab = new TLatex(0.17, 0.855, cone.Data());
+  TLatex *lab = new TLatex(0.17, 0.855,
+                           Form("%s  |  all #eta_{reco}", cone.Data()));
   lab->SetNDC();
   lab->SetTextFont(42);
   lab->SetTextSize(0.035);
@@ -261,7 +271,7 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
     ylo = 0.95;
     yhi = 1.05;
   }
-  const double xMin = frame->GetXaxis()->GetXmin();
+  const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
   TCanvas *c = new TCanvas("response_variants_" + cone + "_" + collection +
@@ -279,10 +289,11 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   frame->GetXaxis()->CenterTitle();
   frame->GetYaxis()->CenterTitle();
   frame->GetXaxis()->SetTitleOffset(1.25);
+  frame->GetXaxis()->SetRangeUser(xMin, xMax);
   frame->GetYaxis()->SetRangeUser(ylo, yhi);
 
   bool first = true;
-  TLegend *leg = new TLegend(0.60, 0.72, 0.88, 0.88);
+  TLegend *leg = new TLegend(0.68, 0.72, 0.895, 0.88);
   leg->SetBorderSize(0);
   leg->SetFillStyle(0);
   leg->SetTextSize(0.034);
@@ -317,8 +328,10 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   }
 
   DrawCMSInternalHeader(0.14, 0.90);
-  TLatex *lab = new TLatex(0.17, 0.855,
-                           Form("%s  |  %s", cone.Data(), collection.Data()));
+  TLatex *lab =
+      new TLatex(0.17, 0.855,
+                Form("%s  |  %s  |  all #eta_{reco}", cone.Data(),
+                     collection.Data()));
   lab->SetNDC();
   lab->SetTextFont(42);
   lab->SetTextSize(0.035);

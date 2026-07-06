@@ -169,8 +169,8 @@ static TruncResult TruncMeanInRange(TH1D *h, int binLo, int binHi) {
   double hTotal = h->Integral();
   double nEffEntries =
       (hTotal > 1e-10) ? h->GetEntries() * nEff / hTotal : nEff;
-  if (nEffEntries < 10)
-    return r;
+  // no separate entries gate here: FindTruncBins already required
+  // h's raw (pre-truncation) entries >= min_entries_per_bin
   h->GetXaxis()->SetRange(binLo, binHi);
   double mean = h->GetMean();
   double rms = h->GetRMS();
