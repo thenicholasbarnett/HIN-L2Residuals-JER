@@ -276,13 +276,15 @@ static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
   return nullptr;
 }
 
-// Shared implementation for all three public entry points below. fTrig/fNoTrig
-// are already-open files; exactly one is null in single-dataset mode
-// (TriggeredOnly leaves fNoTrig null, NonTriggeredOnly leaves fTrig null) and
-// both are non-null in Merge mode.
-static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
-                            TString outputRootFile, TString outputTag,
-                            TString method, bool useNorm) {
+// Shared implementation for the two runTextFile() entry points below.
+// fTrig/fNoTrig are already-open files; exactly one is null in single-dataset
+// mode (TriggeredOnly leaves fNoTrig null, NonTriggeredOnly leaves fTrig
+// null) and both are non-null in Merge mode. calibMode selects which
+// calibration kind is read/written (see TextFileWriter.h) -- JEC and JER
+// are otherwise mutually exclusive within one call.
+static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
+                            CalibrationMode calibMode, TString outputRootFile,
+                            TString outputTag, TString method, bool useNorm) {
 
   if (outputTag.IsNull())
     outputTag = kDefaultTag;
@@ -311,7 +313,9 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
   static const char *const kModeLabel[] = {"merge (triggered + non-triggered)",
                                            "single (triggered-only)",
                                            "single (non-triggered-only)"};
-  std::cout << "Mode: " << kModeLabel[(int)mode] << "\n"
+  const bool doJEC = (calibMode == CalibrationMode::JEC);
+  std::cout << "Mode: " << kModeLabel[(int)srcMode] << "\n"
+            << "Calibration:  " << (doJEC ? "JEC" : "JER") << "\n"
             << "Triggered residuals:     "
             << (fTrig ? fTrig->GetName() : "(none)") << "\n"
             << "Non-triggered residuals: "
@@ -346,6 +350,8 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
   for (int ip = 0; ip < nPt; ip++)
     ptEdges[ip + 1] = bins.ptavgSlices[ip].hi;
 
+  const TString objKind = doJEC ? "intercept" : "intercept_jer";
+
   for (const TString &cone : cfg.coneLabels) {
 
     TDirectory *trigConeDir = fTrig ? (TDirectory *)fTrig->Get(cone) : nullptr;
@@ -359,11 +365,11 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
 
     fOut->cd();
     TDirectory *coneDirOut = fOut->mkdir(cone.Data());
-    TDirectory *dGraphs = coneDirOut->mkdir("graphs");
+    TDirectory *dGraphs = doJEC ? coneDirOut->mkdir("graphs") : nullptr;
 
-    // filled below for abseta then fulleta, used to write the two text files afterward
+    // filled below for abseta then fulleta, used to write the text files afterward
     std::vector<FitResult> fitsAbsEta, fitsFullEta;
-    std::vector<TH1D *> hSliceJerAbsEta, hSliceJerFullEta;
+    std::vector<TH1D *> hSliceAbsEta, hSliceFullEta;
 
     for (int em = 0; em < 2; em++) {
       const bool fullEta = (em == 1);
@@ -376,40 +382,37 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
       const int nEta = (int)etaEdges.size() - 1;
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-      // one intercept histogram per pT slice, chosen per SelectSource() --
+      // one correction histogram per pT slice, chosen per SelectSource() --
       // a null source (TriggeredOnly below threshold) means the slice is
       // intentionally excluded, not merely missing.
-      std::vector<TH1D *> hSlice(nPt, nullptr);
-      std::vector<TH1D *> &hSliceJer =
-          fullEta ? hSliceJerFullEta : hSliceJerAbsEta;
-      hSliceJer.assign(nPt, nullptr);
+      std::vector<TH1D *> &hSlice = fullEta ? hSliceFullEta : hSliceAbsEta;
+      hSlice.assign(nPt, nullptr);
       int nMissingSlices = 0;
       for (int ip = 0; ip < nPt; ip++) {
         const auto &ptSlice = bins.ptavgSlices[ip];
         TFile *src =
-            SelectSource(mode, ptSlice, cfg.hltJ80Thresh, fTrig, fNoTrig);
+            SelectSource(srcMode, ptSlice, cfg.hltJ80Thresh, fTrig, fNoTrig);
         if (src) {
           TString name =
-              L2Name::ObjectName(cone, "intercept",
+              L2Name::ObjectName(cone, objKind,
                                  {etaMode, L2Name::PtKey(ptSlice)}, {method}) +
               suffix;
           hSlice[ip] = FetchIntercept(src, cone, name);
-          TString nameJer =
-              L2Name::ObjectName(cone, "intercept_jer",
-                                 {etaMode, L2Name::PtKey(ptSlice)}, {method}) +
-              suffix;
-          hSliceJer[ip] = FetchIntercept(src, cone, nameJer);
         }
         if (!hSlice[ip]) {
           nMissingSlices++;
         }
       }
       if (nMissingSlices > 0) {
-        std::cerr
-            << cone << " " << etaMode << ": " << nMissingSlices << "/" << nPt
-            << " pT slices missing or excluded (below trigger threshold in"
-            << " triggered-only mode, or intercept histogram not found)\n";
+        std::cerr << cone << " " << etaMode << ": " << nMissingSlices << "/"
+                  << nPt
+                  << " pT slices missing or excluded (below trigger "
+                     "threshold in triggered-only mode, or "
+                  << objKind << " histogram not found)\n";
       }
+
+      if (!doJEC)
+        continue; // JER SF is a direct binned grid -- no corrfinal, no fit
 
       // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
       TString gridName =
@@ -468,43 +471,48 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
       }
     }
 
-    TString absEtaTxt =
-        textDir + "/" + outputTag + "_" + cone + "_abseta" + suffix + ".txt";
-    TString etaTxt =
-        textDir + "/" + outputTag + "_" + cone + "_eta" + suffix + ".txt";
-    if (wantAbsEta && !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta))
-      std::cerr << "Cannot open output file " << absEtaTxt << "\n";
-    if (wantFullEta && !WriteFullEtaTextFile(etaTxt, fitsFullEta))
-      std::cerr << "Cannot open output file " << etaTxt << "\n";
+    if (doJEC) {
+      TString absEtaTxt =
+          textDir + "/" + outputTag + "_" + cone + "_abseta" + suffix + ".txt";
+      TString etaTxt =
+          textDir + "/" + outputTag + "_" + cone + "_eta" + suffix + ".txt";
+      if (wantAbsEta && !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta))
+        std::cerr << "Cannot open output file " << absEtaTxt << "\n";
+      if (wantFullEta && !WriteFullEtaTextFile(etaTxt, fitsFullEta))
+        std::cerr << "Cannot open output file " << etaTxt << "\n";
 
-    std::cout << "Done. " << cone << ": ";
-    if (wantAbsEta)
-      std::cout << 2 * (int)fitsAbsEta.size() << " eta bins -> " << absEtaTxt;
-    if (wantAbsEta && wantFullEta)
-      std::cout << ", ";
-    if (wantFullEta)
-      std::cout << (int)fitsFullEta.size() << " eta bins -> " << etaTxt;
-    std::cout << "\n";
+      std::cout << "Done. " << cone << ": ";
+      if (wantAbsEta)
+        std::cout << 2 * (int)fitsAbsEta.size() << " eta bins -> "
+                  << absEtaTxt;
+      if (wantAbsEta && wantFullEta)
+        std::cout << ", ";
+      if (wantFullEta)
+        std::cout << (int)fitsFullEta.size() << " eta bins -> " << etaTxt;
+      std::cout << "\n";
+    } else {
+      TString absEtaJerTxt = textDir + "/" + outputTag + "_" + cone +
+                             "_abseta_jer" + suffix + ".txt";
+      TString etaJerTxt =
+          textDir + "/" + outputTag + "_" + cone + "_eta_jer" + suffix +
+          ".txt";
+      if (wantAbsEta && !WriteJerSfTextFile(absEtaJerTxt, false,
+                                            bins.ptavgSlices, hSliceAbsEta))
+        std::cerr << "Cannot write JER SF output file " << absEtaJerTxt
+                  << "\n";
+      if (wantFullEta && !WriteJerSfTextFile(etaJerTxt, true, bins.ptavgSlices,
+                                             hSliceFullEta))
+        std::cerr << "Cannot write JER SF output file " << etaJerTxt << "\n";
 
-    TString absEtaJerTxt = textDir + "/" + outputTag + "_" + cone +
-                           "_abseta_jer" + suffix + ".txt";
-    TString etaJerTxt =
-        textDir + "/" + outputTag + "_" + cone + "_eta_jer" + suffix + ".txt";
-    if (wantAbsEta && !WriteJerSfTextFile(absEtaJerTxt, false, bins.ptavgSlices,
-                                          hSliceJerAbsEta))
-      std::cerr << "Cannot write JER SF output file " << absEtaJerTxt << "\n";
-    if (wantFullEta && !WriteJerSfTextFile(etaJerTxt, true, bins.ptavgSlices,
-                                           hSliceJerFullEta))
-      std::cerr << "Cannot write JER SF output file " << etaJerTxt << "\n";
-
-    std::cout << "Done (JER SF). " << cone << ": ";
-    if (wantAbsEta)
-      std::cout << "-> " << absEtaJerTxt;
-    if (wantAbsEta && wantFullEta)
-      std::cout << ", ";
-    if (wantFullEta)
-      std::cout << "-> " << etaJerTxt;
-    std::cout << "\n";
+      std::cout << "Done (JER SF). " << cone << ": ";
+      if (wantAbsEta)
+        std::cout << "-> " << absEtaJerTxt;
+      if (wantAbsEta && wantFullEta)
+        std::cout << ", ";
+      if (wantFullEta)
+        std::cout << "-> " << etaJerTxt;
+      std::cout << "\n";
+    }
   }
 
   fOut->Close();
@@ -516,7 +524,8 @@ static void RunTextFileImpl(SourceMode mode, TFile *fTrig, TFile *fNoTrig,
 
 void runTextFile(TString triggeredResidualsFile,
                  TString nonTriggeredResidualsFile, TString outputRootFile,
-                 TString outputTag, TString method, bool useNorm) {
+                 CalibrationMode mode, TString outputTag, TString method,
+                 bool useNorm) {
   TFile *fTrig = TFile::Open(triggeredResidualsFile, "read");
   TFile *fNoTrig = TFile::Open(nonTriggeredResidualsFile, "read");
   if (!fTrig || fTrig->IsZombie()) {
@@ -527,24 +536,24 @@ void runTextFile(TString triggeredResidualsFile,
     std::cerr << "Cannot open " << nonTriggeredResidualsFile << "\n";
     return;
   }
-  RunTextFileImpl(SourceMode::Merge, fTrig, fNoTrig, outputRootFile, outputTag,
-                  method, useNorm);
+  RunTextFileImpl(SourceMode::Merge, fTrig, fNoTrig, mode, outputRootFile,
+                  outputTag, method, useNorm);
 }
 
 void runTextFile(TString residualsFile, SingleDatasetKind kind,
-                 TString outputRootFile, TString outputTag, TString method,
-                 bool useNorm) {
+                 TString outputRootFile, CalibrationMode mode,
+                 TString outputTag, TString method, bool useNorm) {
   TFile *f = TFile::Open(residualsFile, "read");
   if (!f || f->IsZombie()) {
     std::cerr << "Cannot open " << residualsFile << "\n";
     return;
   }
   if (kind == SingleDatasetKind::Triggered) {
-    RunTextFileImpl(SourceMode::TriggeredOnly, f, nullptr, outputRootFile,
-                    outputTag, method, useNorm);
+    RunTextFileImpl(SourceMode::TriggeredOnly, f, nullptr, mode,
+                    outputRootFile, outputTag, method, useNorm);
   } else {
-    RunTextFileImpl(SourceMode::NonTriggeredOnly, nullptr, f, outputRootFile,
-                    outputTag, method, useNorm);
+    RunTextFileImpl(SourceMode::NonTriggeredOnly, nullptr, f, mode,
+                    outputRootFile, outputTag, method, useNorm);
   }
 }
 

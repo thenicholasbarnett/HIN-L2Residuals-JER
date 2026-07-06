@@ -20,8 +20,6 @@
 #include <algorithm>
 #include <utility>
 
-static constexpr int kMinEntriesPlot = 10;
-
 // Return the x-values at the low and high truncation boundaries for `fraction` of the area.
 inline std::pair<double, double> TruncBounds(TH1D *h, double fraction) {
   if (!h || h->Integral() <= 0)
@@ -96,8 +94,9 @@ inline void DrawTruncLines(TH1D *h, double fraction, Color_t col, double yMin,
   hiLine->Draw();
 }
 
-inline TF1 *FitGaussianGuide(TH1D *h, const TString &name, Color_t col) {
-  if (!h || h->GetEntries() < kMinEntriesPlot)
+inline TF1 *FitGaussianGuide(TH1D *h, const TString &name, Color_t col,
+                             int minEntries) {
+  if (!h || h->GetEntries() < minEntries)
     return nullptr;
   TF1 *fit = new TF1(name, "gaus", -0.5, 0.5);
   fit->SetParameter(0, h->GetMaximum());
@@ -127,10 +126,13 @@ inline void DrawAsymBase(TH1D *hData, TH1D *hMC, const TString &xTitle,
 
 // Asymmetry distributions. Three canvases per (cone, pT slice, alpha slice,
 // eta bin), data (black) vs MC (red), log-y: trunc90/trunc95 truncation
-// bounds, gauss fit guides. Skips bins under kMinEntriesPlot.
+// bounds, gauss fit guides. Skips bins under minEntries -- same threshold
+// ([cuts] min_entries_per_bin) extraction itself requires to fit a bin, so
+// plotting never re-fits something extraction already wrote off as too thin.
 
 inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
-                         const BinningConfig &bins, ProgressBar &pb) {
+                         const BinningConfig &bins, int minEntries,
+                         ProgressBar &pb) {
   TDirectory *dData = (TDirectory *)fIn->Get(cone + "/QA_data");
   TDirectory *dMC = (TDirectory *)fIn->Get(cone + "/QA_mc");
 
@@ -155,7 +157,7 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
         TH1D *hd = GetHAny(dData, {dname});
         TH1D *hm = GetHAny(dMC, {mname});
 
-        if (!hd || !hm || hd->GetEntries() < kMinEntriesPlot) {
+        if (!hd || !hm || hd->GetEntries() < minEntries) {
           if (hd)
             delete hd;
           if (hm)
@@ -254,8 +256,10 @@ inline void PlotAsymDist(TFile *fIn, const TString &outDir, const TString &cone,
           DrawAsymHeader();
           drawInfo();
 
-          TF1 *fd = FitGaussianGuide(hdc, cvName + "_data_fit", kBlack);
-          TF1 *fm = FitGaussianGuide(hmc, cvName + "_mc_fit", kRed + 1);
+          TF1 *fd =
+              FitGaussianGuide(hdc, cvName + "_data_fit", kBlack, minEntries);
+          TF1 *fm =
+              FitGaussianGuide(hmc, cvName + "_mc_fit", kRed + 1, minEntries);
           if (fd)
             fd->Draw("same");
           if (fm)

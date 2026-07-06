@@ -184,7 +184,7 @@ void TestFileStructure() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 1.0, 1.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header, headerEta;
   auto absLines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -218,7 +218,7 @@ void TestMergeSourceSelection() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 5.0, 1.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   TFile *fOut = TFile::Open(rootPath, "read");
   TH2D *hGrid =
@@ -252,7 +252,7 @@ void TestNormSelection() {
   MakeResiduals(notrigPath, 1.0, 0.001, {0, 1, 2, 3, 4, 5}, false, true);
   MakeResiduals(notrigPath, 9.0, 0.001, {0, 1, 2, 3, 4, 5}, true, false);
 
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", true);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", true);
 
   Check(std::ifstream(TxtPath(tag, "abseta", true).Data()).good(),
         "norm run writes a _norm-suffixed abseta text file");
@@ -286,8 +286,8 @@ void TestSingleFileMode() {
   CleanupFiles(resPath, resPath, rootPath, tag);
 
   MakeResiduals(resPath, 3.0, 0.001, {0, 1, 2, 3, 4, 5});
-  runTextFile(resPath, SingleDatasetKind::NonTriggered, rootPath, tag, "gauss",
-              false);
+  runTextFile(resPath, SingleDatasetKind::NonTriggered, rootPath,
+              CalibrationMode::JEC, tag, "gauss", false);
 
   Check(std::ifstream(TxtPath(tag, "abseta", false).Data()).good(),
         "single-file run writes the abseta text file");
@@ -318,8 +318,8 @@ void TestSingleTriggeredMode() {
   CleanupFiles(resPath, resPath, rootPath, tag);
 
   MakeResiduals(resPath, 5.0, 0.001, {0, 1, 2, 3, 4, 5});
-  runTextFile(resPath, SingleDatasetKind::Triggered, rootPath, tag, "gauss",
-              false);
+  runTextFile(resPath, SingleDatasetKind::Triggered, rootPath,
+              CalibrationMode::JEC, tag, "gauss", false);
 
   TFile *fOut = TFile::Open(rootPath, "read");
   TH2D *hGrid =
@@ -349,7 +349,7 @@ void TestEtaOrdering() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 1.0, 1.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -416,7 +416,7 @@ void TestEtaFileOrdering() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 1.0, 1.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "eta", false).Data(), header);
@@ -455,7 +455,7 @@ void TestUnityFallback_TooFewSlices() {
   // Only 2 valid slices total: Triggered supplies 100-175 and 175-250, NonTriggered supplies none.
   MakeResiduals(trigPath, 1.0, 0.001, {2, 3});
   MakeResiduals(notrigPath, 1.0, 0.001, {});
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -484,7 +484,7 @@ void TestUnityFallback_EmptyBins() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 0.0, 0.0, 0.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -513,7 +513,7 @@ void TestFitRoundTrip() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 1.0, 1.0, 1e-5);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -550,7 +550,7 @@ void TestEtaExtent() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
   MakeTrigNoTrig(trigPath, notrigPath, 1.0, 1.0);
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
 
   std::string header;
   auto lines = ReadJECFile(TxtPath(tag, "abseta", false).Data(), header);
@@ -580,7 +580,7 @@ void TestJerSfWriter() {
 
   MakeResidualsWithJer(trigPath, 1.0, 0.001, 1.02, 0.01, {0, 1, 2, 3, 4, 5});
   MakeResidualsWithJer(notrigPath, 1.0, 0.001, 1.02, 0.01, {0, 1, 2, 3, 4, 5});
-  runTextFile(trigPath, notrigPath, rootPath, tag, "gauss", false);
+  runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JER, tag, "gauss", false);
 
   TString jerAbsPath = TxtPath(tag, "abseta_jer", false);
   TString jerEtaPath = TxtPath(tag, "eta_jer", false);

@@ -7,6 +7,7 @@
 //   -triggered trig.root
 //   -nontriggered notrig.root
 //   -output out.root
+//   -mode jec
 //   # [-tag name]
 //   # [-method gauss]
 //   # [-norm true]
@@ -14,12 +15,14 @@
 //
 // ./build/bin/runTextFile args.config  # config file lines: key = value
 //
-// Interpreted: 
+// Interpreted:
 //
 // export L2RESIDUALS_CONFIG=/path/to/cfg/2024ppRef.toml  # required
 // root -l -b -q 'macros/runTextFile.C("triggered.root", "nontriggered.root", "out.root")'
 //
-// compatible with only triggered residuals, only non-trigger residuals, or both
+// compatible with only triggered residuals, only non-trigger residuals, or both.
+// -mode jec|jer is required whenever -triggered/-nontriggered is used, mirroring
+// runCalibration's own -mode -- a Step 2 file only ever has one calibration kind.
 
 #ifdef __CLING__
 // clang-format off
@@ -44,18 +47,25 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 int main(int argc, char *argv[]) {
   static const char *const kUsage =
       "Usage: runTextFile -triggered trig.root -nontriggered notrig.root"
-      " -output out.root [-tag name] [-method gauss] [-norm true] -config "
-      "path\n"
-      "       runTextFile -triggered trig.root -output out.root ... -config "
-      "path\n"
-      "       runTextFile -nontriggered notrig.root -output out.root ... "
-      "-config path\n"
+      " -output out.root -mode jec|jer [-tag name] [-method gauss] [-norm "
+      "true] -config path\n"
+      "       runTextFile -triggered trig.root -output out.root -mode "
+      "jec|jer ... -config path\n"
+      "       runTextFile -nontriggered notrig.root -output out.root -mode "
+      "jec|jer ... -config path\n"
       "       runTextFile -resolution response.root [-tag name] -config path\n"
       "       runTextFile args.config   # config file lines use: key = value\n"
+      "  -mode jec|jer: required whenever -triggered or -nontriggered is "
+      "given, mirroring\n"
+      "                 runCalibration's own -mode -- a Step 2 file only "
+      "ever has one\n"
+      "                 calibration kind. jec writes the L2Residual "
+      "correction text files;\n"
+      "                 jer writes the JER SF text files.\n"
       "  -resolution: write JER pT resolution text file from a runResponse "
       "output\n"
-      "               (independent of -triggered/-nontriggered; can be "
-      "combined)\n"
+      "               (independent of -triggered/-nontriggered/-mode; can "
+      "be combined)\n"
       "  tag: plain filename prefix (no '/'), defaults to \"L2Residual\" "
       "(JEC/JER SF)\n"
       "          or \"JER_ptresolution\" (resolution-only run)\n";
@@ -85,6 +95,7 @@ int main(int argc, char *argv[]) {
       cl.getValue<std::string>("nontriggered", std::string(""));
   std::string resolution =
       cl.getValue<std::string>("resolution", std::string(""));
+  std::string modeStr = cl.getValue<std::string>("mode", std::string(""));
 
   if (!cl.check()) {
     std::cerr << kUsage;
@@ -109,19 +120,34 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  CalibrationMode mode = CalibrationMode::JEC;
+  if (hasTrig || hasNoTrig) {
+    if (modeStr == "jec") {
+      mode = CalibrationMode::JEC;
+    } else if (modeStr == "jer") {
+      mode = CalibrationMode::JER;
+    } else {
+      std::cerr << "ERROR: -mode must be \"jec\" or \"jer\" when using "
+                   "-triggered or -nontriggered, got: \""
+                << modeStr << "\"\n"
+                << kUsage;
+      return 1;
+    }
+  }
+
   if (hasResolution) {
     runTextFilePtResolution(resolution, tag);
   }
 
   if (hasTrig || hasNoTrig) {
     if (hasTrig && hasNoTrig) {
-      runTextFile(trig, noTrig, output, tag, method, useNorm);
+      runTextFile(trig, noTrig, output, mode, tag, method, useNorm);
     } else if (hasTrig) {
-      runTextFile(trig, SingleDatasetKind::Triggered, output, tag, method,
-                  useNorm);
+      runTextFile(trig, SingleDatasetKind::Triggered, output, mode, tag,
+                  method, useNorm);
     } else {
-      runTextFile(noTrig, SingleDatasetKind::NonTriggered, output, tag, method,
-                  useNorm);
+      runTextFile(noTrig, SingleDatasetKind::NonTriggered, output, mode, tag,
+                  method, useNorm);
     }
   }
   return 0;
