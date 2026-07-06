@@ -151,9 +151,11 @@ inline void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
 }
 
 // xLeft should match the canvas's actual left margin, or "CMS Internal"
-// won't sit flush with the frame's left edge.
+// won't sit flush with the frame's left edge. xRight matches the 0.90 every
+// other plot family already passes explicitly (Kinematics.h/ResponsePlots.h)
+// -- the bare 0.95 default sits too close to the canvas edge and clips.
 inline void DrawAsymHeader(double xLeft = 0.13) {
-  DrawCMSInternalHeader(xLeft);
+  DrawCMSInternalHeader(xLeft, 0.90);
 }
 
 inline TString FormatEntriesText(Long64_t entries) {
