@@ -360,10 +360,10 @@ ak4PF/
 `runPlotting` handles plotting for output files from each step. Flags that don't apply to the input file type skip silently. `-flags` has three modes: omitted (empty) runs a curated smart default — NOT every applicable plot, see the table below for which flags that includes per step; `-flags all` runs every applicable flag unconditionally; a space-separated value runs exactly those flags.
 
 ```
-./build/bin/runPlotting -input <input_asymmetries-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_residuals-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-calibration JEC|JER] [-tag name] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_corrections-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-tag name] -config cfg/2024ppRef.toml
-./build/bin/runPlotting -input <input_response-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_asymmetries-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] [-sample true] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_residuals-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-calibration JEC|JER] [-tag name] [-sample true] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_corrections-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-closure true] [-tag name] [-sample true] -config cfg/2024ppRef.toml
+./build/bin/runPlotting -input <input_response-file.root> [-outdir <output_plots-dir>] [-flags "..."] [-tag name] [-sample true] -config cfg/2024ppRef.toml
 ```
 
 | Flag | Input | Description | In smart default? |
@@ -382,6 +382,8 @@ ak4PF/
 | `all` | any | Every applicable flag, unconditionally (including inclusive-jet kinematics and `finals` from either source) | n/a |
 
 `-calibration JEC|JER` (default `JEC`) switches `roverlay`, `alpha`, `methods`, `etasym`, `normcomp`, and `finals` between the JEC output (mean-derived, the L2Residual correction) and the JER SF output (stddev-derived) — see the Step 2 section above. `adist` is unaffected (its A-distribution QA histograms aren't duplicated between the two). `kinematics`, `event`, `ptfit`, and `response` don't have a JEC/JER axis and ignore `-calibration` entirely. `finals`' Step 3 `corrfinal`-grid fallback has no JER SF equivalent yet, so `-calibration JER` against a Step 3 file only ever finds Step 2's native `intercept_jer_*` objects.
+
+`-sample true` (default `false`) stops after 1000 plots or 60 seconds, whichever comes first, instead of running the full `-flags` selection to completion — useful for previewing a cosmetic change (axis titles, colors, legend layout, ...) against a couple of real plots without waiting out a full run.
 
 <br>
 
