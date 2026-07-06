@@ -28,6 +28,12 @@ inline int TerminalWidth(int fallback = 80) {
   return cols - 1;
 }
 
+// Thrown by ProgressBar::Update() once a sample cap set via EnableSample()
+// is hit. Unwinds straight out of a plotting loop regardless of how many
+// nested loops or separate Plot* calls sit in between -- used by
+// runPlotting's -sample flag to preview cosmetics without a full run.
+struct SampleLimitReached {};
+
 // Colors: kBlack, kGreen, kBlue, kRed, kPink, kPurple, kOrange, kYellow, kCyan, kWhite, kRandom
 
 struct ProgressBar {
@@ -51,6 +57,8 @@ struct ProgressBar {
   int current = 0;
   Color color;
   time_t startTime;
+  int sampleLimit = -1;      // -1 == no cap; set via EnableSample()
+  time_t sampleDeadline = 0; // absolute time(nullptr) cutoff; 0 == no cap
 
   ProgressBar(const std::string &label, int total, Color color = kRandom)
       : label(label), total(total), color(color), startTime(time(nullptr)) {
@@ -91,6 +99,18 @@ struct ProgressBar {
   void Update() {
     current++;
     Draw();
+    if (sampleLimit >= 0 &&
+        (current >= sampleLimit || time(nullptr) >= sampleDeadline))
+      throw SampleLimitReached{};
+  }
+
+  // Caps this bar to whichever comes first: maxCount total Update() calls,
+  // or maxSeconds of wall-clock time since construction. Update() throws
+  // SampleLimitReached the instant either limit is hit -- the caller must
+  // wrap its plotting loop in a try/catch to stop early.
+  void EnableSample(int maxCount, int maxSeconds) {
+    sampleLimit = maxCount;
+    sampleDeadline = startTime + maxSeconds;
   }
 
   void Finish() {
