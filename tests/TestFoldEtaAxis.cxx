@@ -23,7 +23,7 @@ void Check(bool cond, const char *msg) {
   }
 }
 
-// Build a 3-axis THnSparse: full eta (36 CMS JEC bins) x asymmetry (10 bins) x pT_avg (5 bins)
+// make 3-axis THnSparse
 THnSparse *MakeTestSparse(const char *name) {
   BinningConfig bins;
   AxisBins asymBins = {10, -1.0, 1.0, "A"};
@@ -170,8 +170,8 @@ int main() {
     delete hf;
   }
 
-  // -2.6, not -2.5: -2.5 sits exactly on edge kEtaEdges[7], which ROOT's
-  // bin-edge convention would put in the adjacent bin
+  // -2.6, not -2.5 which sits on edge kEtaEdges[7]
+  // ROOT's bin-edge convention would put in adjacent bin
   std::cout << "\n[6] Fills at different |eta| values stay separate"
             << std::endl;
   {

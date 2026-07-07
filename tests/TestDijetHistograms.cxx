@@ -45,9 +45,7 @@ int main() {
   Check(h.hTagJetResp != nullptr, "hTagJetResp created in MC mode");
   Check(h.hProbeJetResp != nullptr, "hProbeJetResp created in MC mode");
 
-  // values are exactly representable in float and away from bin edges, so
-  // there's no float->double rounding ambiguity against the independent
-  // FindBin lookup below
+  // no float->double rounding ambiguity with FindBin
   std::cout << "\n[3] FillInclJetResp: matched jet" << std::endl;
   {
     // corrPt=105, rawPt=88, jtPt=100, eta=0.13, refPt=80

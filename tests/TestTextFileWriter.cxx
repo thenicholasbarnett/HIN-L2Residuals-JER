@@ -452,7 +452,7 @@ void TestUnityFallback_TooFewSlices() {
   const char *tag = "test_tw5";
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 
-  // Only 2 valid slices total: Triggered supplies 100-175 and 175-250, NonTriggered supplies none.
+  // Only 2 valid slices total: Triggered supplies 100-175 and 175-250, NonTriggered supplies none
   MakeResiduals(trigPath, 1.0, 0.001, {2, 3});
   MakeResiduals(notrigPath, 1.0, 0.001, {});
   runTextFile(trigPath, notrigPath, rootPath, CalibrationMode::JEC, tag, "gauss", false);
@@ -473,7 +473,7 @@ void TestUnityFallback_TooFewSlices() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [6] Unity fallback for empty histograms (all bins zero)
+// [6] Unity fallback for empty histograms
 void TestUnityFallback_EmptyBins() {
   std::cout << "\n[6] Unity fallback, empty histograms\n";
 
@@ -502,7 +502,7 @@ void TestUnityFallback_EmptyBins() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [7] Fit round-trip: unit input recovers f≈1.0 at all pT centers
+// [7] Fit round-trip: unit input recovers f≈1.0
 void TestFitRoundTrip() {
   std::cout << "\n[7] Fit round-trip\n";
 
@@ -520,6 +520,8 @@ void TestFitRoundTrip() {
   if ((int)lines.size() != 36) {
     std::cout << "  SKIP  (line count wrong)\n";
   } else {
+    // NEED TO CHANGE THIS
+    // SHOULD MIMIC TOML BINNING OF PTAVG
     // slice midpoints: 30-70, 70-100, 100-175, 175-250, 250-500, 500-1000
     const double ptCenters[] = {50.0, 85.0, 137.5, 212.5, 375.0, 750.0};
     const JECLine &barrel = lines[18]; // innermost positive eta
@@ -566,9 +568,7 @@ void TestEtaExtent() {
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 
-// [9] JER SF writer round-trip via the vendored JetResolutionObject reader;
-// uses getRecords() since getRecord() only matches on eta and this writer
-// emits one record per (eta, pT) cell
+// [9] JER SF writer round-trip via the vendored JetResolutionObject reader
 void TestJerSfWriter() {
   std::cout << "\n[9] JER SF text writer round-trip\n";
 
