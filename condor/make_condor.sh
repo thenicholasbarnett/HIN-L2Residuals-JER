@@ -175,8 +175,8 @@ parse_args() {
   fi
 }
 
-# Validates CONFIG_PATH is set and exists, then resolves it to an absolute
-# path (needed before the cd into WORKDIR later).
+# validates CONFIG_PATH is set and exists
+# resolves to absolute path (needed before the cd into WORKDIR later).
 require_config() {
   if [[ -z "${CONFIG_PATH}" ]]; then
     echo "ERROR: -config path is required -- which TOML gets submitted is a physics-affecting" >&2

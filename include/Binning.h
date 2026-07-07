@@ -52,12 +52,7 @@ inline void SetEtaBins(THnSparse *h, Int_t axis) {
   h->GetAxis(axis)->Set((Int_t)kEtaEdges.size() - 1, kEtaEdges.data());
 }
 
-// Build pT_avg RangeBins from cfg.ptavgEdges (cfg/2024ppRef.toml, [binning] ptavg_edges).
-// title/shortName are derived from the edges so they can't drift out of sync
-// with a TOML edit; shortName matches the pre-TOML hardcoded format exactly
-// ("_ptavg_<lo>_<hi>") so existing Step 2 output object names stay readable.
-// Colors cycle through the Hiroshige palette by slice index; plot styling
-// stays out of the physics-binning config.
+// Build pT_avg RangeBins from cfg.ptavgEdges (cfg/2024ppRef.toml, [binning] ptavg_edges)
 inline std::vector<RangeBin> BuildPtAvgSlices(const std::vector<float> &edges) {
   static Color_t (*const kColorCycle[])() = {
       HiroshigeYellow, HiroshigeIceBlue,  HiroshigeLightBlue,
@@ -94,13 +89,8 @@ struct BinningConfig {
   AxisBins pt = {100, 0.0, 1000.0, "p_{T} (GeV)"};
   AxisBins phi = {64, -3.2, 3.2, "#phi (rad)"};
   AxisBins trig = {2, 0, 2, "trigger decision"};
-
-  // MC-only: p_{T}^{reco}/p_{T}^{gen} response axis, added to the incl/tag/probe
-  // kinematics THnSparses in MC mode (JES/JER inputs, see ConeHistograms).
+  
   AxisBins response = {200, 0.0, 2.0, "p_{T}^{reco}/p_{T}^{gen}"};
-
-  // pT_avg slicing: edges come from cfg/2024ppRef.toml ([binning] ptavg_edges),
-  // so rebinning Step 2/3's pT slices needs only a TOML edit + rerun, no recompile.
   std::vector<RangeBin> ptavgSlices = BuildPtAvgSlices(Config().ptavgEdges);
 
   // cumulative alpha ranges

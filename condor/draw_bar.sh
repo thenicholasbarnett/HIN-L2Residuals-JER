@@ -6,21 +6,11 @@ BAR_COLOR=""
 _BAR_START_TIME=""
 _TERM_COLS=80
 
-# Wipe the line the instant a resize is signaled, instead of waiting for the
-# next scheduled draw_bar call -- shrinks (doesn't eliminate) the window
-# where a live drag-resize's terminal-side reflow of already-painted output
-# is visible. The reflow itself is kitty's own repaint of history, not new
-# bytes from this script, so this can't fully suppress it.
 trap 'printf "\r\033[2K"' WINCH
 
 start_bar_timer() { _BAR_START_TIME=$(date +%s); }
 
-# Real terminal width, falling back when stdout isn't a tty (e.g. Condor job
-# output redirected to a log file). Sets _TERM_COLS (global, same convention
-# as BAR_COLOR above) rather than a $(...)-captured return value -- capturing
-# would redirect this function's own fd 1 to the capture pipe and break the
-# -t 1 check below. Also avoids `local -n` (bash 4.3+), since macOS ships
-# bash 3.2.
+# scales with terminal width
 terminal_width() {
   _TERM_COLS=80
   if [[ -t 1 ]]; then
@@ -31,14 +21,12 @@ terminal_width() {
       _TERM_COLS="$cols"
     fi
   fi
-  # reserve one column -- writing all the way to the last column leaves the
-  # terminal in a pending-wrap state that \r doesn't reliably clear, which
-  # walks the bar down the screen over many redraws
+  
   _TERM_COLS=$((_TERM_COLS - 1))
 }
 
-# Sets BAR_COLOR by drawing from a shuffled deck; refills when exhausted,
-# guaranteeing every color appears once per cycle with no consecutive repeats.
+# color of progress bar is randomized
+# every color appears once before any appear twice
 pick_bar_color() {
   if ((${#_COLOR_QUEUE[@]} == 0)); then
     local shuffled=("${_BAR_COLORS[@]}")
@@ -96,10 +84,7 @@ draw_bar() {
   fi
   terminal_width
 
-  # Progressively drop cosmetics as the terminal narrows -- rate first,
-  # then ETA/elapsed, then the label -- so the bar itself is the last
-  # thing to give up space. If even a bare minimum-width bar won't fit,
-  # drop the bar too and fall back to plain "current/total pct%".
+  # progressively drop cosmetics as terminal narrows
   local min_bar=10
   local use_label="$label" use_rate="$rate_str" use_time="$time_str" width
   local stage

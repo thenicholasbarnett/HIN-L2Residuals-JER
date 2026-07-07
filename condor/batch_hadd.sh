@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Merge many ROOT files into one via tree-reduction hadd, batched and run in
-# parallel per level.
-#
-# Arguments are JetMET-style "-flag value" (matching make_condor.sh and the
-# compiled binaries' CLI) or bare boolean "-flag" switches -- no positional
-# arguments. Flag names are case-insensitive (matched after uppercasing).
+
+# merge many ROOT files into one!
 #
 # Usage:
-#   bash condor/batch_hadd.sh -output out.root -input "IN_FILES" [-batchsize N] [-njobs N] [-zombiecheck]
+#   bash condor/batch_hadd.sh 
+#     -output out.root 
+#     -input "IN_FILES" 
+#     [-batchsize N] 
+#     [-njobs N] 
+#     [-z]
 #
-# -output out.root  : required; path for the final merged ROOT file
-# -input pattern    : required; a quoted glob (e.g. "/eos/.../asym_*.root") or
-#                      a directory (matches every *.root directly inside it,
-#                      non-recursive). Must be quoted to prevent shell expansion.
+# -output out.root  : required; path for final output merged ROOT file
+# -input pattern    : required; a quoted glob (e.g. "/eos/.../asym_*.root")
+#                      must be quoted to prevent shell expansion
 # -batchsize N      : optional, default 5; files merged together per hadd job
 # -njobs N          : optional, default 2; parallel hadd batches per level
-# -zombiecheck      : bare switch; scan every input with rootls first and skip
-#                      any that fail, before merging starts (default off)
+# -zombiecheck      : bare switch; scan input files for zombies (default off)
+
 set -euo pipefail
 
 usage() {
@@ -26,7 +26,7 @@ usage() {
 }
 
 # Parses "$@" into the OUT_FILE/IN_FILES/BATCH_SIZE/NJOBS/ZOMBIE_CHECK
-# globals. Exits via usage() on any error.
+# exits via usage() on error
 parse_args() {
   if [[ $# -lt 1 ]]; then usage; fi
 
