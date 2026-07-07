@@ -74,10 +74,9 @@ int main(int argc, char *argv[]) {
   if (!cl.parse(argc, argv))
     return 1;
 
-  // config is queried and exported first, ahead of check()'s aggregate
-  // report: Config() (called just below for -method's default) is a
-  // process-wide singleton that reads L2RESIDUALS_CONFIG, so it must be
-  // set before any other default-value expression can safely touch it.
+  // config exported first, ahead of check() aggregate
+  // report: config() is a process-wide singleton reads L2RESIDUALS_CONFIG 
+  // must be set first
   std::string config = cl.getValue<std::string>("config");
   if (config.empty()) {
     std::cerr << "ERROR: missing required config=... argument\n" << kUsage;
