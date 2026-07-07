@@ -9,6 +9,7 @@ bin/*
 
 # analysis outputs
 plots/
+condor/submissions/
 *.root
 *.png
 *.pdf
