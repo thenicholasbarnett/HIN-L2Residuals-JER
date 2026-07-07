@@ -1,12 +1,3 @@
-// Vendored verbatim from JetMETAnalysis/JetUtilities/interface/ProgressBar.hh
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
-// 2026-07-03. Internal-only: used by exactly one call site inside
-// HistogramUtilities.cc (a debug-gated loadbar2() in the median calculation).
-// Not used anywhere else in this repo -- include/ProgressBar.h (richer: rate,
-// ETA, color) remains the sole progress-bar system everywhere else, per the
-// original JME compatibility survey's assessment that this file is a strict
-// subset of what this repo already has.
-
 #include <iostream>
 #include <iomanip>
 #include <string>

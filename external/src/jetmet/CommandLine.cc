@@ -5,9 +5,6 @@
 //
 //            06/15/2008 Philipp Schieferdecker <philipp.schieferdecker@cern.ch>
 //
-// Vendored verbatim from JetMETAnalysis/JetUtilities/src/CommandLine.cc
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref
-// on 2026-07-02.
 ////////////////////////////////////////////////////////////////////////////////
 
 

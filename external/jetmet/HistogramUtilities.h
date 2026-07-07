@@ -5,18 +5,7 @@
 //
 //            04/07/2016 Alexx Perloff          <alexx.stephen.perloff@cern.ch>
 //
-// Vendored verbatim from JetMETAnalysis/JetUtilities/interface/HistogramUtilities.hh
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
-// 2026-07-03. Vendor-only for now, per Nicky's explicit call -- not wired into
-// CalibrationExtractor.cxx or Style.h's method-palette arrays. This provides
-// mean/RMS/Gauss-fit/median metric extraction with fallback logic; if a
-// median-based 5th method is ever added to runCalibration's existing
-// gauss/doubleGauss/trunc90/trunc95 set (see CLAUDE.md's "configurable method
-// set" open follow-up), this is the natural place to build on. Its own
-// internal ProgressBar.hh dependency is vendored alongside for exactly one
-// call site (a debug-gated loadbar2() in the median calculation) and is not
-// used anywhere else in this repo -- include/ProgressBar.h remains the sole
-// progress-bar system everywhere else.
+////////////////////////////////////////////////////////////////////////////////
 
 #ifndef HISTOGRAM_UTILITIES_HH
 #define HISTOGRAM_UTILITIES_HH

@@ -1,7 +1,3 @@
-// Vendored verbatim from JetMETAnalysis/JetUtilities/src/Variables.cc
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
-// 2026-07-03. See Variables.h for context.
-
 #include "Variables.h"
 
 using std::cout;

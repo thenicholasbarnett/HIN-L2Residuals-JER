@@ -5,9 +5,6 @@
 //
 //            04/07/2016 Alexx Perloff          <alexx.stephen.perloff@cern.ch>
 //
-// Vendored verbatim from JetMETAnalysis/JetUtilities/src/HistogramUtilities.cc
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
-// 2026-07-03. See HistogramUtilities.h for context.
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "HistogramUtilities.h"

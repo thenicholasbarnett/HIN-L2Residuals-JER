@@ -5,9 +5,6 @@
 //            07/29/2008 Philipp Schieferdecker <philipp.schieferdecker@cern.ch>
 //            09/24/2015 Alexx Perloff           <alexx.stephen.perloff@cern.ch>
 //
-// Vendored verbatim from JetMETAnalysis/JetUtilities/src/RootStyle.cc
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
-// 2026-07-03.
 ////////////////////////////////////////////////////////////////////////////////
 
 

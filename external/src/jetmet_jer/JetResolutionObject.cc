@@ -1,8 +1,3 @@
-// Vendored verbatim from CMSSW CondFormats/JetMETObjects
-// (src/JetResolutionObject.cc) into L2Residuals-2024ppref on 2026-07-03.
-// See JetResolutionObject.h for context. Compiled with -DSTANDALONE (see
-// CMakeLists.txt) so the STANDALONE branches below are the ones taken.
-
 // Self-define STANDALONE so the correct branches are taken regardless of
 // whether the build system passes -DSTANDALONE on the command line.
 #ifndef STANDALONE

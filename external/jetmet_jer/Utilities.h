@@ -1,9 +1,3 @@
-// Vendored verbatim from CMSSW CondFormats/JetMETObjects
-// (interface/Utilities.h) into L2Residuals-2024ppref on 2026-07-03.
-// Already fully STANDALONE-ready as shipped -- handleError()'s edm::LogError
-// call is guarded behind #ifdef STANDALONE / #else, so no local patch was
-// needed here (unlike what an early read of just the include list suggested).
-
 #ifndef CondFormats_JetMETObjects_Utilities_h
 #define CondFormats_JetMETObjects_Utilities_h
 

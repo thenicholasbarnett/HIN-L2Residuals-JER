@@ -1,12 +1,3 @@
-// Vendored verbatim from CMSSW CondFormats/JetMETObjects
-// (interface/JetResolutionObject.h) into L2Residuals-2024ppref on 2026-07-03.
-// This is the real, standard CMS JER resolution/scale-factor text format
-// reader/writer -- it already supports a STANDALONE build mode (no CMSSW
-// dependency) for exactly this kind of use outside full CMSSW. Used by
-// src/TextFileWriter.cxx to write the JER SF text output. Built with
-// -DSTANDALONE so the #ifndef STANDALONE branches below compile against plain
-// ROOT (TFormula) instead of CMSSW's FormulaEvaluator.
-
 // Self-define STANDALONE so any TU that includes this header gets the correct
 // branches regardless of whether the build system passes -DSTANDALONE.
 #ifndef STANDALONE

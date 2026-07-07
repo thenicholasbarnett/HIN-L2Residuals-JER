@@ -5,12 +5,6 @@
 //
 //            06/15/2008 Philipp Schieferdecker <philipp.schieferdecker@cern.ch>
 //
-// Vendored verbatim from JetMETAnalysis/JetUtilities/interface/CommandLine.h
-// (https://github.com/lmartika/JetMETAnalysis, JetUtilities/interface/CommandLine.h)
-// into L2Residuals-2024ppref on 2026-07-02. This is the CLI parser every
-// compiled entry point in this repo (macros/*.C) now uses directly -- see
-// each macro's main() for the "-key value" / "params.config key = value"
-// usage idiom, matching JetMET's own bin/*.cc convention.
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef COMMANDLINE_H
