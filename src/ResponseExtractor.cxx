@@ -216,7 +216,7 @@ void runResponse(TString inputFile, TString outputFile) {
     return;
   }
 
-  // incl/tag/probe response sparses made by ConeHistograms::Init
+  // incl/tag/probe response sparses, ConeHistograms instantiation
   int totalSteps = 0;
   for (const TString &cone : cfg.coneLabels) {
     if (fIn->Get(cone + "/" + cone + "_incl_resp"))

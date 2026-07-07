@@ -147,34 +147,17 @@ static bool WriteFullEtaTextFile(const TString &path,
   return true;
 }
 
-// --- JER SF text output, via the vendored JME::JetResolutionObject
-// (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) ---
-//
-// Unlike the JEC writer above (which fits a continuous correction(pT_avg)
-// function per eta bin), the JER SF file is a direct binned grid: one flat
-// value per (eta bin, pT_avg slice) cell, no fit. This matches how real
-// official CMS JER SF text files are actually shaped -- a JetEta x JetPt
-// grid of flat scale factors, not a parametrized formula. Definition line:
-// "{1 JetEta 1 JetPt [0] Resolution}" -- 1 bin variable (JetEta), 1
-// structural variable (JetPt, using each pT_avg slice's own [lo,hi) edges
-// as its range -- required by the record format even though the formula
-// itself doesn't depend on it, since Step 2 only gives discretized pT_avg
-// slices, not a continuous fit vs pT), formula "[0]" (the record's first
-// parameter *is* the flat JER SF value, retrievable either via
-// evaluateFormula() or directly). A second parameter, unc -- the *fractional*
-// uncertainty on the SF, unc = error/value, not the raw absolute fit error --
-// rides along in every record, unused by evaluateFormula() but directly
-// retrievable via record.getParametersValues()[1]. Fractional, not absolute,
-// so it matches the standard JER-smearing convention directly (s_up/down =
-// sJER * (1 +/- unc), e.g. "Practical Application of JER Smearing") without
-// a consumer needing to divide by the SF value themselves.
+// JER SF text output, via the vendored JME::JetResolutionObject
+// JER SF file is a direct binned grid: one value per (eta bin, pT_avg slice) bin
+// Definition line: "{1 JetEta 1 JetPt [0] Resolution}"
+// 1 bin variable (JetEta), 1 structural variable (JetPt), [0] is JER SF value
+// unc of SF  = error/value, retrievable via record.getParametersValues()[1]
+// JER-smearing convention (s_up/down = sJER * (1 +/- unc)) 
 struct JerRecord {
   double ptLo, ptHi, value, unc;
 };
 
-// This eta bin's per-pT-slice JER SF values, skipping slices with no data
-// (missing/excluded source, or a genuinely unfit bin left at the histogram's
-// zero/zero-error default -- same convention as FitPtSlices's point list above).
+// JER SF values (eta_probe, pT_avg), skipping slices with no data
 static std::vector<JerRecord>
 CollectJerRecords(int ieta, const std::vector<RangeBin> &ptSlices,
                   const std::vector<TH1D *> &hSliceJer) {
@@ -192,11 +175,10 @@ CollectJerRecords(int ieta, const std::vector<RangeBin> &ptSlices,
   return out;
 }
 
-// One record line per JerRecord. The "4" token is 2*nVariables + nParameters
-// (2 for the JetPt range this record structurally carries, 2 for the actual
-// [value, unc] parameters) -- see JetResolutionObject::Record's own
-// parsing for why that combined count, not just nParameters, is what the
-// format's record header field means.
+// One record line per JerRecord
+// "4" token is 2*nVariables + nParameters
+// 2 for JetPt range, 2 for [value, unc] parameters
+// see JetResolutionObject::Record
 static void AppendJerLines(std::stringstream &buf, double etaLo, double etaHi,
                            const std::vector<JerRecord> &recs) {
   for (const auto &r : recs) {
@@ -205,14 +187,9 @@ static void AppendJerLines(std::stringstream &buf, double etaLo, double etaHi,
   }
 }
 
-// Assembles the JER SF text-format definition+records into a temp file, then
-// round-trips it through the real vendored JME::JetResolutionObject: parsed
-// via its file constructor, re-emitted via its own saveToFile(). The final
-// on-disk bytes are produced by the vendored code, not reimplemented here --
-// this function only assembles the input text and mirrors abseta cells onto
-// both eta halves, exactly like WriteAbsEtaTextFile does for JEC (both files
-// use "JetEta" binning even in "abseta" mode, for the same reason: the data
-// is |eta|-binned, but every record still needs one real eta range).
+// JER SF temp text file first
+// JME::JetResolutionObject: parses and re-emitts with saveToFile()
+// mirrors abseta cells onto both eta halves
 static bool WriteJerSfTextFile(const TString &path, bool fullEta,
                                const std::vector<RangeBin> &ptSlices,
                                const std::vector<TH1D *> &hSliceJer) {
@@ -256,11 +233,9 @@ static bool WriteJerSfTextFile(const TString &path, bool fullEta,
   return ok;
 }
 
-// Which residuals file backs a given pT_avg slice. TriggeredOnly/
-// NonTriggeredOnly back the single-dataset overload and aren't just Merge
-// with one side nulled out -- NonTriggeredOnly ignores the threshold
-// entirely (an unbiased dataset has nothing to gate), while TriggeredOnly
-// drops (doesn't fall back on) slices below it.
+// which residuals given pT_avg slice
+// NonTriggeredOnly ignores threshold
+// TriggeredOnly drops slices below threshold
 enum class SourceMode { Merge, TriggeredOnly, NonTriggeredOnly };
 
 static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
@@ -276,12 +251,9 @@ static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
   return nullptr;
 }
 
-// Shared implementation for the two runTextFile() entry points below.
-// fTrig/fNoTrig are already-open files; exactly one is null in single-dataset
-// mode (TriggeredOnly leaves fNoTrig null, NonTriggeredOnly leaves fTrig
-// null) and both are non-null in Merge mode. calibMode selects which
-// calibration kind is read/written (see TextFileWriter.h) -- JEC and JER
-// are otherwise mutually exclusive within one call.
+// fTrig/fNoTrig already-open files
+// calibMode selects which calibration kind is read/written
+// mutually exclusive within one call.
 static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                             CalibrationMode calibMode, TString outputRootFile,
                             TString outputTag, TString method, bool useNorm) {
@@ -300,8 +272,7 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
   const AnalysisConfig &cfg = Config();
   PrintConfigSummary(cfg);
 
-  // Correction text files always land here, not wherever the caller points
-  // OUTPUT=, see TextFileWriter.h. Gitignored; created if missing.
+  // calibration text files land here
   const TString textDir =
       TString(cfg.repoRoot.c_str()) + "/" + kTextOutputSubdir;
   if (gSystem->mkdir(textDir, kTRUE) < 0 && gSystem->AccessPathName(textDir)) {
@@ -335,16 +306,13 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
   }
 
   TFile *fOut = new TFile(outputRootFile, "recreate");
-
-  // [step3] eta_mode selects which of the two text files actually get
-  // written; "both" (default) writes both, matching prior behavior.
   const bool wantAbsEta = (cfg.etaModeOutput != "eta");
   const bool wantFullEta = (cfg.etaModeOutput != "abseta");
 
   BinningConfig bins;
   const int nPt = (int)bins.ptavgSlices.size();
 
-  // pT_avg bin edges for the corrfinal grid: bins.ptavgSlices are contiguous.
+  // pT_avg bin edges for corrfinal grid
   std::vector<Double_t> ptEdges(nPt + 1);
   ptEdges[0] = bins.ptavgSlices[0].lo;
   for (int ip = 0; ip < nPt; ip++)
@@ -367,7 +335,7 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
     TDirectory *coneDirOut = fOut->mkdir(cone.Data());
     TDirectory *dGraphs = doJEC ? coneDirOut->mkdir("graphs") : nullptr;
 
-    // filled below for abseta then fulleta, used to write the text files afterward
+    // filled below for abseta then fulleta
     std::vector<FitResult> fitsAbsEta, fitsFullEta;
     std::vector<TH1D *> hSliceAbsEta, hSliceFullEta;
 
@@ -382,9 +350,7 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       const int nEta = (int)etaEdges.size() - 1;
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-      // one correction histogram per pT slice, chosen per SelectSource() --
-      // a null source (TriggeredOnly below threshold) means the slice is
-      // intentionally excluded, not merely missing.
+      // one correction histogram per pT slice
       std::vector<TH1D *> &hSlice = fullEta ? hSliceFullEta : hSliceAbsEta;
       hSlice.assign(nPt, nullptr);
       int nMissingSlices = 0;
@@ -412,7 +378,7 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       }
 
       if (!doJEC)
-        continue; // JER SF is a direct binned grid -- no corrfinal, no fit
+        continue; // JER SF is direct binned grid, no corrfinal, no fit
 
       // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
       TString gridName =
@@ -587,8 +553,6 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
 
   const int nEta = (int)kAbsEtaEdges.size() - 1;
 
-  // "corr" variant, "incl" collection -- these are the names written by
-  // ExtractPerAbsEtaVsPtGen in ResponseExtractor.cxx.
   const TString variant = "corr";
   const TString collection = "incl";
 
@@ -600,8 +564,7 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
       continue;
     }
 
-    // Collect JER records per |eta| bin, reading the per-|eta| JER TH1Ds.
-    // Each TH1D has one bin per pT_gen interval; bin content = JER, error = JER uncertainty.
+    // Collect JER records per |eta| bin TH1Ds
     std::vector<std::vector<JerRecord>> etaRecords(nEta);
     bool any = false;
     for (int ieta = 0; ieta < nEta; ieta++) {
@@ -629,7 +592,7 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
       continue;
     }
 
-    // Write abseta file (mirror |eta| bins onto both eta halves).
+    // write abseta file (mirror |eta| bins onto both eta halves).
     if (wantAbsEta) {
       TString path =
           textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
@@ -662,7 +625,7 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
                   << "\n";
     }
 
-    // Full-eta file: no per-bin negative-eta extraction (folding sums both
+    // full-eta file: no per-bin negative-eta extraction (folding sums both
     // sides), so this mirrors the |eta|-folded values across eta=0 -- same
     // content as the abseta file, just written with full-eta bin edges. A
     // future pass extracting eta_reco > 0 and < 0 separately can replace this.
