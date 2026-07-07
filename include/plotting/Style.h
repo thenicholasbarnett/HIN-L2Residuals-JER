@@ -21,8 +21,9 @@ static const char *const kMethodKeys[] = {"gauss", "doubleGauss", "trunc90",
                                           "trunc95"};
 static const char *const kMethodLabels[] = {
     "Gauss fit", "Double-Gauss fit", "Trunc. mean 90%", "Trunc. mean 95%"};
-static const Color_t kMethodColors[] = {HiroshigeNightBlue(), KlimtGreen(),
-                                        HiroshigeOrange(), HiroshigeLightRed()};
+// avoid red/green together -- the classic colorblind-unsafe pairing
+static const Color_t kMethodColors[] = {HiroshigeNightBlue(), KlimtPurple(),
+                                        HiroshigeOrange(), HiroshigeYellow()};
 static const int kMethodStyles[] = {
     20, 34, 21, 22}; // circle / cross / square / triangle-up
 static constexpr int kNMethods = 4;

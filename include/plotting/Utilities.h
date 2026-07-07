@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -218,8 +219,17 @@ inline std::pair<double, double> YRange(const std::vector<TH1D *> &hv,
 // full binning's extent when the data itself stops well short of it (e.g.
 // a central pT slice with limited jet reach in eta). Returns {0,0} if none
 // of the histograms have any content.
+//
+// yLo/yHi optionally restrict "occupied" to bins whose value actually falls
+// inside that window -- for a fixed, tight y-range (closures) a point can
+// sit well outside the visible band while still counting as occupied,
+// stretching the x-axis out past where anything is actually drawn. Defaults
+// span the full real line, so callers with an auto-scaled y-range see no
+// change in behavior.
 inline std::pair<double, double> OccupiedRangeWithMargin(
-    const std::vector<TH1D *> &hv) {
+    const std::vector<TH1D *> &hv,
+    double yLo = -std::numeric_limits<double>::infinity(),
+    double yHi = std::numeric_limits<double>::infinity()) {
   int loBin = -1, hiBin = -1;
   TH1D *ref = nullptr;
   for (auto *h : hv) {
@@ -228,12 +238,13 @@ inline std::pair<double, double> OccupiedRangeWithMargin(
     if (!ref)
       ref = h;
     for (int i = 1; i <= h->GetNbinsX(); i++) {
-      if (h->GetBinContent(i) != 0 || h->GetBinError(i) != 0) {
-        if (loBin < 0 || i < loBin)
-          loBin = i;
-        if (i > hiBin)
-          hiBin = i;
-      }
+      const double v = h->GetBinContent(i), e = h->GetBinError(i);
+      if ((v == 0 && e == 0) || v < yLo || v > yHi)
+        continue;
+      if (loBin < 0 || i < loBin)
+        loBin = i;
+      if (i > hiBin)
+        hiBin = i;
     }
   }
   if (!ref || loBin < 0)

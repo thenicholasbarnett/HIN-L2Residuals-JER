@@ -19,7 +19,7 @@
 #include <algorithm>
 
 static const TString kAlphaYTitle =
-    "#frac{R_{MC}/R_{data}|_{#alpha}}{R_{MC}/R_{data}|_{#alpha=0.30}}";
+    "#frac{(R_{MC}/R_{data})_{#alpha}}{(R_{MC}/R_{data})_{#alpha=0.30}}";
 
 inline TString AlphaEtaBinLabel(int ie) {
   return Form("%.3f < |#eta_{reco}| < %.3f", kAbsEtaEdges[ie],
@@ -79,7 +79,9 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
         gc->GetYaxis()->SetTitle(kAlphaYTitle);
         gc->GetXaxis()->CenterTitle();
         gc->GetYaxis()->CenterTitle();
-        gc->GetYaxis()->SetTitleOffset(1.9);
+        gc->GetYaxis()->SetTitleSize(0.036);
+        gc->GetYaxis()->SetTitleOffset(2.2);
+        gc->GetYaxis()->SetLabelSize(0.032);
         gc->GetXaxis()->SetLimits(0.0, 0.50);
         gc->SetTitle("");
 
@@ -176,7 +178,7 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
       ylo -= pad;
       yhi += pad;
 
-      TLegend *leg = new TLegend(0.16, 0.16, 0.50, 0.16 + 0.05 * kNMethods);
+      TLegend *leg = new TLegend(0.21, 0.16, 0.55, 0.16 + 0.05 * kNMethods);
       leg->SetBorderSize(0);
       leg->SetFillStyle(0);
       leg->SetTextSize(0.030);
@@ -196,7 +198,9 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
           gc[m]->GetYaxis()->SetTitle(kAlphaYTitle);
           gc[m]->GetXaxis()->CenterTitle();
           gc[m]->GetYaxis()->CenterTitle();
-          gc[m]->GetYaxis()->SetTitleOffset(1.9);
+          gc[m]->GetYaxis()->SetTitleSize(0.036);
+          gc[m]->GetYaxis()->SetTitleOffset(2.2);
+          gc[m]->GetYaxis()->SetLabelSize(0.032);
           gc[m]->GetXaxis()->SetLimits(0.0, 0.50);
           gc[m]->Draw("AP");
           gc[m]->GetHistogram()->SetMinimum(ylo);

@@ -19,7 +19,7 @@
 #include <vector>
 
 static const TString kFinalsYTitle =
-    "k_{FSR} #scale[0.35]{#bullet} #frac{R_{MC}}{R_{Data}} |_{#alpha=0.30}";
+    "k_{FSR} #scale[0.35]{#bullet} (#frac{R_{MC}}{R_{Data}})_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
 // finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
@@ -91,18 +91,10 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                kMethodKeys[m], etaMode.Data());
       TCanvas *c = new TCanvas(cvName, "", 800, 800);
       RealAspectRatio(c);
-      c->SetLeftMargin(0.16);
+      c->SetLeftMargin(0.20);
+      c->SetBottomMargin(0.12);
       c->SetGridx();
       c->SetGridy();
-
-      // end the axis one bin past the last populated one instead of running
-      // out to the binning's full extent, which is often much wider than
-      // where jets actually get reconstructed
-      auto [xMin, xMax] = OccupiedRangeWithMargin(hists);
-      if (xMin >= xMax) {
-        xMin = xFullMin;
-        xMax = xFullMax;
-      }
 
       double ylo = 0.9, yhi = 1.6;
       // closure passes check R_MC/R_data ~= 1 to a tight tolerance
@@ -111,18 +103,44 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         yhi = 1.05;
       }
 
-      // one legend (cone/method + all pT slices) instead of two separate
-      // boxes -- upper-left for |eta|, upper-middle for full eta so it
-      // doesn't sit over the eta<0 half of the data
-      const double legX1 = fullEta ? 0.34 : 0.19;
-      const double legX2 = fullEta ? 0.67 : 0.52;
-      TLegend *leg = new TLegend(legX1, 0.50, legX2, 0.88);
-      leg->SetBorderSize(0);
-      leg->SetFillStyle(0);
-      leg->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
-      leg->SetTextSize(0.028);
-      leg->AddEntry((TObject *)nullptr, cone.Data(), "");
-      leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
+      // end the axis one bin past the last populated one instead of running
+      // out to the binning's full extent, which is often much wider than
+      // where jets actually get reconstructed -- restricted to points that
+      // actually land inside [ylo, yhi], so a closure's tight y-window
+      // doesn't drag the x-axis out to cover a point that isn't even drawn
+      auto [xMin, xMax] = OccupiedRangeWithMargin(hists, ylo, yhi);
+      if (xMin >= xMax) {
+        xMin = xFullMin;
+        xMax = xFullMax;
+      }
+
+      // cone/method header stays top -- upper-left for |eta|, upper-middle
+      // for full eta so it doesn't sit over the eta<0 half of the data;
+      // pulled in almost flush with the frame, just enough buffer to clear
+      // the inward-facing tick marks, not sitting on top of them
+      const double legX1 = fullEta ? 0.34 : 0.215;
+      const double legX2 = fullEta ? 0.67 : 0.54;
+      TLegend *legInfo = new TLegend(legX1, 0.82, legX2, 0.895);
+      legInfo->SetBorderSize(0);
+      legInfo->SetFillStyle(0);
+      legInfo->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
+      legInfo->SetTextSize(0.028);
+      legInfo->AddEntry((TObject *)nullptr, cone.Data(), "");
+      legInfo->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
+
+      // pT-slice entries sit low in the same column instead of stacked under
+      // the header -- for closures the data band hugs 1.0 so the bottom
+      // border itself is clear, right down to the tick-mark buffer; the
+      // normal wide 0.9-1.6 range has the opposite problem (1.0 sits close
+      // to the *bottom* of that range), so it keeps the higher anchor that
+      // already sat clear of the data. Box height scales with slice count.
+      const double ptLegY1 = isClosure ? 0.135 : 0.29;
+      const double ptLegY2 = ptLegY1 + 0.032 * (double)bins.ptavgSlices.size();
+      TLegend *legPt = new TLegend(legX1, ptLegY1, legX2, ptLegY2);
+      legPt->SetBorderSize(0);
+      legPt->SetFillStyle(0);
+      legPt->SetTextFont(42);
+      legPt->SetTextSize(0.028);
 
       bool first = true;
       for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
@@ -134,11 +152,11 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
         hists[ip]->GetYaxis()->SetTitle(kFinalsYTitle);
         hists[ip]->GetYaxis()->SetTitleSize(0.048);
-        hists[ip]->GetYaxis()->SetTitleOffset(1.35);
-        hists[ip]->GetYaxis()->SetLabelSize(0.048);
+        hists[ip]->GetYaxis()->SetTitleOffset(2.0);
+        hists[ip]->GetYaxis()->SetLabelSize(0.038);
         hists[ip]->GetXaxis()->SetTitle(xTitle);
         hists[ip]->GetXaxis()->SetTitleSize(0.052);
-        hists[ip]->GetXaxis()->SetLabelSize(0.048);
+        hists[ip]->GetXaxis()->SetLabelSize(0.038);
         hists[ip]->GetXaxis()->CenterTitle();
         hists[ip]->GetYaxis()->CenterTitle();
         hists[ip]->SetTitle("");
@@ -146,7 +164,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         first = false;
         TString label = ptSl.title;
         label.ReplaceAll(" GeV", "");
-        leg->AddEntry(hists[ip], label, "lp");
+        legPt->AddEntry(hists[ip], label, "lp");
       }
 
       TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
@@ -156,27 +174,27 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       rl->Draw();
 
       if (isClosure) {
-        // distinct accent color -- plain gray would be invisible against the grid
         TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
         rl99->SetLineStyle(3);
-        rl99->SetLineColor(HiroshigeLightRed());
+        rl99->SetLineColor(kBlack);
         rl99->SetLineWidth(2);
         rl99->Draw();
 
         TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
         rl101->SetLineStyle(3);
-        rl101->SetLineColor(HiroshigeLightRed());
+        rl101->SetLineColor(kBlack);
         rl101->SetLineWidth(2);
         rl101->Draw();
       }
 
-      leg->Draw();
-      DrawAsymHeader(0.16);
+      legInfo->Draw();
+      legPt->Draw();
+      DrawAsymHeader(0.20);
 
       SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
       pb.Update();
 
-      delete c; // cascade-deletes hists, leg, rl (and rl99/rl101 if drawn)
+      delete c; // cascade-deletes hists, legInfo, legPt, rl (and rl99/rl101 if drawn)
     }
   }
 }
