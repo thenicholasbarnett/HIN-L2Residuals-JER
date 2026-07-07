@@ -1,7 +1,7 @@
 
 <b> <i> Mission Statement </b> </i>
 
-Object-oriented C++/ROOT framework for jet energy corrections and resolutions within the CMS Heavy Ions community. This repository measures dijet asymmetries and extrapolates out data to simulation differences using a pT-balance method. Currently usable for resolving jet energy and finding L2Residual corrections.
+Object-oriented C++/ROOT framework for making jet energy corrections and resolutions within the CMS Heavy Ions community. This repository measures dijet asymmetries and extrapolates out data to simulation differences using a pT-balance method. Currently usable for resolving jet energy and finding L2Residual corrections.
 <br>
 
 <i> Methodology and text-file convention follow CMS JERC tools (vendored in `external/jetmet*`)
