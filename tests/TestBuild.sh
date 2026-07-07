@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Verifies the compiled executable and interpreted macro are both usable.
-# Run from the repo root after: cmake --build build
+# Verifies compiled executable and interpreted macro are usable
 
 set -euo pipefail
 
@@ -8,8 +7,6 @@ PASS=0
 FAIL=0
 
 check() {
-    # Using PASS=$((PASS+1)) instead of ((PASS++)) to avoid set -e triggering
-    # when the pre-increment value is 0 (bash arithmetic returns exit 1 for 0).
     if eval "$2" &>/dev/null; then
         echo "  PASS  $1"
         PASS=$((PASS + 1))
@@ -19,7 +16,7 @@ check() {
     fi
 }
 
-# Shared library has .so on Linux and .dylib on macOS
+# library is .so on linux, .dylib on mac
 case "$(uname)" in
     Darwin) LIB_EXT="dylib" ;;
     *)      LIB_EXT="so"    ;;

@@ -71,8 +71,9 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
                              const TString &graphName, TDirectory *dGraphs) {
   FitResult r;
   int n = (int)ptCenters.size();
-  if (n < kMinSlices)
+  if (n < kMinSlices) {
     return r;
+  }
 
   std::vector<double> ex(n, 0.0);
   TGraphErrors *gr = new TGraphErrors(n, ptCenters.data(), corr.data(),
@@ -90,8 +91,9 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
   // fit function in graph so runPlotting can draw
   TFitResultPtr res = gr->Fit(f, "QSR");
   if (res.Get() && res->IsValid()) {
-    for (int p = 0; p < kNPar; p++)
+    for (int p = 0; p < kNPar; p++) {
       r.p[p] = res->Parameter(p);
+    }
     r.valid = true;
   }
 
@@ -99,7 +101,7 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
     dGraphs->cd();
     gr->Write();
   }
-  delete f;  // clone in gr's function list is separately owned
+  delete f; // clone in gr's function list is separately owned
   delete gr;
   return r;
 }
@@ -121,14 +123,17 @@ static void WriteJECLine(std::ofstream &out, double etaLo, double etaHi,
 static bool WriteAbsEtaTextFile(const TString &path,
                                 const std::vector<FitResult> &fits) {
   std::ofstream out(path.Data());
-  if (!out.is_open())
+  if (!out.is_open()) {
     return false;
+  }
   out << kJECHeader << "\n";
   const int nEta = (int)fits.size();
-  for (int ieta = nEta - 1; ieta >= 0; ieta--)
+  for (int ieta = nEta - 1; ieta >= 0; ieta--) {
     WriteJECLine(out, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta], fits[ieta]);
-  for (int ieta = 0; ieta < nEta; ieta++)
+  }
+  for (int ieta = 0; ieta < nEta; ieta++) {
     WriteJECLine(out, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1], fits[ieta]);
+  }
   out.close();
   return true;
 }
@@ -137,66 +142,52 @@ static bool WriteAbsEtaTextFile(const TString &path,
 static bool WriteFullEtaTextFile(const TString &path,
                                  const std::vector<FitResult> &fits) {
   std::ofstream out(path.Data());
-  if (!out.is_open())
+  if (!out.is_open()) {
     return false;
+  }
   out << kJECHeader << "\n";
   const int nEta = (int)fits.size();
-  for (int ieta = 0; ieta < nEta; ieta++)
+  for (int ieta = 0; ieta < nEta; ieta++) {
     WriteJECLine(out, kEtaEdges[ieta], kEtaEdges[ieta + 1], fits[ieta]);
+  }
   out.close();
   return true;
 }
 
-// --- JER SF text output, via the vendored JME::JetResolutionObject
-// (external/jetmet_jer/, from CMSSW CondFormats/JetMETObjects) ---
-//
-// Unlike the JEC writer above (which fits a continuous correction(pT_avg)
-// function per eta bin), the JER SF file is a direct binned grid: one flat
-// value per (eta bin, pT_avg slice) cell, no fit. This matches how real
-// official CMS JER SF text files are actually shaped -- a JetEta x JetPt
-// grid of flat scale factors, not a parametrized formula. Definition line:
-// "{1 JetEta 1 JetPt [0] Resolution}" -- 1 bin variable (JetEta), 1
-// structural variable (JetPt, using each pT_avg slice's own [lo,hi) edges
-// as its range -- required by the record format even though the formula
-// itself doesn't depend on it, since Step 2 only gives discretized pT_avg
-// slices, not a continuous fit vs pT), formula "[0]" (the record's first
-// parameter *is* the flat JER SF value, retrievable either via
-// evaluateFormula() or directly). A second parameter, unc -- the *fractional*
-// uncertainty on the SF, unc = error/value, not the raw absolute fit error --
-// rides along in every record, unused by evaluateFormula() but directly
-// retrievable via record.getParametersValues()[1]. Fractional, not absolute,
-// so it matches the standard JER-smearing convention directly (s_up/down =
-// sJER * (1 +/- unc), e.g. "Practical Application of JER Smearing") without
-// a consumer needing to divide by the SF value themselves.
+// JER SF text output, via the vendored JME::JetResolutionObject
+// JER SF file is a direct binned grid: one value per (eta bin, pT_avg slice) bin
+// Definition line: "{1 JetEta 1 JetPt [0] Resolution}"
+// 1 bin variable (JetEta), 1 structural variable (JetPt), [0] is JER SF value
+// unc of SF  = error/value, retrievable via record.getParametersValues()[1]
+// JER-smearing convention (s_up/down = sJER * (1 +/- unc))
 struct JerRecord {
   double ptLo, ptHi, value, unc;
 };
 
-// This eta bin's per-pT-slice JER SF values, skipping slices with no data
-// (missing/excluded source, or a genuinely unfit bin left at the histogram's
-// zero/zero-error default -- same convention as FitPtSlices's point list above).
+// JER SF values (eta_probe, pT_avg), skipping slices with no data
 static std::vector<JerRecord>
 CollectJerRecords(int ieta, const std::vector<RangeBin> &ptSlices,
                   const std::vector<TH1D *> &hSliceJer) {
   std::vector<JerRecord> out;
   for (size_t ip = 0; ip < hSliceJer.size(); ip++) {
-    if (!hSliceJer[ip])
+    if (!hSliceJer[ip]) {
       continue;
+    }
     double v = hSliceJer[ip]->GetBinContent(ieta + 1);
     double e = hSliceJer[ip]->GetBinError(ieta + 1);
-    if (v == 0.0 && e == 0.0)
+    if (v == 0.0 && e == 0.0) {
       continue;
+    }
     double unc = (v != 0.0) ? e / v : 0.0;
     out.push_back({ptSlices[ip].lo, ptSlices[ip].hi, v, unc});
   }
   return out;
 }
 
-// One record line per JerRecord. The "4" token is 2*nVariables + nParameters
-// (2 for the JetPt range this record structurally carries, 2 for the actual
-// [value, unc] parameters) -- see JetResolutionObject::Record's own
-// parsing for why that combined count, not just nParameters, is what the
-// format's record header field means.
+// One record line per JerRecord
+// "4" token is 2*nVariables + nParameters
+// 2 for JetPt range, 2 for [value, unc] parameters
+// see JetResolutionObject::Record
 static void AppendJerLines(std::stringstream &buf, double etaLo, double etaHi,
                            const std::vector<JerRecord> &recs) {
   for (const auto &r : recs) {
@@ -205,14 +196,9 @@ static void AppendJerLines(std::stringstream &buf, double etaLo, double etaHi,
   }
 }
 
-// Assembles the JER SF text-format definition+records into a temp file, then
-// round-trips it through the real vendored JME::JetResolutionObject: parsed
-// via its file constructor, re-emitted via its own saveToFile(). The final
-// on-disk bytes are produced by the vendored code, not reimplemented here --
-// this function only assembles the input text and mirrors abseta cells onto
-// both eta halves, exactly like WriteAbsEtaTextFile does for JEC (both files
-// use "JetEta" binning even in "abseta" mode, for the same reason: the data
-// is |eta|-binned, but every record still needs one real eta range).
+// JER SF temp text file first
+// JME::JetResolutionObject: parses and re-emitts with saveToFile()
+// mirrors abseta cells onto both eta halves
 static bool WriteJerSfTextFile(const TString &path, bool fullEta,
                                const std::vector<RangeBin> &ptSlices,
                                const std::vector<TH1D *> &hSliceJer) {
@@ -222,24 +208,28 @@ static bool WriteJerSfTextFile(const TString &path, bool fullEta,
 
   if (fullEta) {
     const int nEta = (int)kEtaEdges.size() - 1;
-    for (int ieta = 0; ieta < nEta; ieta++)
+    for (int ieta = 0; ieta < nEta; ieta++) {
       AppendJerLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
                      CollectJerRecords(ieta, ptSlices, hSliceJer));
+    }
   } else {
     const int nEta = (int)kAbsEtaEdges.size() - 1;
-    for (int ieta = nEta - 1; ieta >= 0; ieta--)
+    for (int ieta = nEta - 1; ieta >= 0; ieta--) {
       AppendJerLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
                      CollectJerRecords(ieta, ptSlices, hSliceJer));
-    for (int ieta = 0; ieta < nEta; ieta++)
+    }
+    for (int ieta = 0; ieta < nEta; ieta++) {
       AppendJerLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
                      CollectJerRecords(ieta, ptSlices, hSliceJer));
+    }
   }
 
   TString tmpPath = path + ".tmp";
   {
     std::ofstream tmp(tmpPath.Data());
-    if (!tmp.is_open())
+    if (!tmp.is_open()) {
       return false;
+    }
     tmp << buf.str();
   }
 
@@ -256,11 +246,9 @@ static bool WriteJerSfTextFile(const TString &path, bool fullEta,
   return ok;
 }
 
-// Which residuals file backs a given pT_avg slice. TriggeredOnly/
-// NonTriggeredOnly back the single-dataset overload and aren't just Merge
-// with one side nulled out -- NonTriggeredOnly ignores the threshold
-// entirely (an unbiased dataset has nothing to gate), while TriggeredOnly
-// drops (doesn't fall back on) slices below it.
+// which residuals given pT_avg slice
+// NonTriggeredOnly ignores threshold
+// TriggeredOnly drops slices below threshold
 enum class SourceMode { Merge, TriggeredOnly, NonTriggeredOnly };
 
 static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
@@ -276,18 +264,16 @@ static TFile *SelectSource(SourceMode mode, const RangeBin &ptSlice,
   return nullptr;
 }
 
-// Shared implementation for the two runTextFile() entry points below.
-// fTrig/fNoTrig are already-open files; exactly one is null in single-dataset
-// mode (TriggeredOnly leaves fNoTrig null, NonTriggeredOnly leaves fTrig
-// null) and both are non-null in Merge mode. calibMode selects which
-// calibration kind is read/written (see TextFileWriter.h) -- JEC and JER
-// are otherwise mutually exclusive within one call.
+// fTrig/fNoTrig already-open files
+// calibMode selects which calibration kind is read/written
+// mutually exclusive within one call.
 static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                             CalibrationMode calibMode, TString outputRootFile,
                             TString outputTag, TString method, bool useNorm) {
 
-  if (outputTag.IsNull())
+  if (outputTag.IsNull()) {
     outputTag = kDefaultTag;
+  }
   if (outputTag.Contains("/")) {
     std::cerr
         << "ERROR: TAG must be a plain name, not a path (it contains '/'): "
@@ -300,8 +286,7 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
   const AnalysisConfig &cfg = Config();
   PrintConfigSummary(cfg);
 
-  // Correction text files always land here, not wherever the caller points
-  // OUTPUT=, see TextFileWriter.h. Gitignored; created if missing.
+  // calibration text files land here
   const TString textDir =
       TString(cfg.repoRoot.c_str()) + "/" + kTextOutputSubdir;
   if (gSystem->mkdir(textDir, kTRUE) < 0 && gSystem->AccessPathName(textDir)) {
@@ -335,20 +320,18 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
   }
 
   TFile *fOut = new TFile(outputRootFile, "recreate");
-
-  // [step3] eta_mode selects which of the two text files actually get
-  // written; "both" (default) writes both, matching prior behavior.
   const bool wantAbsEta = (cfg.etaModeOutput != "eta");
   const bool wantFullEta = (cfg.etaModeOutput != "abseta");
 
   BinningConfig bins;
   const int nPt = (int)bins.ptavgSlices.size();
 
-  // pT_avg bin edges for the corrfinal grid: bins.ptavgSlices are contiguous.
+  // pT_avg bin edges for corrfinal grid
   std::vector<Double_t> ptEdges(nPt + 1);
   ptEdges[0] = bins.ptavgSlices[0].lo;
-  for (int ip = 0; ip < nPt; ip++)
+  for (int ip = 0; ip < nPt; ip++) {
     ptEdges[ip + 1] = bins.ptavgSlices[ip].hi;
+  }
 
   const TString objKind = doJEC ? "intercept" : "intercept_jer";
 
@@ -367,24 +350,24 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
     TDirectory *coneDirOut = fOut->mkdir(cone.Data());
     TDirectory *dGraphs = doJEC ? coneDirOut->mkdir("graphs") : nullptr;
 
-    // filled below for abseta then fulleta, used to write the text files afterward
+    // filled below for abseta then fulleta
     std::vector<FitResult> fitsAbsEta, fitsFullEta;
     std::vector<TH1D *> hSliceAbsEta, hSliceFullEta;
 
     for (int em = 0; em < 2; em++) {
       const bool fullEta = (em == 1);
-      if (fullEta && !wantFullEta)
+      if (fullEta && !wantFullEta) {
         continue;
-      if (!fullEta && !wantAbsEta)
+      }
+      if (!fullEta && !wantAbsEta) {
         continue;
+      }
       const std::vector<Double_t> &etaEdges =
           fullEta ? kEtaEdges : kAbsEtaEdges;
       const int nEta = (int)etaEdges.size() - 1;
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-      // one correction histogram per pT slice, chosen per SelectSource() --
-      // a null source (TriggeredOnly below threshold) means the slice is
-      // intentionally excluded, not merely missing.
+      // one correction histogram per pT slice
       std::vector<TH1D *> &hSlice = fullEta ? hSliceFullEta : hSliceAbsEta;
       hSlice.assign(nPt, nullptr);
       int nMissingSlices = 0;
@@ -411,8 +394,9 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                   << objKind << " histogram not found)\n";
       }
 
-      if (!doJEC)
-        continue; // JER SF is a direct binned grid -- no corrfinal, no fit
+      if (!doJEC) {
+        continue; // JER SF is direct binned grid, no corrfinal, no fit
+      }
 
       // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
       TString gridName =
@@ -424,8 +408,9 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       hGrid->GetZaxis()->SetTitle("Correction factor");
       hGrid->Sumw2();
       for (int ip = 0; ip < nPt; ip++) {
-        if (!hSlice[ip])
+        if (!hSlice[ip]) {
           continue;
+        }
         for (int ieta = 0; ieta < nEta; ieta++) {
           hGrid->SetBinContent(ieta + 1, ip + 1,
                                hSlice[ip]->GetBinContent(ieta + 1));
@@ -444,12 +429,14 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       for (int ieta = 0; ieta < nEta; ieta++) {
         std::vector<double> ptX, corr, corrErr;
         for (int ip = 0; ip < nPt; ip++) {
-          if (!hSlice[ip])
+          if (!hSlice[ip]) {
             continue;
+          }
           double v = hSlice[ip]->GetBinContent(ieta + 1);
           double e = hSlice[ip]->GetBinError(ieta + 1);
-          if (v == 0.0 && e == 0.0)
+          if (v == 0.0 && e == 0.0) {
             continue;
+          }
           ptX.push_back(SliceCenter(bins.ptavgSlices[ip]));
           corr.push_back(v);
           corrErr.push_back(e > 0.0 ? e : 1e-4);
@@ -476,50 +463,59 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
           textDir + "/" + outputTag + "_" + cone + "_abseta" + suffix + ".txt";
       TString etaTxt =
           textDir + "/" + outputTag + "_" + cone + "_eta" + suffix + ".txt";
-      if (wantAbsEta && !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta))
+      if (wantAbsEta && !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta)) {
         std::cerr << "Cannot open output file " << absEtaTxt << "\n";
-      if (wantFullEta && !WriteFullEtaTextFile(etaTxt, fitsFullEta))
+      }
+      if (wantFullEta && !WriteFullEtaTextFile(etaTxt, fitsFullEta)) {
         std::cerr << "Cannot open output file " << etaTxt << "\n";
+      }
 
       std::cout << "Done. " << cone << ": ";
-      if (wantAbsEta)
-        std::cout << 2 * (int)fitsAbsEta.size() << " eta bins -> "
-                  << absEtaTxt;
-      if (wantAbsEta && wantFullEta)
+      if (wantAbsEta) {
+        std::cout << 2 * (int)fitsAbsEta.size() << " eta bins -> " << absEtaTxt;
+      }
+      if (wantAbsEta && wantFullEta) {
         std::cout << ", ";
-      if (wantFullEta)
+      }
+      if (wantFullEta) {
         std::cout << (int)fitsFullEta.size() << " eta bins -> " << etaTxt;
+      }
       std::cout << "\n";
     } else {
       TString absEtaJerTxt = textDir + "/" + outputTag + "_" + cone +
                              "_abseta_jer" + suffix + ".txt";
       TString etaJerTxt =
-          textDir + "/" + outputTag + "_" + cone + "_eta_jer" + suffix +
-          ".txt";
+          textDir + "/" + outputTag + "_" + cone + "_eta_jer" + suffix + ".txt";
       if (wantAbsEta && !WriteJerSfTextFile(absEtaJerTxt, false,
-                                            bins.ptavgSlices, hSliceAbsEta))
-        std::cerr << "Cannot write JER SF output file " << absEtaJerTxt
-                  << "\n";
+                                            bins.ptavgSlices, hSliceAbsEta)) {
+        std::cerr << "Cannot write JER SF output file " << absEtaJerTxt << "\n";
+      }
       if (wantFullEta && !WriteJerSfTextFile(etaJerTxt, true, bins.ptavgSlices,
-                                             hSliceFullEta))
+                                             hSliceFullEta)) {
         std::cerr << "Cannot write JER SF output file " << etaJerTxt << "\n";
+      }
 
       std::cout << "Done (JER SF). " << cone << ": ";
-      if (wantAbsEta)
+      if (wantAbsEta) {
         std::cout << "-> " << absEtaJerTxt;
-      if (wantAbsEta && wantFullEta)
+      }
+      if (wantAbsEta && wantFullEta) {
         std::cout << ", ";
-      if (wantFullEta)
+      }
+      if (wantFullEta) {
         std::cout << "-> " << etaJerTxt;
+      }
       std::cout << "\n";
     }
   }
 
   fOut->Close();
-  if (fTrig)
+  if (fTrig) {
     fTrig->Close();
-  if (fNoTrig)
+  }
+  if (fNoTrig) {
     fNoTrig->Close();
+  }
 }
 
 void runTextFile(TString triggeredResidualsFile,
@@ -549,12 +545,63 @@ void runTextFile(TString residualsFile, SingleDatasetKind kind,
     return;
   }
   if (kind == SingleDatasetKind::Triggered) {
-    RunTextFileImpl(SourceMode::TriggeredOnly, f, nullptr, mode,
-                    outputRootFile, outputTag, method, useNorm);
+    RunTextFileImpl(SourceMode::TriggeredOnly, f, nullptr, mode, outputRootFile,
+                    outputTag, method, useNorm);
   } else {
     RunTextFileImpl(SourceMode::NonTriggeredOnly, nullptr, f, mode,
                     outputRootFile, outputTag, method, useNorm);
   }
+}
+
+// eta bin (|eta| if fullEta=false, signed eta_reco if fullEta=true) JER
+// records read back from runResponse's JER_per_abseta/JER_per_eta directory
+static std::vector<std::vector<JerRecord>>
+CollectPtResEtaRecords(TDirectory *dPerEta, const TString &cone, int nEta,
+                       bool fullEta) {
+  std::vector<std::vector<JerRecord>> etaRecords(nEta);
+  for (int ieta = 0; ieta < nEta; ieta++) {
+    TString etaKey = L2Name::EtaKey(ieta, fullEta);
+    TString hName =
+        L2Name::ObjectName(cone, "JER", {"corr", "vs_ptgen", etaKey}, {"incl"});
+    TH1D *h = (TH1D *)dPerEta->Get(hName);
+    if (!h) {
+      continue;
+    }
+    for (int ip = 1; ip <= h->GetNbinsX(); ip++) {
+      const double v = h->GetBinContent(ip);
+      const double e = h->GetBinError(ip);
+      if (v == 0.0 && e == 0.0) {
+        continue;
+      }
+      const double ptLo = h->GetXaxis()->GetBinLowEdge(ip);
+      const double ptHi = h->GetXaxis()->GetBinUpEdge(ip);
+      const double unc = (v != 0.0) ? e / v : 0.0;
+      etaRecords[ieta].push_back({ptLo, ptHi, v, unc});
+    }
+  }
+  return etaRecords;
+}
+
+// round-trips an assembled JER-grid buffer through JME::JetResolutionObject,
+// same convention as WriteJerSfTextFile above
+static bool WritePtResolutionFile(const TString &path,
+                                  const std::stringstream &buf) {
+  TString tmpPath = path + ".tmp";
+  {
+    std::ofstream tmp(tmpPath.Data());
+    tmp << buf.str();
+  }
+  bool ok = true;
+  try {
+    JME::JetResolutionObject obj(tmpPath.Data());
+    obj.saveToFile(path.Data());
+  } catch (const std::exception &ex) {
+    std::cerr << "ERROR writing pT resolution file " << path << ": "
+              << ex.what() << "\n";
+    ok = false;
+  }
+  gSystem->Unlink(tmpPath);
+  return ok;
 }
 
 void runTextFilePtResolution(TString responseFile, TString outputTag) {
@@ -566,8 +613,9 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
     return;
   }
 
-  if (outputTag.IsNull())
+  if (outputTag.IsNull()) {
     outputTag = "JER_ptresolution";
+  }
   if (outputTag.Contains("/")) {
     std::cerr << "ERROR: outputTag must not contain '/': " << outputTag << "\n";
     fIn->Close();
@@ -585,118 +633,63 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
   const bool wantAbsEta = (cfg.etaModeOutput != "eta");
   const bool wantFullEta = (cfg.etaModeOutput != "abseta");
 
-  const int nEta = (int)kAbsEtaEdges.size() - 1;
-
-  // "corr" variant, "incl" collection -- these are the names written by
-  // ExtractPerAbsEtaVsPtGen in ResponseExtractor.cxx.
-  const TString variant = "corr";
-  const TString collection = "incl";
+  const int nAbsEta = (int)kAbsEtaEdges.size() - 1;
+  const int nFullEta = (int)kEtaEdges.size() - 1;
 
   for (const TString &cone : cfg.coneLabels) {
-    TDirectory *dPerEta = (TDirectory *)fIn->Get(cone + "/JER_per_abseta");
-    if (!dPerEta) {
-      std::cerr << "No JER_per_abseta/ directory for " << cone
-                << " -- was this file produced by runResponse?\n";
-      continue;
-    }
-
-    // Collect JER records per |eta| bin, reading the per-|eta| JER TH1Ds.
-    // Each TH1D has one bin per pT_gen interval; bin content = JER, error = JER uncertainty.
-    std::vector<std::vector<JerRecord>> etaRecords(nEta);
-    bool any = false;
-    for (int ieta = 0; ieta < nEta; ieta++) {
-      TString etaKey = L2Name::EtaKey(ieta, false);
-      TString hName = L2Name::ObjectName(
-          cone, "JER", {variant, "vs_ptgen", etaKey}, {collection});
-      TH1D *h = (TH1D *)dPerEta->Get(hName);
-      if (!h)
-        continue;
-      for (int ip = 1; ip <= h->GetNbinsX(); ip++) {
-        const double v = h->GetBinContent(ip);
-        const double e = h->GetBinError(ip);
-        if (v == 0.0 && e == 0.0)
-          continue;
-        const double ptLo = h->GetXaxis()->GetBinLowEdge(ip);
-        const double ptHi = h->GetXaxis()->GetBinUpEdge(ip);
-        const double unc = (v != 0.0) ? e / v : 0.0;
-        etaRecords[ieta].push_back({ptLo, ptHi, v, unc});
-        any = true;
-      }
-    }
-
-    if (!any) {
-      std::cerr << "No per-|eta| JER data found for " << cone << "\n";
-      continue;
-    }
-
-    // Write abseta file (mirror |eta| bins onto both eta halves).
     if (wantAbsEta) {
-      TString path =
-          textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
-      std::stringstream buf;
-      buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
-      for (int ieta = nEta - 1; ieta >= 0; ieta--)
-        AppendJerLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
-                       etaRecords[ieta]);
-      for (int ieta = 0; ieta < nEta; ieta++)
-        AppendJerLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
-                       etaRecords[ieta]);
+      TDirectory *dPerAbsEta = (TDirectory *)fIn->Get(cone + "/JER_per_abseta");
+      if (!dPerAbsEta) {
+        std::cerr
+            << "No JER_per_abseta/ directory for " << cone
+            << " -- was this file produced with abs-eta output enabled?\n";
+      } else {
+        auto etaRecords =
+            CollectPtResEtaRecords(dPerAbsEta, cone, nAbsEta, false);
 
-      TString tmpPath = path + ".tmp";
-      {
-        std::ofstream tmp(tmpPath.Data());
-        tmp << buf.str();
+        TString path =
+            textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
+        std::stringstream buf;
+        buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+        for (int ieta = nAbsEta - 1; ieta >= 0; ieta--) {
+          AppendJerLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
+                         etaRecords[ieta]);
+        }
+        for (int ieta = 0; ieta < nAbsEta; ieta++) {
+          AppendJerLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
+                         etaRecords[ieta]);
+        }
+
+        if (WritePtResolutionFile(path, buf)) {
+          std::cout << "Done (pT resolution). " << cone << ": -> " << path
+                    << "\n";
+        }
       }
-      bool ok = true;
-      try {
-        JME::JetResolutionObject obj(tmpPath.Data());
-        obj.saveToFile(path.Data());
-      } catch (const std::exception &ex) {
-        std::cerr << "ERROR writing pT resolution file " << path << ": "
-                  << ex.what() << "\n";
-        ok = false;
-      }
-      gSystem->Unlink(tmpPath);
-      if (ok)
-        std::cout << "Done (pT resolution). " << cone << ": -> " << path
-                  << "\n";
     }
 
-    // Full-eta file: no per-bin negative-eta extraction (folding sums both
-    // sides), so this mirrors the |eta|-folded values across eta=0 -- same
-    // content as the abseta file, just written with full-eta bin edges. A
-    // future pass extracting eta_reco > 0 and < 0 separately can replace this.
     if (wantFullEta) {
-      TString path =
-          textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";
-      std::stringstream buf;
-      buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
-      const int nFullEta = (int)kEtaEdges.size() - 1;
-      for (int ieta = 0; ieta < nFullEta; ieta++) {
-        const int iAbs = (ieta < nFullEta / 2) ? (nFullEta / 2 - 1 - ieta)
-                                               : (ieta - nFullEta / 2);
-        AppendJerLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
-                       etaRecords[iAbs]);
-      }
+      TDirectory *dPerEta = (TDirectory *)fIn->Get(cone + "/JER_per_eta");
+      if (!dPerEta) {
+        std::cerr
+            << "No JER_per_eta/ directory for " << cone
+            << " -- was this file produced with full-eta output enabled?\n";
+      } else {
+        auto etaRecords = CollectPtResEtaRecords(dPerEta, cone, nFullEta, true);
 
-      TString tmpPath = path + ".tmp";
-      {
-        std::ofstream tmp(tmpPath.Data());
-        tmp << buf.str();
+        TString path =
+            textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";
+        std::stringstream buf;
+        buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+        for (int ieta = 0; ieta < nFullEta; ieta++) {
+          AppendJerLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
+                         etaRecords[ieta]);
+        }
+
+        if (WritePtResolutionFile(path, buf)) {
+          std::cout << "Done (pT resolution). " << cone << ": -> " << path
+                    << "\n";
+        }
       }
-      bool ok = true;
-      try {
-        JME::JetResolutionObject obj(tmpPath.Data());
-        obj.saveToFile(path.Data());
-      } catch (const std::exception &ex) {
-        std::cerr << "ERROR writing pT resolution file " << path << ": "
-                  << ex.what() << "\n";
-        ok = false;
-      }
-      gSystem->Unlink(tmpPath);
-      if (ok)
-        std::cout << "Done (pT resolution). " << cone << ": -> " << path
-                  << "\n";
     }
   }
 

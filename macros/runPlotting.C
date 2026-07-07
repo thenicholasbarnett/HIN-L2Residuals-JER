@@ -69,71 +69,40 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 #include <iostream>
 #include <vector>
 
-// ============================================================
-// Entry point
-//
 // flags has three modes:
-//   (empty, the default): curated smart default, not every plot family:
-//     event + kinematics (tag/probe only, no inclusive jets) for Step 1;
-//     adist + roverlay + alpha for Step 2 (excludes etasym/methods/normcomp,
-//     which need Step 2's own output but are comparison/QA plots, not
-//     day-to-day output); ptfit + finals for Step 3. "finals" is included
-//     here only when the file provides it via the Step 3 corrfinal-grid
-//     fallback (see PlotFinals): only on Step 3 output, never via Step 2's
-//     native intercepts.
-//   "all": literal firehose, every plot family below, unconditionally,
-//     including inclusive-jet kinematics and "finals" from either data
-//     source. Use this to regenerate everything a file supports.
-//   explicit space-separated keywords: exactly the named flags run, each
-//     behaving as documented below (e.g. "kinematics" always includes
-//     inclusive jets; "finals" always tries both its data sources).
+//   (empty, the default):
+//     event + kinematics tag/probe
+//     adist + roverlay + alpha
+//     ptfit + finals
 //
-//   "etasym"    : full-eta vs |eta| reflected symmetry check (PlotEtaSym)
-//   "methods"   : method comparison: gauss vs trunc90 vs trunc95 (PlotMethodComp)
-//   "finals"    : final R_MC/R_data at alpha→0, all pT slices overlaid (PlotFinals)
-//                 also reads Step 3's corrfinal TH2D grid as a fallback.
-//                 CLOSURE=true fixes its y-range to 0.95-1.05 with 0.99/1.01
-//                 guide lines, for checking a closure pass's R_MC/R_data ~= 1.
-//   "normcomp"  : direct vs kFSR-norm correction factor overlay with ratio panel (PlotNormComp)
-//   "adist"     : asymmetry distributions per bin with log-y and truncation lines
-//   "roverlay"  : R_data and R_MC overlay with ratio panel per alpha/pT
-//   "alpha"     : kFSR-normalized alpha fit plots: R_MC/R_data(α)/R_MC/R_data(0.30) vs alpha
-//   "ptfit"     : Step 3 pT-dependence fit: correction factor vs pT_avg per eta bin (PlotPtFit)
-//   "kinematics": Step-1 inclusive/tag/probe jet kinematics from runAsymmetry output
-//   "event"     : Step-1 event-level QA: vz, primary vertex filter, HLT trigger
-//   "response"  : runResponse JES/JER: per-bin response distributions with a
-//                 Gaussian guide fit, plus JES/JER vs eta_gen and vs pT_gen
-//                 summary overlays (incl/tag/probe) (PlotResponse)
+//   "all": literal firehose, every plot family below, unconditionally
 //
-// CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS -- same shape as
-// CLOSURE=true) switches which Step 2 output etasym/methods/finals/normcomp/
-// roverlay/alpha read: the default JEC (mean-derived, what Step 3 turns into
-// JEC text files) or JER SF (stddev-derived, "_jer"-suffixed objects --
-// see CalibrationExtractor.cxx). adist reads the same underlying A
-// distribution regardless, since that QA histogram isn't duplicated between
-// the two. kinematics/event/ptfit/response don't have a JEC/JER axis at all
-// and ignore CALIBRATION= entirely. finals' Step 3 corrfinal-grid fallback
-// has no JER equivalent yet -- CALIBRATION=JER only ever finds Step 2's
-// native intercept_jer_* objects there.
+//   "etasym"    : full-eta vs |eta| reflected
+//   "methods"   : double gauss vs gauss vs trunc90 vs trunc95
+//   "finals"    : R_MC/R_data at alpha→0, pT slices overlaid
+//                 CLOSURE=true fixes y-range, adds guid lines
+//   "normcomp"  : direct vs kFSR-norm correction factor overlay + ratio panel
+//   "adist"     : asymmetry distributions
+//   "roverlay"  : R_data and R_MC overlay with ratio panel per (alpha, pT_avg)
+//   "alpha"     : kFSR extrapolations: R_MC/R_data(α)/R_MC/R_data(0.30) vs alpha
+//   "ptfit"     : correction factor vs pT_avg per eta bin
+//   "kinematics": inclusive/tag/probe jet kinematics
+//   "event"     : vz, primary vertex filter, HLT trigger
+//   "response"  : per-bin response distributions with gauss fit, 
+//                 plus JES/JER vs eta_gen and vs pT_gen
+//                 summary overlays (incl/tag/probe)
 //
-// -sample true (default false): stops after kSampleMaxPlots plots or
-// kSampleMaxSeconds seconds, whichever comes first, instead of running the
-// full FLAGS= selection to completion. For previewing a cosmetic change
-// (axis titles, colors, legend layout, ...) against a couple of real plots
-// without waiting out a full run. No effect on which plots are counted for
-// the progress bar's total, only on how many actually get saved.
-// ============================================================
+// CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS) 
+// JEC: mean-derived
+// JER SF: width-derived
+//
+// -sample true  # default false
+// for previewing small collection of plots for cosmetic changes
 
-// -sample true's cap: whichever comes first.
+// -sample key, only some representative plots for checking cosmetics
 constexpr int kSampleMaxPlots = 1000;
 constexpr int kSampleMaxSeconds = 60;
 
-// Smart-default "finals" inclusion. PlotFinals draws from Step 2's native
-// intercept histograms when present, falling back to Step 3's corrfinal grid
-// otherwise (FinalCorrections.h). The curated default only wants it when the
-// fallback path is what's actually available (a Step 3 file), not
-// when Step 2's own output happens to contain intercepts too. Checked once
-// against the first cone; a single pipeline run is uniform across cones.
 bool WantsFinalsByDefault(TFile *fIn, const TString &cone,
                           const BinningConfig &bins, bool useJer) {
   if (bins.ptavgSlices.empty())
@@ -184,9 +153,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   }
 
   BinningConfig bins;
-
-  // same fallback ResponseExtractor.cxx uses when the TOML key is absent --
-  // plotting must never re-fit a bin extraction already wrote off as too thin
+  
   const int minEntriesPlot =
       (cfg.minEntriesPerBin > 0) ? cfg.minEntriesPerBin : 100;
 
@@ -211,8 +178,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   const bool doResponse =
       doAllLiteral || doSmartDefault || flags.Contains("response");
 
-  // "kinematics" named explicitly (or "all") pulls in inclusive jets too;
-  // the smart default sticks to tag/probe only.
+  // kinematics
   const bool kineIncludeIncl = doAllLiteral || flags.Contains("kinematics");
 
   bool doFinals = doAllLiteral || flags.Contains("finals");
@@ -299,9 +265,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
               << " plots or " << kSampleMaxSeconds << "s, whichever first)\n";
   }
 
-  // Finish() forces current=total before its final draw -- correct for a
-  // real completion, but would repaint a false "100%" bar under the stopped
-  // message above if the sample cap cut the run short.
+  // Finish() forces current=total before its final draw
   if (sampleStopped) {
     printf("\n");
     fflush(stdout);

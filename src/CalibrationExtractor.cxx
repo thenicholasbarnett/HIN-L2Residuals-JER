@@ -58,10 +58,7 @@ struct RPoint {
   double alpha, val, err;
 };
 
-// x-error for an alpha-threshold marker: half the local spacing to its
-// neighbors on the threshold axis. Not a physical bin width (the alpha
-// slices are cumulative "alpha < threshold" cuts, not a partition) -- just
-// conveys the threshold sweep's step size on the plot.
+// x-error for an alpha-threshold marker
 static double AlphaPointHalfWidth(const std::vector<double> &x, int k) {
   const int n = (int)x.size();
   if (n < 2)
@@ -278,10 +275,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   fitFn->SetLineColor(color);
   gr->Fit(fitFn, "QR");
 
-  // x-error set only after the fit runs: TGraphErrors::Fit uses the
-  // effective-variance method when ex is nonzero, so setting these before
-  // fitting would quietly perturb the extrapolated intercept. These are
-  // purely a plotting aid for PlotAlphaFit.
+  // x-error set only after the fit runs
   for (int k = 0; k < n; k++)
     gr->SetPointError(k, AlphaPointHalfWidth(x, k), ey[k]);
 
@@ -290,8 +284,6 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   out.valid = true;
 
   // kFSR
-  // fitting values at each alpha normalized by the value at a nominal alpha
-  // extrapolated value multiplied by value at nominal alpha gives correction
   double normVal = 0, normErr = 0;
   for (int k = n - 1; k >= 0; k--) {
     if (pts[k].alpha <= controls.alphaFitHi + 1e-4 && pts[k].val > 1e-6) {
@@ -301,13 +293,6 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
     }
   }
   if (normVal > 1e-6) {
-    // Every point gets normalized and kept, not just the ones the fit
-    // uses -- above-alphaFitHi points are real measurements, just not part
-    // of the extrapolation (same convention as the direct graph above,
-    // which already carries all n points through an "R"-ranged fit). Only
-    // abort the whole normalized graph on a degenerate in-range point,
-    // matching the original behavior; a bad out-of-range point is just
-    // skipped since it was never going into the fit anyway.
     std::vector<double> xn, yn, exn, eyn;
     xn.reserve(n);
     yn.reserve(n);

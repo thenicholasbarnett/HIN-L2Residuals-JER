@@ -25,9 +25,7 @@ void Check(bool cond, const char *msg) {
   }
 }
 
-// Response values chosen symmetric around 1.0 so the expected fitted mean
-// (JES) is exactly 1.0 regardless of fit-window/binning details; the spread
-// gives FitResponse something real to measure for JER.
+// Response values symmetric about 1.0
 static const double kResponseValues[] = {0.90, 0.93, 0.96, 0.99, 1.00,
                                          1.01, 1.04, 1.07, 1.10};
 static constexpr int kNResponseValues = 9;
@@ -44,11 +42,10 @@ int main() {
   std::remove(inputPath);
   std::remove(outputPath);
 
-  // synthetic Step 1 MC output file (ak4PF, incl collection only)
-  // corrPt, rawPt, and jtPt all use the same symmetric response values so
-  // JES(corr)=JES(reco)=JES(raw)~1.0 by construction -- this test checks
-  // the extraction plumbing (all three variants, entry-count guard), not
-  // that the three variants differ, which is a real-data property.
+  // synthetic MC asymmetry file (ak4PF, incl only)
+  // corrPt, rawPt, and jtPt use same symmetric responses
+  // JES(corr)=JES(reco)=JES(raw)~1.0 by construction -- 
+  // this test extraction of all three variants, entry-count guard
   {
     BinningConfig bins;
     ConeHistograms h;
@@ -65,8 +62,8 @@ int main() {
       }
     }
 
-    // a deliberately under-filled pt_gen bin (only 5 entries, well below
-    // min_entries_per_bin=100) -- should NOT produce a valid fit.
+    // deliberately under-filled pt_gen bin, only 5 entries
+    // should NOT produce a valid fit.
     for (int r = 0; r < 5; r++) {
       h.FillInclJetResp(300.0f, 300.0f, 300.0f, eta, 300.0f, 1.0f);
     }
@@ -124,20 +121,61 @@ int main() {
                "but bins stay zero"
             << std::endl;
   {
-    // ConeHistograms::Init always constructs all three response sparses
-    // when isMC -- unfilled ones are empty, not absent, so extraction
-    // still writes JES/JER TH1Ds for them (matching the unity/zero
-    // fallback convention used elsewhere, e.g. TextFileWriter.cxx).
+    // ConeHistograms::Init always constructs three response sparses
+    // extraction writes JES/JER TH1Ds for unfilled hists still (see fallback to unity)
     TH1D *hJESTag = (TH1D *)fIn->Get("ak4PF/ak4PF_JES_corr_vs_ptgen_tag");
     Check(hJESTag != nullptr,
           "JES_corr_vs_ptgen_tag object still written (unfilled, not absent)");
     if (hJESTag) {
       bool allZero = true;
-      for (int b = 1; b <= hJESTag->GetNbinsX(); b++)
-        if (std::fabs(hJESTag->GetBinContent(b)) > kEps)
+      for (int b = 1; b <= hJESTag->GetNbinsX(); b++) {
+        if (std::fabs(hJESTag->GetBinContent(b)) > kEps) {
           allZero = false;
+        }
+      }
       Check(allZero, "tag collection (never filled) has no valid fits anywhere "
                      "-> all bins zero");
+    }
+  }
+
+  std::cout << "\n[3] JER_per_abseta and JER_per_eta (default etaModeOutput "
+               "= \"both\")"
+            << std::endl;
+  {
+    // eta=0.13 lands in |eta| bin 0 ([0,0.261])
+    // signed full-eta bin 18 ([0,0.261]) 
+    // both should carry the real fit
+    TH1D *hAbs = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_abseta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+    TH1D *hFull = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+    Check(hAbs != nullptr, "JER_per_abseta eta_0p0_0p261 exists");
+    Check(hFull != nullptr, "JER_per_eta eta_0p0_0p261 exists");
+    if (hAbs && hFull) {
+      const int bin = hAbs->GetXaxis()->FindBin(105.0);
+      const double jerAbs = hAbs->GetBinContent(bin);
+      const double jerFull = hFull->GetBinContent(bin);
+      Check(jerAbs > 0.01 && jerAbs < 0.20,
+            "JER_per_abseta(pt_gen~105) in a sane positive range");
+      Check(std::fabs(jerFull - jerAbs) < kEps,
+            "JER_per_eta matches JER_per_abseta for the same physical eta bin");
+    }
+
+    // the mirror-image negative-eta bin no real entries 
+    // should stay all zero, proving JER_per_eta isn't JER_per_abseta mirrored
+    TH1D *hFullNeg = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_m0p261_0p0_incl");
+    Check(hFullNeg != nullptr,
+          "JER_per_eta eta_m0p261_0p0 (negative side) exists");
+    if (hFullNeg) {
+      bool allZero = true;
+      for (int b = 1; b <= hFullNeg->GetNbinsX(); b++) {
+        if (std::fabs(hFullNeg->GetBinContent(b)) > kEps) {
+          allZero = false;
+        }
+      }
+      Check(allZero, "JER_per_eta negative-eta bin has no fits -> all zero "
+                     "(not mirrored from the positive side)");
     }
   }
 
