@@ -66,9 +66,9 @@
 # Prerequisites:
 #   - On lxplus, run cmsenv before configuring/building this repo:
 #       source /cvmfs/cms.cern.ch/cmsset_default.sh
-#       cd <CMSSW_RELEASE>/src && cmsenv && cd /path/to/L2Residuals-2024ppref
+#       cd <CMSSW_RELEASE>/src && cmsenv && cd /path/to/HIN-L2Residuals-JER
 #       cmake -S . -B build && cmake --build build
-#     or, if the repo is checked out as $CMSSW_BASE/src/Analysis/L2Residuals:
+#     or, if the repo is checked out as $CMSSW_BASE/src/Analysis/HIN-L2Residuals-JER:
 #       scram b -j4
 #   - All five cone JEC files must be present in data/jec/ before submitting
 #   - The CMSSW src directory used on worker jobs is derived from cmsenv
@@ -246,7 +246,7 @@ require_cmssw() {
     echo "ERROR: cmsenv is not active. The binary must be built and submitted from a cmsenv shell." >&2
     echo "       source /cvmfs/cms.cern.ch/cmsset_default.sh" >&2
     echo "       cd <CMSSW>/src && cmsenv && cd -" >&2
-    echo "       cd /path/to/L2Residuals-2024ppref" >&2
+    echo "       cd /path/to/HIN-L2Residuals-JER" >&2
     echo "       cmake -S . -B build && cmake --build build" >&2
     echo "       or build the SCRAM executable with: scram b -j4" >&2
     exit 1

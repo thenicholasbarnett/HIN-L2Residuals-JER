@@ -35,16 +35,16 @@ Copy and paste code blocks for generic workflow
 cd CMSSW_X_Y_Z/src
 cmsenv
 mkdir -p Analysis
-git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git Analysis/L2Residuals
-cd Analysis/L2Residuals
+git clone git@github.com:thenicholasbarnett/HIN-L2Residuals-JER.git Analysis/HIN-L2Residuals-JER
+cd Analysis/HIN-L2Residuals-JER
 scram b
 ```
 
 <i> CMake </i>
 
 ```bash
-git clone git@github.com:thenicholasbarnett/L2Residuals-2024ppref.git
-cd L2Residuals-2024ppref
+git clone git@github.com:thenicholasbarnett/HIN-L2Residuals-JER.git
+cd HIN-L2Residuals-JER
 cmake -B build
 cmake --build build
 ```

@@ -6,7 +6,7 @@
 //            09/04/2015 Alexx Perloff           <alexx.stephen.perloff@cern.ch>
 //
 // Vendored from JetMETAnalysis/JetUtilities/interface/Style.h
-// (https://github.com/lmartika/JetMETAnalysis) into L2Residuals-2024ppref on
+// (https://github.com/lmartika/JetMETAnalysis) into HIN-L2Residuals-JER on
 // 2026-07-03. Verbatim except for one deliberate, clearly-marked local
 // addition inside CMS_lumi() below: a new iPeriod==16 case reproducing this
 // repo's own DrawCMSInternalHeader wording ("CMS" + "Internal", "2024 pp
@@ -164,7 +164,7 @@ CMS_lumi( TPad* pad, int iPeriod, int iPosX, bool verbose )
      extraText3  = "Preliminary";
   }
   else if(iPeriod==16) {
-     // L2Residuals-2024ppref local addition (2026-07-03): matches this
+     // HIN-L2Residuals-JER local addition (2026-07-03): matches this
      // repo's own DrawCMSInternalHeader wording ("CMS" + "Internal", not
      // "Simulation"/"Preliminary") -- see include/plotting/Style.h. Kept as
      // a new dedicated iPeriod value rather than reusing 14 below, which
@@ -290,7 +290,7 @@ CMS_lumi( TPad* pad, int iPeriod, int iPosX, bool verbose )
     }
   else if ( iPeriod==16 )
     {
-      // L2Residuals-2024ppref local addition (2026-07-03) -- matches this
+      // HIN-L2Residuals-JER local addition (2026-07-03) -- matches this
       // repo's own DrawCMSInternalHeader default lumi text exactly.
       lumiText += "2024 pp (5.36 TeV)";
     }
