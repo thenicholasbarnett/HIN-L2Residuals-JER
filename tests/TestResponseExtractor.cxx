@@ -133,11 +133,54 @@ int main() {
           "JES_corr_vs_ptgen_tag object still written (unfilled, not absent)");
     if (hJESTag) {
       bool allZero = true;
-      for (int b = 1; b <= hJESTag->GetNbinsX(); b++)
-        if (std::fabs(hJESTag->GetBinContent(b)) > kEps)
+      for (int b = 1; b <= hJESTag->GetNbinsX(); b++) {
+        if (std::fabs(hJESTag->GetBinContent(b)) > kEps) {
           allZero = false;
+        }
+      }
       Check(allZero, "tag collection (never filled) has no valid fits anywhere "
                      "-> all bins zero");
+    }
+  }
+
+  std::cout << "\n[3] JER_per_abseta and JER_per_eta (default etaModeOutput "
+               "= \"both\")"
+            << std::endl;
+  {
+    // eta=0.13 lands in |eta| bin 0 ([0,0.261]) and signed full-eta bin 18
+    // ([0,0.261]) -- same physical bin, both should carry the real fit, not
+    // a mirrored copy.
+    TH1D *hAbs = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_abseta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+    TH1D *hFull = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+    Check(hAbs != nullptr, "JER_per_abseta eta_0p0_0p261 exists");
+    Check(hFull != nullptr, "JER_per_eta eta_0p0_0p261 exists");
+    if (hAbs && hFull) {
+      const int bin = hAbs->GetXaxis()->FindBin(105.0);
+      const double jerAbs = hAbs->GetBinContent(bin);
+      const double jerFull = hFull->GetBinContent(bin);
+      Check(jerAbs > 0.01 && jerAbs < 0.20,
+            "JER_per_abseta(pt_gen~105) in a sane positive range");
+      Check(std::fabs(jerFull - jerAbs) < kEps,
+            "JER_per_eta matches JER_per_abseta for the same physical eta bin");
+    }
+
+    // the mirror-image negative-eta bin got no real entries -> should stay
+    // all zero, proving JER_per_eta isn't just JER_per_abseta mirrored
+    TH1D *hFullNeg = (TH1D *)fIn->Get(
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_m0p261_0p0_incl");
+    Check(hFullNeg != nullptr,
+          "JER_per_eta eta_m0p261_0p0 (negative side) exists");
+    if (hFullNeg) {
+      bool allZero = true;
+      for (int b = 1; b <= hFullNeg->GetNbinsX(); b++) {
+        if (std::fabs(hFullNeg->GetBinContent(b)) > kEps) {
+          allZero = false;
+        }
+      }
+      Check(allZero, "JER_per_eta negative-eta bin has no fits -> all zero "
+                     "(not mirrored from the positive side)");
     }
   }
 

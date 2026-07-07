@@ -54,8 +54,9 @@ struct ResponseFitResult {
 static ResponseFitResult FitResponse(TH1D *h, double halfWidth,
                                      int minEntries) {
   ResponseFitResult r;
-  if (!CanFit(h, minEntries))
+  if (!CanFit(h, minEntries)) {
     return r;
+  }
 
   TF1 *g = new TF1(Form("_rf_%s", h->GetName()), "gaus", 1.0 - halfWidth,
                    1.0 + halfWidth);
@@ -137,28 +138,29 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
   delete hJER;
 }
 
-// per |eta| bin JER and JES vs pT_gen
-// used by runTextFilePtResolution
+// per eta bin (|eta| if fullEta=false, signed eta_reco if fullEta=true) JER
+// and JES vs pT_gen, used by runTextFilePtResolution
 //
-// |eta| bin (restrict axis 0), projects and fit per pT_gen bin
+// restricts axis 0 to each eta bin in turn, projects and fits per pT_gen bin
 // writes {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection} to dOut
+static void ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
+                                 const TString &collection,
+                                 const ResponseVariant &variant,
+                                 const AxisBins &ptBins, TDirectory *dOut,
+                                 double halfWidth, int minEntries,
+                                 bool fullEta) {
 
-static void ExtractPerAbsEtaVsPtGen(THnSparse *hFolded, const TString &cone,
-                                    const TString &collection,
-                                    const ResponseVariant &variant,
-                                    const AxisBins &ptBins, TDirectory *dOut,
-                                    double halfWidth, int minEntries) {
-
-  const int nEta = (int)kAbsEtaEdges.size() - 1;
+  const std::vector<Double_t> &etaEdges = fullEta ? kEtaEdges : kAbsEtaEdges;
+  const int nEta = (int)etaEdges.size() - 1;
   const int nPt = ptBins.nBins;
   const double lo = ptBins.lo, hi = ptBins.hi;
   const double width = (hi - lo) / nPt;
 
   for (int ieta = 0; ieta < nEta; ieta++) {
-    const TString etaKey = L2Name::EtaKey(ieta, false);
+    const TString etaKey = L2Name::EtaKey(ieta, fullEta);
 
-    hFolded->GetAxis(kRespEtaRecoAxis)
-        ->SetRangeUser(kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1]);
+    h->GetAxis(kRespEtaRecoAxis)
+        ->SetRangeUser(etaEdges[ieta], etaEdges[ieta + 1]);
 
     TString jesName = L2Name::ObjectName(
         cone, "JES", {variant.tag, "vs_ptgen", etaKey}, {collection});
@@ -176,9 +178,9 @@ static void ExtractPerAbsEtaVsPtGen(THnSparse *hFolded, const TString &cone,
       const double ptLo = lo + ip * width;
       const double ptHi = ptLo + width;
 
-      hFolded->GetAxis(kRespPtGenAxis)->SetRangeUser(ptLo, ptHi);
-      TH1D *hProj = ProjectTHnSparse1D(hFolded, variant.axis, {});
-      hFolded->GetAxis(kRespPtGenAxis)->SetRange(0, 0);
+      h->GetAxis(kRespPtGenAxis)->SetRangeUser(ptLo, ptHi);
+      TH1D *hProj = ProjectTHnSparse1D(h, variant.axis, {});
+      h->GetAxis(kRespPtGenAxis)->SetRange(0, 0);
 
       ResponseFitResult fr = FitResponse(hProj, halfWidth, minEntries);
       if (fr.valid) {
@@ -190,7 +192,7 @@ static void ExtractPerAbsEtaVsPtGen(THnSparse *hFolded, const TString &cone,
       delete hProj;
     }
 
-    hFolded->GetAxis(kRespEtaRecoAxis)->SetRange(0, 0);
+    h->GetAxis(kRespEtaRecoAxis)->SetRange(0, 0);
 
     dOut->cd();
     hJES->Write();
@@ -219,8 +221,9 @@ void runResponse(TString inputFile, TString outputFile) {
   // incl/tag/probe response sparses, ConeHistograms instantiation
   int totalSteps = 0;
   for (const TString &cone : cfg.coneLabels) {
-    if (fIn->Get(cone + "/" + cone + "_incl_resp"))
+    if (fIn->Get(cone + "/" + cone + "_incl_resp")) {
       totalSteps += kNCollections * kNVariants;
+    }
   }
   if (totalSteps == 0) {
     std::cerr << "No MC response histograms found in " << inputFile
@@ -237,6 +240,9 @@ void runResponse(TString inputFile, TString outputFile) {
   }
   TFile *fOut = new TFile(outputFile, "recreate");
 
+  const bool wantAbsEta = (cfg.etaModeOutput != "eta");
+  const bool wantFullEta = (cfg.etaModeOutput != "abseta");
+
   BinningConfig bins;
   ProgressBar pb("Extracting response:", totalSteps);
 
@@ -245,12 +251,16 @@ void runResponse(TString inputFile, TString outputFile) {
     TDirectory *coneDir = (TDirectory *)fIn->Get(cone);
     THnSparse *hSentinel =
         coneDir ? (THnSparse *)coneDir->Get(cone + "_incl_resp") : nullptr;
-    if (!hSentinel)
+    if (!hSentinel) {
       continue;
+    }
 
     TDirectory *coneDirOut = fOut->mkdir(cone.Data());
     TDirectory *dQA_ptgen = coneDirOut->mkdir("QA_response_ptgen");
-    TDirectory *dPerEta = coneDirOut->mkdir("JER_per_abseta");
+    TDirectory *dPerAbsEta =
+        wantAbsEta ? coneDirOut->mkdir("JER_per_abseta") : nullptr;
+    TDirectory *dPerEta =
+        wantFullEta ? coneDirOut->mkdir("JER_per_eta") : nullptr;
 
     for (int ic = 0; ic < kNCollections; ic++) {
       const TString collection = kCollectionKeys[ic];
@@ -268,13 +278,19 @@ void runResponse(TString inputFile, TString outputFile) {
         pb.Update();
       }
 
-      // per |eta| bin extraction for corr variant
+      // per |eta| and per (signed) eta_reco extraction for corr variant,
       // used to write CMS JER pT resolution text files
-      THnSparse *hFolded = FoldEtaAxis(
-          hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
-      ExtractPerAbsEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                              dPerEta, halfWidth, minEntries);
-      delete hFolded;
+      if (wantAbsEta) {
+        THnSparse *hFolded = FoldEtaAxis(
+            hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
+        ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
+                             dPerAbsEta, halfWidth, minEntries, false);
+        delete hFolded;
+      }
+      if (wantFullEta) {
+        ExtractPerEtaVsPtGen(hRaw, cone, collection, kVariants[0], bins.pt,
+                             dPerEta, halfWidth, minEntries, true);
+      }
     }
   }
 
