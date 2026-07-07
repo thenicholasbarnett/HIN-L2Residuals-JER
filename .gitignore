@@ -2,24 +2,26 @@
 build/
 lib/
 
-# bin/ is SCRAM source; ignore only accidental local executables there.
+# SCRAM source
 bin/*
 !bin/BuildFile.xml
 !bin/*.cc
 
 # analysis outputs
+plots/
 *.root
 *.png
 *.pdf
 !data/veto/*.root
 
-# closure/reprocessing inputs
+# closure/reprocessing
 cfg/*clos*.toml
 data/jec/preliminary/
 
-# editor / OS
+# editor/OS
 *.swp
 .DS_Store
 
-# scratch/manual-test scripts, never shared
+# scratch work
 local/
+tmp/
