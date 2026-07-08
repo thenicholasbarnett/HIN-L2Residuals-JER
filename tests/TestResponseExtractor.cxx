@@ -53,19 +53,21 @@ int main() {
 
     // eta=0.13 -> eta_reco bin covering [0,0.261]
     // refPt=105 -> pt_gen bin [100,110)
+    // rho=2.5 rides in the sparse; extraction integrates over it
     const float eta = 0.13f;
     const float refPt = 105.0f;
+    const float rho = 2.5f;
     for (int iv = 0; iv < kNResponseValues; iv++) {
       const float pt = (float)(kResponseValues[iv] * refPt);
       for (int r = 0; r < kRepeatsPerValue; r++) {
-        h.FillInclJetResp(pt, pt, pt, eta, refPt, 1.0f);
+        h.FillInclJetResp(pt, pt, pt, eta, refPt, rho, 1.0f);
       }
     }
 
     // deliberately under-filled pt_gen bin, only 5 entries
     // should NOT produce a valid fit.
     for (int r = 0; r < 5; r++) {
-      h.FillInclJetResp(300.0f, 300.0f, 300.0f, eta, 300.0f, 1.0f);
+      h.FillInclJetResp(300.0f, 300.0f, 300.0f, eta, 300.0f, rho, 1.0f);
     }
 
     TFile *fo = new TFile(inputPath, "recreate");

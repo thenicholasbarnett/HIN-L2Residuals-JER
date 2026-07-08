@@ -16,6 +16,9 @@ struct EventStruct {
   ULong64_t event;
   UInt_t lumi;
 
+  // pileup density, ggHiNtuplizer/EventTree (separate tree from vz/evt above)
+  Float_t rho;
+
   std::vector<std::pair<TString, void *>> BranchMap(bool isMC) {
     std::vector<std::pair<TString, void *>> branches = {{"vz", &vz},
                                                         {"evt", &event}};
@@ -25,6 +28,10 @@ struct EventStruct {
       branches.insert(branches.end(), {{"run", &run}, {"lumi", &lumi}});
     }
     return branches;
+  }
+
+  std::vector<std::pair<TString, void *>> RhoBranchMap() {
+    return {{"rho", &rho}};
   }
 };
 

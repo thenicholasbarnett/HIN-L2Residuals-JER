@@ -27,7 +27,8 @@
 //                       (extraction only writes the raw histogram).
 //   response_summary:  JES/JER vs pT_gen, incl/tag/probe overlaid.
 //   response_variants: corr/reco/raw overlaid, one per collection.
-// eta_reco-binned plots not produced yet (extraction doesn't slice on that axis).
+//   response_etarange: JES/JER vs pT_gen, coarse |eta| detector regions
+//                       overlaid, incl jets (corr variant).
 // No-op if the input has no response objects.
 
 static const char *const kResponseCollections[] = {"incl", "tag", "probe"};
@@ -376,6 +377,98 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   delete c; // cascade-deletes h[*], leg, lab (and rl if drawn)
 }
 
+// overlays JES/JER vs pT_gen across the coarse |eta| detector regions
+// (kEtaRangeEdges), incl jets only -- the collection with real eta reach
+// (tag is barrel-confined, probe limited). Reads runResponse's
+// JER_per_etarange corr-variant output.
+inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
+                                   const TString &cone,
+                                   const TString &quantity, // "JES" or "JER"
+                                   ProgressBar &pb) {
+  const std::vector<RangeBin> slices = BuildEtaRangeSlices();
+  const int nSl = (int)slices.size();
+  std::vector<TH1D *> h(nSl, nullptr);
+  bool any = false;
+  for (int is = 0; is < nSl; is++) {
+    TString name = L2Name::ObjectName(
+        cone, quantity,
+        {"corr", "vs_ptgen", L2Name::EtaKey(slices[is].lo, slices[is].hi)},
+        {"incl"});
+    h[is] = GetHAny(fIn, {cone + "/JER_per_etarange/" + name});
+    if (h[is]) {
+      any = true;
+    }
+  }
+  if (!any) {
+    return;
+  }
+
+  static const int markers[] = {20, 21, 22, 23, 33, 34};
+
+  TH1D *frame = nullptr;
+  for (int is = 0; is < nSl; is++) {
+    if (h[is]) {
+      frame = h[is];
+      break;
+    }
+  }
+
+  auto [ylo, yhi] = YRange(h);
+  const double xMin = ResponsePtGenMin(frame->GetXaxis());
+  const double xMax = frame->GetXaxis()->GetXmax();
+
+  TCanvas *c =
+      new TCanvas("response_etarange_" + cone + "_" + quantity, "", 800, 800);
+  RealAspectRatio(c);
+  c->SetLogx();
+  c->SetLeftMargin(0.14);
+  c->SetGridx();
+  c->SetGridy();
+
+  frame->SetTitle("");
+  frame->GetXaxis()->SetTitle(kPtGenAxisTitle);
+  frame->GetYaxis()->SetTitle(
+      ResponseYTitle(quantity, kResponseVariantLabels[0]));
+  frame->GetXaxis()->CenterTitle();
+  frame->GetYaxis()->CenterTitle();
+  frame->GetXaxis()->SetTitleOffset(1.25);
+  frame->GetXaxis()->SetRangeUser(xMin, xMax);
+  frame->GetYaxis()->SetRangeUser(ylo, yhi);
+
+  bool first = true;
+  TLegend *leg = new TLegend(0.52, 0.66, 0.88, 0.88);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(0.032);
+  leg->SetTextFont(42);
+  leg->AddEntry((TObject *)nullptr, cone + ", incl jets", "");
+  for (int is = 0; is < nSl; is++) {
+    if (!h[is]) {
+      continue;
+    }
+    StyleH(h[is], slices[is].color, markers[is % 6], 1.5f);
+    h[is]->Draw(first ? "E1" : "E1 same");
+    first = false;
+    leg->AddEntry(h[is], slices[is].title, "lp");
+  }
+  leg->Draw();
+
+  if (quantity == "JES") {
+    TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
+    rl->SetLineStyle(2);
+    rl->SetLineColor(kGray + 2);
+    rl->SetLineWidth(1);
+    rl->Draw();
+  }
+
+  DrawCMSInternalHeader(0.14, 0.90);
+
+  SavePlot(c, outDir, cone, "response_etarange", {quantity}, c->GetName());
+  pb.Update();
+
+  delete c; // cascade-deletes h[*], leg (and rl if drawn)
+}
+
 inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                          double halfWidth, int minEntries, ProgressBar &pb) {
   // sentinel: does this cone have runResponse output at all?
@@ -438,6 +531,10 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
     DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic], "JER",
                           pb);
   }
+
+  // detector-region overlay: coarse |eta| slices, incl jets
+  DrawEtaRangeComparison(fIn, outDir, cone, "JES", pb);
+  DrawEtaRangeComparison(fIn, outDir, cone, "JER", pb);
 }
 
 #endif

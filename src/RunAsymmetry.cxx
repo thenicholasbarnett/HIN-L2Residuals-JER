@@ -11,6 +11,7 @@
 #include "jetcorrector/JetCorrector.h"
 #include "JetSelection.h"
 #include "json_handler/JSON_handler.h"
+#include "JetSmearing.h"
 
 #include "BranchMapping.h"
 #include "EventStructs.h"
@@ -21,7 +22,9 @@
 
 #include "AnalysisConfig.h"
 
+#include <cstdint>
 #include <memory>
+#include <random>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -32,8 +35,12 @@ enum class RunMode { MC, NonTriggered, Triggered };
 static constexpr Int_t kNRefMax = 200;
 static constexpr float kVzCut = 15.0f;
 
+// matches SmearedJetProducerT.h's default "seed" fillDescriptions value --
+// no reason to diverge, this is purely for reproducible smearing draws
+static constexpr std::uint32_t kJerClosureSeed = 37428479;
+
 void runAsymmetry(TString input, TString output, TString modeFlag,
-                  Long64_t maxEvents) {
+                  Long64_t maxEvents, bool jerClosure) {
 
   const AnalysisConfig &cfg = Config();
   PrintConfigSummary(cfg);
@@ -50,6 +57,12 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
         Form("ERROR: invalid runAsymmetry mode '%s'. Expected mc, "
              "non-triggered, or triggered.",
              modeFlag.Data()));
+  }
+
+  if (jerClosure && mode != RunMode::MC) {
+    std::cerr << "ERROR: -calibration jer -closure true only applies to "
+                 "-mode mc (JER smearing needs gen-matched MC jets)\n";
+    return;
   }
 
   // validate cone config
@@ -88,6 +101,27 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     jecs.emplace_back(chain);
   }
 
+  // JER SF closure: MC jets get smeared (JetSmearing.h) using previously
+  // derived per-cone resolution + scale-factor text files
+  if (jerClosure && (cfg.jerResolutionFilesPerCone.size() != nCones ||
+                     cfg.jerScaleFactorFilesPerCone.size() != nCones)) {
+    std::cerr << "ERROR: -calibration jer -closure true requires "
+                 "jer_closure.resolution_files and .scale_factor_files, one "
+                 "per cone, in the config\n";
+    return;
+  }
+  std::vector<JME::JetResolution> jerResolution;
+  std::vector<JME::JetResolutionScaleFactor> jerScaleFactor;
+  std::mt19937 jerRng(kJerClosureSeed);
+  if (jerClosure) {
+    jerResolution.reserve(nCones);
+    jerScaleFactor.reserve(nCones);
+    for (size_t c = 0; c < nCones; c++) {
+      jerResolution.emplace_back(cfg.jerResolutionFilesPerCone[c]);
+      jerScaleFactor.emplace_back(cfg.jerScaleFactorFilesPerCone[c]);
+    }
+  }
+
   // jet ID, veto map, golden json
   JetSelect js(cfg.vetoMapPath, cfg.vetoMapHist);
   std::unique_ptr<JSON_handler> dcs;
@@ -108,11 +142,12 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     return;
   }
 
-  // ttrees: jet collections, event info, filter, trigger
+  // ttrees: jet collections, event info, pileup density, filter, trigger
   const size_t kEvtIdx = nCones;
-  const size_t kSkimIdx = nCones + 1;
-  const size_t kTrigIdx = nCones + 2;
-  std::vector<TTree *> trees(nCones + 3, nullptr);
+  const size_t kGgIdx = nCones + 1;
+  const size_t kSkimIdx = nCones + 2;
+  const size_t kTrigIdx = nCones + 3;
+  std::vector<TTree *> trees(nCones + 4, nullptr);
 
   for (size_t c = 0; c < nCones; c++) {
     trees[c] = (TTree *)fi->Get(cfg.jetTreePaths[c]);
@@ -125,6 +160,12 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
   trees[kEvtIdx] = (TTree *)fi->Get(cfg.hiTreePath);
   if (!trees[kEvtIdx]) {
     std::cerr << "Missing HiTree " << cfg.hiTreePath << " in " << input << "\n";
+    return;
+  }
+  trees[kGgIdx] = (TTree *)fi->Get(cfg.ggTreePath);
+  if (!trees[kGgIdx]) {
+    std::cerr << "Missing ggHiNtuplizer TTree " << cfg.ggTreePath << " in "
+              << input << "\n";
     return;
   }
   if (mode != RunMode::MC) {
@@ -147,6 +188,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
   // branch mapping
   const bool isMC = (mode == RunMode::MC);
   SetBranches(trees[kEvtIdx], event.BranchMap(isMC));
+  SetBranches(trees[kGgIdx], event.RhoBranchMap());
   for (size_t c = 0; c < nCones; c++) {
     SetBranches(trees[c], jets[c].BranchMap(isMC));
   }
@@ -188,8 +230,9 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
 
   for (Long64_t i = 0; i < nLoop; i++) {
 
-    // vz
+    // vz, rho
     trees[kEvtIdx]->GetEntry(i);
+    trees[kGgIdx]->GetEntry(i);
     hvz_all->Fill(event.vz);
     if (TMath::Abs(event.vz) > kVzCut) {
       continue;
@@ -236,6 +279,20 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       }
     }
 
+    // JER SF closure: smear MC jets ahead of any downstream jet ordering or
+    // selection, mirroring how L2Residual reprocessing sits on corrPt above
+    if (jerClosure) {
+      for (size_t c = 0; c < nCones; c++) {
+        for (int j = 0; j < jets[c].reco.nref; j++) {
+          JetSmearing::Result sm = JetSmearing::ComputeSmearFactor(
+              corrPt[c][j], jets[c].reco.eta[j], event.rho, jets[c].ref.pt[j],
+              jerResolution[c], jerScaleFactor[c], jerRng);
+          corrPt[c][j] =
+              (float)JetSmearing::SmearedPt(corrPt[c][j], sm.smearFactor);
+        }
+      }
+    }
+
     // sorted structure of jet indices per cone
     for (size_t c = 0; c < nCones; c++) {
       sorted[c] = FindLeadingJets(corrPt[c].data(), jets[c].reco.nref);
@@ -263,7 +320,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
           if (isMC) {
             cones[c].FillInclJetResp(corrPt[c][j], jets[c].reco.rawpt[j],
                                      jets[c].reco.pt[j], jets[c].reco.eta[j],
-                                     jets[c].ref.pt[j], weight);
+                                     jets[c].ref.pt[j], event.rho, weight);
           }
         }
       }
@@ -326,7 +383,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       if (isMC) {
         cones[c].FillResp(dijet, corrPt[c].data(), jets[c].reco.rawpt,
                           jets[c].reco.pt, jets[c].reco.eta, jets[c].ref.pt,
-                          weight);
+                          event.rho, weight);
       }
     }
   }

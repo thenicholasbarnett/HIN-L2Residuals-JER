@@ -24,12 +24,15 @@ inline TString EdgeKey(double x) {
   return x < 0.0 ? "m" + s : s;
 }
 
+inline TString EtaKey(double lo, double hi) {
+  return Form("eta_%s_%s", EdgeKey(lo).Data(), EdgeKey(hi).Data());
+}
+
 inline TString EtaKey(int ieta, bool fullEta) {
   const auto &edges = fullEta ? kEtaEdges : kAbsEtaEdges;
   if (ieta < 0 || ieta + 1 >= (int)edges.size())
     return Form("eta_invalid_%d", ieta);
-  return Form("eta_%s_%s", EdgeKey(edges[ieta]).Data(),
-              EdgeKey(edges[ieta + 1]).Data());
+  return EtaKey(edges[ieta], edges[ieta + 1]);
 }
 
 inline TString PtKey(const RangeBin &ptSlice) {
