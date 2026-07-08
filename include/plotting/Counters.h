@@ -335,6 +335,21 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone,
     n += countVariantComparison(kResponseCollections[ic], "JER");
   }
 
+  // detector-region overlay: 2 canvases per cone (JES/JER), each drawn
+  // whenever any coarse |eta| slice has the corresponding incl object.
+  auto countEtaRange = [&](const TString &quantity) -> int {
+    for (const RangeBin &sl : BuildEtaRangeSlices()) {
+      TString name = L2Name::ObjectName(
+          cone, quantity, {"corr", "vs_ptgen", L2Name::EtaKey(sl.lo, sl.hi)},
+          {"incl"});
+      if (HasHAny(fIn, {cone + "/JER_per_etarange/" + name}))
+        return 1;
+    }
+    return 0;
+  };
+  n += countEtaRange("JES");
+  n += countEtaRange("JER");
+
   return n;
 }
 

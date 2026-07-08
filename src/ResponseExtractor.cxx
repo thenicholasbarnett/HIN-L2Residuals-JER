@@ -131,8 +131,10 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
   delete hJER;
 }
 
-// per eta bin (|eta| if fullEta=false, signed eta_reco if fullEta=true) JER
-// and JES vs pT_gen, used by runTextFilePtResolution
+// JES/JER vs pT_gen for each eta bin of etaEdges. The caller supplies the
+// scheme and the matching sparse: kAbsEtaEdges/kEtaRangeEdges on a folded
+// |eta| sparse, kEtaEdges on the raw signed one. Feeds both the pT-resolution
+// text writer (fine schemes) and the detector-region overlay (coarse scheme).
 //
 // restricts axis 0 to each eta bin in turn, projects and extracts per pT_gen bin
 // writes {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection} to dOut
@@ -140,16 +142,16 @@ static void ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
                                  const TString &collection,
                                  const ResponseVariant &variant,
                                  const AxisBins &ptBins, TDirectory *dOut,
-                                 int minEntries, bool fullEta) {
+                                 int minEntries,
+                                 const std::vector<Double_t> &etaEdges) {
 
-  const std::vector<Double_t> &etaEdges = fullEta ? kEtaEdges : kAbsEtaEdges;
   const int nEta = (int)etaEdges.size() - 1;
   const int nPt = ptBins.nBins;
   const double lo = ptBins.lo, hi = ptBins.hi;
   const double width = (hi - lo) / nPt;
 
   for (int ieta = 0; ieta < nEta; ieta++) {
-    const TString etaKey = L2Name::EtaKey(ieta, fullEta);
+    const TString etaKey = L2Name::EtaKey(etaEdges[ieta], etaEdges[ieta + 1]);
 
     h->GetAxis(kRespEtaRecoAxis)
         ->SetRangeUser(etaEdges[ieta], etaEdges[ieta + 1]);
@@ -252,6 +254,9 @@ void runResponse(TString inputFile, TString outputFile) {
         wantAbsEta ? coneDirOut->mkdir("JER_per_abseta") : nullptr;
     TDirectory *dPerEta =
         wantFullEta ? coneDirOut->mkdir("JER_per_eta") : nullptr;
+    // coarse |eta| detector-region slices for the JES/JER overlay plot
+    TDirectory *dPerEtaRange =
+        wantAbsEta ? coneDirOut->mkdir("JER_per_etarange") : nullptr;
 
     for (int ic = 0; ic < kNCollections; ic++) {
       const TString collection = kCollectionKeys[ic];
@@ -269,18 +274,22 @@ void runResponse(TString inputFile, TString outputFile) {
         pb.Update();
       }
 
-      // per |eta| and per (signed) eta_reco extraction for corr variant,
-      // used to write CMS JER pT resolution text files
+      // per |eta| corr-variant extraction, folded once: the fine kAbsEtaEdges
+      // scheme feeds the CMS JER pT-resolution text files, the coarse
+      // kEtaRangeEdges scheme feeds the detector-region JES/JER overlay plot
       if (wantAbsEta) {
         THnSparse *hFolded = FoldEtaAxis(
             hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerAbsEta, minEntries, false);
+                             dPerAbsEta, minEntries, kAbsEtaEdges);
+        ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
+                             dPerEtaRange, minEntries, kEtaRangeEdges);
         delete hFolded;
       }
+      // per (signed) eta_reco extraction for the full-eta pT-resolution files
       if (wantFullEta) {
         ExtractPerEtaVsPtGen(hRaw, cone, collection, kVariants[0], bins.pt,
-                             dPerEta, minEntries, true);
+                             dPerEta, minEntries, kEtaEdges);
       }
     }
   }

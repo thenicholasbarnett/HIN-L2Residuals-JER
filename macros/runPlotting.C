@@ -88,9 +88,10 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 //   "ptfit"     : correction factor vs pT_avg per eta bin
 //   "kinematics": inclusive/tag/probe jet kinematics
 //   "event"     : vz, primary vertex filter, HLT trigger
-//   "response"  : per-bin response distributions with gauss fit, 
-//                 plus JES/JER vs eta_gen and vs pT_gen
-//                 summary overlays (incl/tag/probe)
+//   "response"  : per-bin response distributions with gauss fit,
+//                 JES/JER vs pT_gen summary overlays (incl/tag/probe),
+//                 corr/reco/raw variant overlays, and a coarse |eta|
+//                 detector-region overlay (incl jets)
 //
 // CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS) 
 // JEC: mean-derived

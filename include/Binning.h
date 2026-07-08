@@ -43,6 +43,13 @@ inline const std::vector<Double_t> kEtaEdges = {
 inline const std::vector<Double_t> kRhoEdges = {0.0, 1.0, 2.0, 3.0,
                                                 4.0, 6.0, 25.0};
 
+// Coarse |eta| detector regions for the JES/JER-vs-pT_gen overlay plots
+// (barrel / endcap / transition / forward-HF). Edges are real kAbsEtaEdges
+// members, so each slice sums whole fine bins -- kept purpose-built and
+// separate from the fine residual binning so the overlay legend stays legible.
+inline const std::vector<Double_t> kEtaRangeEdges = {0.0, 1.305, 2.5, 2.964,
+                                                     5.191};
+
 // Derive AxisBins from an edge vector
 inline AxisBins AxisBinsFromEdges(const std::vector<Double_t> &edges,
                                   const TString &title = "") {
@@ -83,6 +90,29 @@ inline std::vector<RangeBin> BuildPtAvgSlices(const std::vector<float> &edges) {
   return slices;
 }
 
+// Coarse |eta| slices for the JES/JER detector-region overlay: title + color
+// per slice, ordered cool (central) -> warm (forward). Object keys are built
+// from lo/hi via L2Name::EtaKey at use time, so shortName isn't needed here.
+inline std::vector<RangeBin> BuildEtaRangeSlices() {
+  static Color_t (*const kColorCycle[])() = {
+      HiroshigeNightBlue, HiroshigeLightBlue, HiroshigeOrange,
+      HiroshigeLightRed};
+  static constexpr int kNColors = sizeof(kColorCycle) / sizeof(kColorCycle[0]);
+
+  std::vector<RangeBin> slices;
+  const int n = (int)kEtaRangeEdges.size() - 1;
+  for (int i = 0; i < n; i++) {
+    RangeBin sl;
+    sl.lo = kEtaRangeEdges[i];
+    sl.hi = kEtaRangeEdges[i + 1];
+    sl.title = Form("%.1f #leq |#eta| < %.1f", sl.lo, sl.hi);
+    sl.shortName = "";
+    sl.color = kColorCycle[i % kNColors]();
+    slices.push_back(sl);
+  }
+  return slices;
+}
+
 struct BinningConfig {
 
   // 4D THnSparse axes
@@ -103,6 +133,7 @@ struct BinningConfig {
   AxisBins response = {200, 0.0, 2.0, "p_{T}^{reco}/p_{T}^{gen}"};
   AxisBins rho = AxisBinsFromEdges(kRhoEdges, "#rho [GeV]");
   std::vector<RangeBin> ptavgSlices = BuildPtAvgSlices(Config().ptavgEdges);
+  std::vector<RangeBin> etaRangeSlices = BuildEtaRangeSlices();
 
   // cumulative alpha ranges
   std::vector<RangeBin> alphaSlices = {
