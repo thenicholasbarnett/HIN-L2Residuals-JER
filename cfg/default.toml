@@ -23,6 +23,7 @@ golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 
 [trees]
 hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
 skim = "skimanalysis/HltTree"
 trigger = "hltanalysis/HltTree"
 filter = "pprimaryVertexFilter"
@@ -52,6 +53,17 @@ files = [
     [ "REQUIRED_SET_ME/AK4PF.txt" ],
     [ "REQUIRED_SET_ME/AK5PF.txt" ],
     [ "REQUIRED_SET_ME/AK6PF.txt" ],
+]
+
+[jer_closure]
+# Only read when runAsymmetry is run with -calibration jer -closure true:
+# MC jets get JER-smeared (hybrid method, JetSmearing.h) before histogramming,
+# to produce the smeared MC input for the JER SF closure check. One text
+# file per cone, same order as cones.labels above -- unset/empty means no
+# JER closure smearing has been derived for this run period yet.
+resolution_files = [
+]
+scale_factor_files = [
 ]
 
 [cuts]

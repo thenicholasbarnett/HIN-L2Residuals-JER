@@ -15,6 +15,7 @@ filelist_HiForest_2024ppref_MC = "mc"
 
 [trees]
 hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
 skim = "skimanalysis/HltTree"
 trigger = "hltanalysis/HltTree"
 # Primary vertex filter branch, read from the skim tree (data only).
@@ -45,6 +46,17 @@ files = [
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK4PF.txt" ],
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
     [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
+]
+
+[jer_closure]
+# Only read when runAsymmetry is run with -calibration jer -closure true:
+# MC jets get JER-smeared (hybrid method, JetSmearing.h) before histogramming,
+# to produce the smeared MC input for the JER SF closure check. One text
+# file per cone, same order as cones.labels above -- unset/empty means no
+# JER closure smearing has been derived for this run period yet.
+resolution_files = [
+]
+scale_factor_files = [
 ]
 
 [cuts]

@@ -12,11 +12,17 @@ struct AnalysisConfig {
 
   std::vector<std::vector<std::string>> jecFilesPerCone;
   std::vector<std::vector<std::string>> residualFilesPerCone;
+  // one JetResolutionObject text file per cone (no chaining, unlike JEC/
+  // residuals above) -- only read when runAsymmetry gets -calibration jer
+  // -closure true, to JER-smear MC jets for the JER SF closure check
+  std::vector<std::string> jerResolutionFilesPerCone;
+  std::vector<std::string> jerScaleFactorFilesPerCone;
   std::string vetoMapPath;
   std::string vetoMapHist;
   TString jsonPath;
 
   TString hiTreePath;
+  TString ggTreePath;
   TString skimTreePath;
   TString trigTreePath;
   std::vector<TString> jetTreePaths;

@@ -98,6 +98,25 @@ bash condor/batch_hadd.sh \
   -config cfg/configuration.toml
 ```
 
+<i> JER SF closure (MC only) </i>
+
+```bash
+./build/bin/runAsymmetry \
+  -input path/to/HiForest_mc.root \
+  -output path/to/residuals-closure_mc.root \
+  -mode mc \
+  -calibration jer \
+  -closure true \
+  -config cfg/configuration.toml
+```
+
+`-calibration jer -closure true` JER-smears MC jets (hybrid method,
+`JetSmearing.h`) before histogramming, using
+`jer_closure.resolution_files`/`scale_factor_files` from the config, to
+produce the smeared-MC half of the JER SF closure check fed into
+`runCalibration -mode jer` (see Step 2 below). Only valid with `-mode mc`;
+any other `-calibration`/`-closure` combination is a no-op.
+
 <strong> Step 2 </strong>
 
 <i> Residuals </i>
@@ -291,15 +310,15 @@ Vendored `CommandLine.h` from JetMET, can be found in external/jetmet
     </tr>
     <tr>
       <td align="center"><code>closure</code></td>
-      <td align="center"><code>runPlotting</code></td>
+      <td align="center"><code>runPlotting</code><br><code>runAsymmetry</code></td>
       <td align="center"><code>true</code><br><code>false</code></td>
-      <td>Fixes final-correction y range for closure checks.</td>
+      <td><code>runPlotting</code>: fixes final-correction y range for closure checks.<br><code>runAsymmetry</code>: combined with <code>calibration jer</code>, JER-smears MC jets before histogramming. Default: false.</td>
     </tr>
     <tr>
       <td align="center"><code>calibration</code></td>
-      <td align="center"><code>runPlotting</code></td>
-      <td align="center"><code>JEC</code><br><code>JER</code></td>
-      <td>Selects plotted calibration objects. Default: JEC.</td>
+      <td align="center"><code>runPlotting</code><br><code>runAsymmetry</code></td>
+      <td align="center"><code>JEC</code>/<code>jec</code><br><code>JER</code>/<code>jer</code></td>
+      <td><code>runPlotting</code>: selects plotted calibration objects.<br><code>runAsymmetry</code>: only meaningful combined with <code>-mode mc -closure true</code> (see above). Default: JEC/jec.</td>
     </tr>
     <tr>
       <td align="center"><code>sample</code></td>
