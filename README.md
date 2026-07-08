@@ -344,6 +344,12 @@ Vendored `CommandLine.h` from JetMET, can be found in external/jetmet
       <td align="center">flag</td>
       <td>Writes Condor files without submitting.</td>
     </tr>
+    <tr>
+      <td align="center"><code>jerclosure</code></td>
+      <td align="center"><code>make_condor.sh</code></td>
+      <td align="center">flag</td>
+      <td>Adds <code>-calibration jer -closure true</code> to submitted <code>runAsymmetry</code> jobs. Only applies to mc-mode filelists; a triggered/non-triggered filelist in the same submission is skipped with a message. Default: off.</td>
+    </tr>
   </tbody>
 </table>
 

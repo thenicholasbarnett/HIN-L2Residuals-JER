@@ -55,8 +55,18 @@ files = [
 # file per cone, same order as cones.labels above -- unset/empty means no
 # JER closure smearing has been derived for this run period yet.
 resolution_files = [
+    "data/jec/preliminary/JER_ptresolution_ak2PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak3PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak4PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak5PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak6PF_abseta_ptresolution.txt",
 ]
 scale_factor_files = [
+    "data/jec/preliminary/L2Residual_ak2PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/L2Residual_ak3PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/L2Residual_ak4PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/L2Residual_ak5PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/L2Residual_ak6PF_abseta_jer_norm.txt",
 ]
 
 [cuts]

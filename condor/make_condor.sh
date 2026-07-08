@@ -9,11 +9,19 @@
 # any argument that isn't a "-flag" at all is an immediate usage error.
 #
 # Usage:
-#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value]
-#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value]
+#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure]
+#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure]
 #
 # -output dir       : required; absolute EOS/AFS path where output ROOT files are written
 # -alltxt           : bare switch; submit every .txt filelist found in data/txt/ (default off)
+# -jerclosure       : bare switch; JER-smear MC jets before histogramming (runAsymmetry's
+#                      -calibration jer -closure true), for the JER SF closure check --
+#                      only applies to mc-mode filelists (smearing needs gen-matched MC
+#                      jets). A non-mc filelist in the same submission is skipped with a
+#                      message rather than submitted un-smeared, so you don't accidentally
+#                      mix a closure MC pass with a stale triggered/non-triggered run.
+#                      Needs jer_closure.resolution_files/scale_factor_files set in the
+#                      selected -config. Default off (ordinary runAsymmetry invocation).
 # -filelists ...    : one or more filelists and/or directories to submit, as separate
 #                      words (e.g. -filelists a.txt b.txt, or -filelists data/txt/2026-07-03).
 #                      Consumes every following word up to the next "-flag". A directory
@@ -78,8 +86,8 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value]" >&2
-  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value]" >&2
+  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure]" >&2
+  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure]" >&2
   exit 1
 }
 
@@ -96,6 +104,7 @@ parse_args() {
   EXPLICIT_FILELISTS=()
   RUN_TAG=""
   CONFIG_PATH=""
+  JER_CLOSURE=false
 
   while [[ $# -gt 0 ]]; do
     arg="$1"
@@ -119,6 +128,9 @@ parse_args() {
         ;;
       NOSUBMIT)
         NO_SUBMIT=true
+        ;;
+      JERCLOSURE)
+        JER_CLOSURE=true
         ;;
       TAG)
         if [[ $# -eq 0 ]]; then
@@ -414,9 +426,9 @@ EOF
 # Appends one job's Arguments/Output/Error/Log/Queue block to the submit
 # file, for a single input HiForest file.
 append_job_to_submit_file() {
-  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6"
+  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6" closure="$7"
   cat >>"${submit_file}" <<EOF
-Arguments = runAsymmetry ${input_file} ${output_file} ${mode} ${CMSSW_SRC_FROM_CONFIG}
+Arguments = runAsymmetry ${input_file} ${output_file} ${mode} ${CMSSW_SRC_FROM_CONFIG} ${closure}
 Output    = $(pwd)/logs/${label}/out/job_${count}.out
 Error     = $(pwd)/logs/${label}/err/job_${count}.err
 Log       = $(pwd)/logs/${label}/log/job_${count}.log
@@ -451,6 +463,15 @@ submit_filelist() {
       ;;
   esac
 
+  local closure="false"
+  if [[ "${JER_CLOSURE}" == true ]]; then
+    if [[ "${mode}" != "mc" ]]; then
+      echo "  SKIP  ${basename}: -jerclosure only applies to mc-mode filelists, got mode=${mode}" >&2
+      return
+    fi
+    closure="true"
+  fi
+
   # Label: last _-separated token (HP0, ZB3, MC, …)
   label=$(echo "${basename}" | rev | cut -d_ -f1 | rev)
 
@@ -471,17 +492,20 @@ submit_filelist() {
     local output_file="${OUTPUT_DIR}/${label}/output_${count}.root"
     mkdir -p "${OUTPUT_DIR}/${label}"
 
-    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}"
+    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}" "${closure}"
     count=$((count + 1))
     draw_bar "${BAR_COLOR}" "${label}:" "${count}" "${total}"
   done <"${filelist_path}"
 
   printf "\n\n"
 
+  local closure_note=""
+  if [[ "${closure}" == true ]]; then closure_note=" [jer closure]"; fi
+
   if [[ "${NO_SUBMIT}" == true ]]; then
-    echo "  ${label} (${mode}): ${count} jobs → $(pwd)/${submit_file}"
+    echo "  ${label} (${mode})${closure_note}: ${count} jobs → $(pwd)/${submit_file}"
   else
-    echo "  Submitting ${label} (${mode}): ${count} jobs..."
+    echo "  Submitting ${label} (${mode})${closure_note}: ${count} jobs..."
     condor_submit "${submit_file}"
   fi
 

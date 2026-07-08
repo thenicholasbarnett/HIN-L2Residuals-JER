@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-if [[ $# -ne 5 ]]; then
-  echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE CMSSW_SRC" >&2
+if [[ $# -ne 6 ]]; then
+  echo "Usage: $0 EXECUTABLE INPUT OUTPUT MODE CMSSW_SRC CLOSURE" >&2
   exit 1
 fi
 
@@ -14,6 +14,7 @@ INPUT="$2"
 OUTPUT="$3"
 MODE="$4"
 CMSSW_SRC="$5"
+CLOSURE="$6"
 START_DIR="$(pwd)"
 
 if [[ -z "${CMSSW_SRC}" ]]; then
@@ -34,7 +35,12 @@ export LD_LIBRARY_PATH="./${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 echo "Input:  ${INPUT}"
 echo "Output: ${OUTPUT}"
 echo "Mode:   ${MODE}"
+echo "Closure: ${CLOSURE}"
 
 chmod +x "${EXECUTABLE}"
 # "-key value" CommandLine parser
-./"${EXECUTABLE}" -input "${INPUT}" -output "${OUTPUT}" -mode "${MODE}" -config "${START_DIR}/analysis_config.toml"
+CLOSURE_ARGS=()
+if [[ "${CLOSURE}" == "true" ]]; then
+  CLOSURE_ARGS=(-calibration jer -closure true)
+fi
+./"${EXECUTABLE}" -input "${INPUT}" -output "${OUTPUT}" -mode "${MODE}" -config "${START_DIR}/analysis_config.toml" "${CLOSURE_ARGS[@]}"
