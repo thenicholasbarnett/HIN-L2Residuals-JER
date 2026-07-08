@@ -320,7 +320,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
           if (isMC) {
             cones[c].FillInclJetResp(corrPt[c][j], jets[c].reco.rawpt[j],
                                      jets[c].reco.pt[j], jets[c].reco.eta[j],
-                                     jets[c].ref.pt[j], weight);
+                                     jets[c].ref.pt[j], event.rho, weight);
           }
         }
       }
@@ -383,7 +383,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
       if (isMC) {
         cones[c].FillResp(dijet, corrPt[c].data(), jets[c].reco.rawpt,
                           jets[c].reco.pt, jets[c].reco.eta, jets[c].ref.pt,
-                          weight);
+                          event.rho, weight);
       }
     }
   }

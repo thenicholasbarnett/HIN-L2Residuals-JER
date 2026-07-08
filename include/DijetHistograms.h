@@ -16,8 +16,8 @@
 //   hProbeJet : TH3D (eta, phi, pT), probe jet of each valid dijet
 //
 // MC-only (Init's isMC flag), parallel to the TH3Ds above, JES/JER inputs:
-//   hInclJetResp/hTagJetResp/hProbeJetResp : 5D THnSparse
-//     (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen),
+//   hInclJetResp/hTagJetResp/hProbeJetResp : 6D THnSparse
+//     (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen, rho),
 //     ref-matched only (refpt[j] >= 0)
 
 struct ConeHistograms {
@@ -28,12 +28,13 @@ struct ConeHistograms {
   static constexpr int kAAxis = 3;
 
   // axis order within hInclJetResp/hTagJetResp/hProbeJetResp:
-  // (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen)
+  // (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen, rho)
   static constexpr int kRespEtaRecoAxis = 0;
   static constexpr int kRespPtGenAxis = 1;
   static constexpr int kRespCorrRAxis = 2;
   static constexpr int kRespJtPtRAxis = 3;
   static constexpr int kRespRawRAxis = 4;
+  static constexpr int kRespRhoAxis = 5;
 
   THnSparse *hAsym = nullptr;
   TH3D *hInclJet = nullptr;
@@ -80,28 +81,34 @@ struct ConeHistograms {
   // MC only; refPt<0 (no gen match) drops the jet rather than filling a
   // meaningless ratio
   void FillInclJetResp(float corrPt, float rawPt, float jtPt, float jetEta,
-                       float refPt, float weight) {
+                       float refPt, float rho, float weight) {
     if (refPt < 0)
       return;
-    double x[5] = {jetEta, refPt, corrPt / refPt, jtPt / refPt, rawPt / refPt};
+    double x[6] = {jetEta,       refPt,         corrPt / refPt,
+                   jtPt / refPt, rawPt / refPt, rho};
     hInclJetResp->Fill(x, weight);
   }
 
   // MC only; tag/probe matched independently, one unmatched doesn't drop the other
   void FillResp(const DijetResult &d, const float *pt, const float *rawPt,
                 const float *jtPt, const float *eta, const float *refPt,
-                float weight) {
+                float rho, float weight) {
     if (refPt[d.tagIdx] >= 0) {
-      double xt[5] = {
-          eta[d.tagIdx], refPt[d.tagIdx], pt[d.tagIdx] / refPt[d.tagIdx],
-          jtPt[d.tagIdx] / refPt[d.tagIdx], rawPt[d.tagIdx] / refPt[d.tagIdx]};
+      double xt[6] = {eta[d.tagIdx],
+                      refPt[d.tagIdx],
+                      pt[d.tagIdx] / refPt[d.tagIdx],
+                      jtPt[d.tagIdx] / refPt[d.tagIdx],
+                      rawPt[d.tagIdx] / refPt[d.tagIdx],
+                      rho};
       hTagJetResp->Fill(xt, weight);
     }
     if (refPt[d.probeIdx] >= 0) {
-      double xp[5] = {eta[d.probeIdx], refPt[d.probeIdx],
+      double xp[6] = {eta[d.probeIdx],
+                      refPt[d.probeIdx],
                       pt[d.probeIdx] / refPt[d.probeIdx],
                       jtPt[d.probeIdx] / refPt[d.probeIdx],
-                      rawPt[d.probeIdx] / refPt[d.probeIdx]};
+                      rawPt[d.probeIdx] / refPt[d.probeIdx],
+                      rho};
       hProbeJetResp->Fill(xp, weight);
     }
   }
@@ -122,14 +129,16 @@ struct ConeHistograms {
   }
 
 private:
-  // (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen); eta_reco
-  // uses kEtaEdges to match the TH3Ds' X axis
+  // (eta_reco, pT_gen, corrPt/pT_gen, jtPt/pT_gen, rawPt/pT_gen, rho); eta_reco
+  // uses kEtaEdges to match the TH3Ds' X axis, rho uses coarse kRhoEdges
   static THnSparse *MakeRespSparse(const TString &name,
                                    const BinningConfig &bins) {
     THnSparse *h = MakeTHnSparse<THnSparseD>(
         name, "",
-        {bins.eta, bins.pt, bins.response, bins.response, bins.response});
+        {bins.eta, bins.pt, bins.response, bins.response, bins.response,
+         bins.rho});
     SetEtaBins(h, kRespEtaRecoAxis);
+    SetRhoBins(h, kRespRhoAxis);
     h->Sumw2();
     return h;
   }

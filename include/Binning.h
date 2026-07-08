@@ -37,6 +37,12 @@ inline const std::vector<Double_t> kEtaEdges = {
     1.479,  1.653,  1.930,  2.172,  2.322,  2.500,  2.650,  2.853,
     2.964,  3.139,  3.489,  3.839,  5.191};
 
+// Coarse pileup-density (rho) bins for the response THnSparse. 1-GeV bins
+// across the populated 0-6 region (~98% of pp-ref jets), one wide catch-all
+// so no jet overflows the axis -- inclusive-in-rho projections stay complete.
+inline const std::vector<Double_t> kRhoEdges = {0.0, 1.0, 2.0, 3.0,
+                                                4.0, 6.0, 25.0};
+
 // Derive AxisBins from an edge vector
 inline AxisBins AxisBinsFromEdges(const std::vector<Double_t> &edges,
                                   const TString &title = "") {
@@ -50,6 +56,10 @@ inline void SetAbsEtaBins(THnSparse *h, Int_t axis) {
 
 inline void SetEtaBins(THnSparse *h, Int_t axis) {
   h->GetAxis(axis)->Set((Int_t)kEtaEdges.size() - 1, kEtaEdges.data());
+}
+
+inline void SetRhoBins(THnSparse *h, Int_t axis) {
+  h->GetAxis(axis)->Set((Int_t)kRhoEdges.size() - 1, kRhoEdges.data());
 }
 
 // Build pT_avg RangeBins from cfg.ptavgEdges (cfg/2024ppRef.toml, [binning] ptavg_edges)
@@ -89,8 +99,9 @@ struct BinningConfig {
   AxisBins pt = {100, 0.0, 1000.0, "p_{T} (GeV)"};
   AxisBins phi = {64, -3.2, 3.2, "#phi (rad)"};
   AxisBins trig = {2, 0, 2, "trigger decision"};
-  
+
   AxisBins response = {200, 0.0, 2.0, "p_{T}^{reco}/p_{T}^{gen}"};
+  AxisBins rho = AxisBinsFromEdges(kRhoEdges, "#rho [GeV]");
   std::vector<RangeBin> ptavgSlices = BuildPtAvgSlices(Config().ptavgEdges);
 
   // cumulative alpha ranges
