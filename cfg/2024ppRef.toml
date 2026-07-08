@@ -76,10 +76,15 @@ max_abs_a = 0.7
 min_entries_per_bin = 100
 residual_gaus_fit_half_width = 0.5
 residual_alpha_fit_hi = 0.31
-# Gaussian fit window for runResponse's JES/JER extraction: [1-x, 1+x] around
-# the pT_reco/pT_gen response, analogous to residual_gaus_fit_half_width above
-# (which is centered at 0, not 1).
+# Gaussian fit window for runPlotting's response_dist QA guide curve only:
+# [1-x, 1+x] around the pT_reco/pT_gen response, analogous to
+# residual_gaus_fit_half_width above (centered at 0, not 1). runResponse's
+# actual JES/JER extraction no longer fits this -- see response_trunc_fraction.
 response_gaus_fit_half_width = 0.3
+# Central-fraction truncated RMS used by runResponse's JES/JER extraction
+# (same trunc95 estimator as Step 2's A-distribution methods, TruncMeanInRange
+# in include/Truncation.h), fed the response ratio (peaked at 1.0) instead of A.
+response_trunc_fraction = 0.95
 
 [binning]
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]

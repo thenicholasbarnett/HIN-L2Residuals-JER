@@ -48,21 +48,22 @@ static const ResponseVariant kVariants[kNVariants] = {
     {kRespRawRAxis, "raw", "p_{T}^{raw}/p_{T}^{gen}"},
 };
 
-// central-95% truncated RMS -> JES (mean) and JER (sigma/mean). Same trunc95
-// estimator as Step 2's A-distribution extraction (CalibrationExtractor's
+// truncated RMS -> JES (mean) and JER (sigma/mean). Same trunc95 estimator as
+// Step 2's A-distribution extraction (CalibrationExtractor's
 // FindTruncBins/TruncMeanInRange), here on the response ratio peaked at 1.0
 // rather than A peaked at 0 -- trims the long non-Gaussian tail toward the
-// response axis's [0,2] edges without a fit window.
-static constexpr double kResponseTruncFraction = 0.95;
+// response axis's [0,2] edges without a fit window. Fraction comes from
+// cfg.responseTruncFraction ([cuts] response_trunc_fraction, default 0.95).
 
 struct ResponseFitResult {
   double jes = 0, jesErr = 0, jer = 0, jerErr = 0;
   bool valid = false;
 };
 
-static ResponseFitResult ExtractResponse(TH1D *h, int minEntries) {
+static ResponseFitResult ExtractResponse(TH1D *h, double fraction,
+                                         int minEntries) {
   ResponseFitResult r;
-  auto [binLo, binHi] = FindTruncBins(h, kResponseTruncFraction, minEntries);
+  auto [binLo, binHi] = FindTruncBins(h, fraction, minEntries);
   TruncResult t = TruncMeanInRange(h, binLo, binHi);
   if (!t.valid || std::abs(t.mean) < 1e-6) {
     return r;
@@ -81,7 +82,7 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
                            const TString &collection,
                            const ResponseVariant &variant,
                            const AxisBins &ptBins, TDirectory *dQA,
-                           TDirectory *dOut, int minEntries) {
+                           TDirectory *dOut, double fraction, int minEntries) {
 
   const int nPt = ptBins.nBins;
   const double lo = ptBins.lo;
@@ -114,7 +115,7 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
     dQA->cd();
     hProj->Write();
 
-    ResponseFitResult fr = ExtractResponse(hProj, minEntries);
+    ResponseFitResult fr = ExtractResponse(hProj, fraction, minEntries);
     if (fr.valid) {
       hJES->SetBinContent(ip + 1, fr.jes);
       hJES->SetBinError(ip + 1, fr.jesErr);
@@ -142,7 +143,7 @@ static void ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
                                  const TString &collection,
                                  const ResponseVariant &variant,
                                  const AxisBins &ptBins, TDirectory *dOut,
-                                 int minEntries,
+                                 double fraction, int minEntries,
                                  const std::vector<Double_t> &etaEdges) {
 
   const int nEta = (int)etaEdges.size() - 1;
@@ -176,7 +177,7 @@ static void ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
       TH1D *hProj = ProjectTHnSparse1D(h, variant.axis, {});
       h->GetAxis(kRespPtGenAxis)->SetRange(0, 0);
 
-      ResponseFitResult fr = ExtractResponse(hProj, minEntries);
+      ResponseFitResult fr = ExtractResponse(hProj, fraction, minEntries);
       if (fr.valid) {
         hJES->SetBinContent(ip + 1, fr.jes);
         hJES->SetBinError(ip + 1, fr.jesErr);
@@ -204,6 +205,7 @@ void runResponse(TString inputFile, TString outputFile) {
 
   const int minEntries =
       (cfg.minEntriesPerBin > 0) ? cfg.minEntriesPerBin : 100;
+  const double truncFraction = cfg.responseTruncFraction;
 
   TFile *fIn = TFile::Open(inputFile, "read");
   if (!fIn || fIn->IsZombie()) {
@@ -270,7 +272,7 @@ void runResponse(TString inputFile, TString outputFile) {
 
       for (int iv = 0; iv < kNVariants; iv++) {
         ExtractVsPtGen(hRaw, cone, collection, kVariants[iv], bins.pt,
-                       dQA_ptgen, coneDirOut, minEntries);
+                       dQA_ptgen, coneDirOut, truncFraction, minEntries);
         pb.Update();
       }
 
@@ -281,15 +283,17 @@ void runResponse(TString inputFile, TString outputFile) {
         THnSparse *hFolded = FoldEtaAxis(
             hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerAbsEta, minEntries, kAbsEtaEdges);
+                             dPerAbsEta, truncFraction, minEntries,
+                             kAbsEtaEdges);
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerEtaRange, minEntries, kEtaRangeEdges);
+                             dPerEtaRange, truncFraction, minEntries,
+                             kEtaRangeEdges);
         delete hFolded;
       }
       // per (signed) eta_reco extraction for the full-eta pT-resolution files
       if (wantFullEta) {
         ExtractPerEtaVsPtGen(hRaw, cone, collection, kVariants[0], bins.pt,
-                             dPerEta, minEntries, kEtaEdges);
+                             dPerEta, truncFraction, minEntries, kEtaEdges);
       }
     }
   }
