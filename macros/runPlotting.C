@@ -93,7 +93,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 //                 corr/reco/raw variant overlays, and a coarse |eta|
 //                 detector-region overlay (incl jets)
 //
-// CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS) 
+// CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS)
 // JEC: mean-derived
 // JER SF: width-derived
 //

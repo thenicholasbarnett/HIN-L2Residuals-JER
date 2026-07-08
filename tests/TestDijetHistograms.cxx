@@ -53,8 +53,9 @@ int main() {
     h.FillInclJetResp(105.0f, 88.0f, 100.0f, 0.13f, 80.0f, 2.5f, 1.0f);
     Double_t x[6] = {0.13, 80.0, 1.3125, 1.25, 1.1, 2.5};
     Int_t coords[6];
-    for (Int_t i = 0; i < 6; i++)
+    for (Int_t i = 0; i < 6; i++) {
       coords[i] = h.hInclJetResp->GetAxis(i)->FindBin(x[i]);
+    }
     Double_t content = h.hInclJetResp->GetBinContent(coords);
     Check(std::fabs(content - 1.0) < kEps,
           "matched jet fills all three response ratios correctly");
@@ -99,8 +100,9 @@ int main() {
                      rawPt[0] / refPt[0],
                      2.5};
     Int_t coords[6];
-    for (Int_t i = 0; i < 6; i++)
+    for (Int_t i = 0; i < 6; i++) {
       coords[i] = h.hTagJetResp->GetAxis(i)->FindBin(x[i]);
+    }
     Double_t content = h.hTagJetResp->GetBinContent(coords);
     Check(std::fabs(content - 1.0) < kEps,
           "tag response ratios = corrPt/refPt=1.21875, jtPt/refPt=0.96875, "

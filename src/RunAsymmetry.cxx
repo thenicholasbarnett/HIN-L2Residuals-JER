@@ -287,8 +287,8 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
           JetSmearing::Result sm = JetSmearing::ComputeSmearFactor(
               corrPt[c][j], jets[c].reco.eta[j], event.rho, jets[c].ref.pt[j],
               jerResolution[c], jerScaleFactor[c], jerRng);
-          corrPt[c][j] = (float)JetSmearing::SmearedPt(corrPt[c][j],
-                                                       sm.smearFactor);
+          corrPt[c][j] =
+              (float)JetSmearing::SmearedPt(corrPt[c][j], sm.smearFactor);
         }
       }
     }

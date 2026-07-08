@@ -20,11 +20,13 @@ struct TruncResult {
 // half the excluded tail off each side. {1, 0} (empty) if h can't be fit.
 inline std::pair<int, int> FindTruncBins(TH1D *h, double fraction,
                                          int minEntries) {
-  if (!CanFit(h, minEntries))
+  if (!CanFit(h, minEntries)) {
     return {1, 0};
+  }
   double total = h->Integral();
-  if (total <= 0)
+  if (total <= 0) {
     return {1, 0};
+  }
   double tailN = 0.5 * (1.0 - fraction) * total;
   int nBins = h->GetNbinsX();
   double running = 0;
@@ -51,8 +53,9 @@ inline std::pair<int, int> FindTruncBins(TH1D *h, double fraction,
 // mean and width of h in bins [binLo, binHi]
 inline TruncResult TruncMeanInRange(TH1D *h, int binLo, int binHi) {
   TruncResult r;
-  if (binLo > binHi)
+  if (binLo > binHi) {
     return r;
+  }
   double nEff = h->Integral(binLo, binHi);
   double hTotal = h->Integral();
   double nEffEntries =

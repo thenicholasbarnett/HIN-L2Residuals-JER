@@ -133,10 +133,10 @@ private:
   // uses kEtaEdges to match the TH3Ds' X axis, rho uses coarse kRhoEdges
   static THnSparse *MakeRespSparse(const TString &name,
                                    const BinningConfig &bins) {
-    THnSparse *h = MakeTHnSparse<THnSparseD>(
-        name, "",
-        {bins.eta, bins.pt, bins.response, bins.response, bins.response,
-         bins.rho});
+    THnSparse *h =
+        MakeTHnSparse<THnSparseD>(name, "",
+                                  {bins.eta, bins.pt, bins.response,
+                                   bins.response, bins.response, bins.rho});
     SetEtaBins(h, kRespEtaRecoAxis);
     SetRhoBins(h, kRespRhoAxis);
     h->Sumw2();

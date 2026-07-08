@@ -395,20 +395,23 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
         {"corr", "vs_ptgen", L2Name::EtaKey(slices[is].lo, slices[is].hi)},
         {"incl"});
     h[is] = GetHAny(fIn, {cone + "/JER_per_etarange/" + name});
-    if (h[is])
+    if (h[is]) {
       any = true;
+    }
   }
-  if (!any)
+  if (!any) {
     return;
+  }
 
   static const int markers[] = {20, 21, 22, 23, 33, 34};
 
   TH1D *frame = nullptr;
-  for (int is = 0; is < nSl; is++)
+  for (int is = 0; is < nSl; is++) {
     if (h[is]) {
       frame = h[is];
       break;
     }
+  }
 
   auto [ylo, yhi] = YRange(h);
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
@@ -440,8 +443,9 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
   leg->SetTextFont(42);
   leg->AddEntry((TObject *)nullptr, cone + ", incl jets", "");
   for (int is = 0; is < nSl; is++) {
-    if (!h[is])
+    if (!h[is]) {
       continue;
+    }
     StyleH(h[is], slices[is].color, markers[is % 6], 1.5f);
     h[is]->Draw(first ? "E1" : "E1 same");
     first = false;

@@ -342,8 +342,9 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone,
       TString name = L2Name::ObjectName(
           cone, quantity, {"corr", "vs_ptgen", L2Name::EtaKey(sl.lo, sl.hi)},
           {"incl"});
-      if (HasHAny(fIn, {cone + "/JER_per_etarange/" + name}))
+      if (HasHAny(fIn, {cone + "/JER_per_etarange/" + name})) {
         return 1;
+      }
     }
     return 0;
   };

@@ -130,14 +130,16 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
 
   // Optional: absent or empty means "no JER closure smearing configured yet"
   if (auto *jerResArr = doc["jer_closure"]["resolution_files"].as_array()) {
-    for (const auto &v : *jerResArr)
+    for (const auto &v : *jerResArr) {
       cfg.jerResolutionFilesPerCone.push_back(
           ResolvePath(v.value_or(std::string{}), repoRoot));
+    }
   }
   if (auto *jerSfArr = doc["jer_closure"]["scale_factor_files"].as_array()) {
-    for (const auto &v : *jerSfArr)
+    for (const auto &v : *jerSfArr) {
       cfg.jerScaleFactorFilesPerCone.push_back(
           ResolvePath(v.value_or(std::string{}), repoRoot));
+    }
   }
 
   for (const auto &v : *doc["binning"]["ptavg_edges"].as_array())
@@ -173,14 +175,16 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
     throw std::runtime_error(
         "jec.residual_files and cones.labels have different lengths");
   if (!cfg.jerResolutionFilesPerCone.empty() &&
-      cfg.jerResolutionFilesPerCone.size() != cfg.coneLabels.size())
+      cfg.jerResolutionFilesPerCone.size() != cfg.coneLabels.size()) {
     throw std::runtime_error(
         "jer_closure.resolution_files and cones.labels have different lengths");
+  }
   if (!cfg.jerScaleFactorFilesPerCone.empty() &&
-      cfg.jerScaleFactorFilesPerCone.size() != cfg.coneLabels.size())
+      cfg.jerScaleFactorFilesPerCone.size() != cfg.coneLabels.size()) {
     throw std::runtime_error(
         "jer_closure.scale_factor_files and cones.labels have different "
         "lengths");
+  }
   if (cfg.jetTreePaths.size() != cfg.coneLabels.size())
     throw std::runtime_error(
         "trees.jets and cones.labels have different lengths");
