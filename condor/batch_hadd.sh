@@ -105,11 +105,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
 
 MY_TMPDIR="$(dirname "$OUT_FILE")/hadd_tmp_$$"
 LOG_FILE="$(dirname "$OUT_FILE")/hadd_$$.log"
-mkdir -p "$MY_TMPDIR"
+eos mkdir -p "$MY_TMPDIR"
 
 cleanup() {
   if (($? == 0)); then
-    rm -rf "$MY_TMPDIR"
+    eos rm -r "$MY_TMPDIR"
     rm -f "$LOG_FILE"
   else
     if [[ -s "$LOG_FILE" ]]; then
