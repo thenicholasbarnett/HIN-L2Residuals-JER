@@ -235,11 +235,13 @@ inline void PlotFinalsGrid(TFile *fIn, const TString &outDir,
       c->SetRightMargin(0.17);
       c->SetBottomMargin(0.12);
 
+      auto [zlo, zhi] = ZRange(h2);
       h2->SetTitle("");
       h2->GetXaxis()->SetTitle(xTitle);
       h2->GetXaxis()->CenterTitle();
       h2->GetYaxis()->CenterTitle();
       h2->GetZaxis()->SetTitle(useJer ? "JER SF" : "Correction factor");
+      h2->GetZaxis()->SetRangeUser(zlo, zhi);
       h2->Draw("COLZ");
 
       DrawAsymHeader(0.13);

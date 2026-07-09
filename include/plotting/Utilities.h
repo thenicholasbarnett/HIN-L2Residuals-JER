@@ -213,6 +213,30 @@ inline std::pair<double, double> YRange(const std::vector<TH1D *> &hv,
   return {lo - pad * span, hi + pad * span};
 }
 
+// TH2D analog of YRange -- structural cells with no data (e.g. a pT slice
+// with no jet reach at a given eta) sit at exactly 0 and otherwise drag
+// COLZ's default [0, max] autorange down to 0, washing out a real spread
+// clustered far from zero (e.g. JER SF values near 1.0).
+inline std::pair<double, double> ZRange(TH2D *h, double pad = 0.15) {
+  double lo = 1e9, hi = -1e9;
+  for (int ix = 1; ix <= h->GetNbinsX(); ix++) {
+    for (int iy = 1; iy <= h->GetNbinsY(); iy++) {
+      const double v = h->GetBinContent(ix, iy), e = h->GetBinError(ix, iy);
+      if (v == 0 && e == 0)
+        continue;
+      lo = std::min(lo, v);
+      hi = std::max(hi, v);
+    }
+  }
+  if (lo > hi)
+    return {0.0, 1.0};
+  const double span = hi - lo;
+  if (span < 1e-9)
+    return {lo - 0.05 * std::max(std::fabs(lo), 1.0),
+            hi + 0.05 * std::max(std::fabs(hi), 1.0)};
+  return {lo - pad * span, hi + pad * span};
+}
+
 // Widest occupied bin range across a set of histograms sharing the same
 // axis binning, extended by one empty bin on each side that has content --
 // so the axis ends just past the real data instead of running out to the
