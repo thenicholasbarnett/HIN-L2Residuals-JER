@@ -18,8 +18,10 @@
 
 #include <algorithm>
 
-static const TString kAlphaYTitle =
-    "#frac{(R_{MC}/R_{data})_{#alpha}}{(R_{MC}/R_{data})_{#alpha=0.30}}";
+inline TString AlphaYTitle(bool useJer) {
+  return useJer ? "#frac{(R_{data}/R_{MC})_{#alpha}}{(R_{data}/R_{MC})_{#alpha=0.30}}"
+               : "#frac{(R_{MC}/R_{data})_{#alpha}}{(R_{MC}/R_{data})_{#alpha=0.30}}";
+}
 
 inline TString AlphaEtaBinLabel(int ie) {
   return Form("%.3f < |#eta_{reco}| < %.3f", kAbsEtaEdges[ie],
@@ -76,7 +78,7 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
         gc->SetMarkerSize(0.9);
 
         gc->GetXaxis()->SetTitle("#alpha threshold");
-        gc->GetYaxis()->SetTitle(kAlphaYTitle);
+        gc->GetYaxis()->SetTitle(AlphaYTitle(useJer));
         gc->GetXaxis()->CenterTitle();
         gc->GetYaxis()->CenterTitle();
         gc->GetYaxis()->SetTitleSize(0.036);
@@ -195,7 +197,7 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
 
         if (first) {
           gc[m]->GetXaxis()->SetTitle("#alpha threshold");
-          gc[m]->GetYaxis()->SetTitle(kAlphaYTitle);
+          gc[m]->GetYaxis()->SetTitle(AlphaYTitle(useJer));
           gc[m]->GetXaxis()->CenterTitle();
           gc[m]->GetYaxis()->CenterTitle();
           gc[m]->GetYaxis()->SetTitleSize(0.036);

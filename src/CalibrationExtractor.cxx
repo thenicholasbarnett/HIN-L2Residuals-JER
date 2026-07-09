@@ -185,7 +185,7 @@ struct ExtrapResult {
 static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
                                       const TString &gname, Color_t color,
                                       const ResidualFitControls &controls,
-                                      TDirectory *dGraphs) {
+                                      TDirectory *dGraphs, bool useJer) {
 
   ExtrapResult out;
   const int n = (int)pts.size();
@@ -199,7 +199,8 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   TGraphErrors *gr =
       new TGraphErrors(n, x.data(), y.data(), ex.data(), ey.data());
   gr->SetName(gname);
-  gr->SetTitle(";#alpha threshold;R_{MC}/R_{data}");
+  gr->SetTitle(useJer ? ";#alpha threshold;R_{data}/R_{MC}"
+                      : ";#alpha threshold;R_{MC}/R_{data}");
   gr->SetMarkerStyle(20);
   gr->SetMarkerColor(color);
   gr->SetLineColor(color);
@@ -265,7 +266,8 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
       TGraphErrors *grn =
           new TGraphErrors(nfit, xn.data(), yn.data(), exn.data(), eyn.data());
       grn->SetName(gnorm);
-      grn->SetTitle(";#alpha threshold;R_{MC}/R_{data} (k_{FSR})");
+      grn->SetTitle(useJer ? ";#alpha threshold;R_{data}/R_{MC} (k_{FSR})"
+                          : ";#alpha threshold;R_{MC}/R_{data} (k_{FSR})");
       grn->SetMarkerStyle(20);
       grn->SetMarkerColor(color);
       grn->SetLineColor(color);
@@ -308,7 +310,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
 //
 // Outputs: 
 // dGraph (method, ptSlice, etaBin)
-// TGraphErrors of R_MC/R_data vs alpha (R_jer)
+// TGraphErrors of R_MC/R_data vs alpha (R), or R_data/R_MC vs alpha (R_jer)
 
 static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
                           const BinningConfig &bins, TDirectory *dQA_data,
@@ -458,7 +460,11 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
               double eRd = ToRErr(Ad, eAd), eRm = ToRErr(Am, eAm);
               if (std::abs(Rd) < 1e-6)
                 return;
-              double ratio = Rm / Rd;
+              // JEC: R_MC/R_data, applied by multiplying DATA (data*ratio=MC
+              // target). JER: R_data/R_MC instead -- we smear MC, not data,
+              // so the factor must invert or the correction runs backwards
+              // (see CLAUDE.md's JER SF sign-convention note).
+              double ratio = doJER ? Rd / Rm : Rm / Rd;
               double eRatio = ratio * TMath::Sqrt((eRd / Rd) * (eRd / Rd) +
                                                   (eRm / Rm) * (eRm / Rm));
               rptsOut[method][ipt][ieta].push_back({alphaX, ratio, eRatio});
@@ -565,7 +571,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
       if (hCorrJer) {
         hCorrJer->GetXaxis()->SetTitle(etaAxisTitle);
         hCorrJer->GetYaxis()->SetTitle(
-            "JER SF: R_{MC}/R_{data} (stddev A) at #alpha=0");
+            "JER SF: R_{data}/R_{MC} (stddev A) at #alpha=0");
         hCorrNormJer->GetXaxis()->SetTitle(etaAxisTitle);
         hCorrNormJer->GetYaxis()->SetTitle(
             "k_{FSR} #cdot JER SF|_{fit range high edge}");
@@ -577,8 +583,9 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         if (doJEC) {
           TString gname = L2Name::ObjectName(
               cone, "R", {etaMode, etaKey, ptKey}, {kMethodNames[method]});
-          ExtrapResult jes = FitAndExtrapolate(
-              rpts[method][ipt][ieta], gname, ptSlice.color, controls, dGraphs);
+          ExtrapResult jes =
+              FitAndExtrapolate(rpts[method][ipt][ieta], gname, ptSlice.color,
+                                controls, dGraphs, false);
           if (jes.valid) {
             hCorr->SetBinContent(ieta + 1, jes.c0);
             hCorr->SetBinError(ieta + 1, jes.ec0);
@@ -593,7 +600,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
               cone, "R_jer", {etaMode, etaKey, ptKey}, {kMethodNames[method]});
           ExtrapResult jer =
               FitAndExtrapolate(rptsJer[method][ipt][ieta], gnameJer,
-                                ptSlice.color, controls, dGraphs);
+                                ptSlice.color, controls, dGraphs, true);
           if (jer.valid) {
             hCorrJer->SetBinContent(ieta + 1, jer.c0);
             hCorrJer->SetBinError(ieta + 1, jer.ec0);
