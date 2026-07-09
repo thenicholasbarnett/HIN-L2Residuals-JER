@@ -67,7 +67,8 @@ int main(int argc, char *argv[]) {
       "               (independent of -triggered/-nontriggered/-mode; can "
       "be combined)\n"
       "  tag: plain filename prefix (no '/'), defaults to \"L2Residual\" "
-      "(JEC/JER SF)\n"
+      "(-mode jec) or\n"
+      "       \"JER_SF\" (-mode jer)\n"
       "          or \"JER_ptresolution\" (resolution-only run)\n";
 
   CommandLine cl;

@@ -28,6 +28,7 @@ static constexpr int kMinSlices = 3;
 
 // outputTag default and fixed output dir (see TextFileWriter.h)
 static const char *const kDefaultTag = "L2Residual";
+static const char *const kDefaultJerTag = "JER_SF";
 static const char *const kTextOutputSubdir = "data/jec/preliminary";
 
 // NEED TO CHANGE
@@ -272,7 +273,10 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                             TString outputTag, TString method, bool useNorm) {
 
   if (outputTag.IsNull()) {
-    outputTag = kDefaultTag;
+    // JER SF isn't an L2Residual -- give it its own default, mirroring
+    // runTextFilePtResolution's separately-scoped "JER_ptresolution" below
+    outputTag =
+        (calibMode == CalibrationMode::JER) ? kDefaultJerTag : kDefaultTag;
   }
   if (outputTag.Contains("/")) {
     std::cerr

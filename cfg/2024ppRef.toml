@@ -62,11 +62,11 @@ resolution_files = [
     "data/jec/preliminary/JER_ptresolution_ak6PF_abseta_ptresolution.txt",
 ]
 scale_factor_files = [
-    "data/jec/preliminary/L2ResidualFixed_ak2PF_abseta_jer_norm.txt",
-    "data/jec/preliminary/L2ResidualFixed_ak3PF_abseta_jer_norm.txt",
-    "data/jec/preliminary/L2ResidualFixed_ak4PF_abseta_jer_norm.txt",
-    "data/jec/preliminary/L2ResidualFixed_ak5PF_abseta_jer_norm.txt",
-    "data/jec/preliminary/L2ResidualFixed_ak6PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak2PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak3PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak4PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak5PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak6PF_abseta_jer_norm.txt",
 ]
 
 [cuts]
