@@ -20,6 +20,7 @@
 
 static const TString kFinalsYTitle =
     "k_{FSR} #scale[0.35]{#bullet} (#frac{R_{MC}}{R_{Data}})_{#alpha=0.30}";
+static const TString kFinalsYTitleJer = "JER SF_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
 // finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
@@ -56,11 +57,11 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         }
 
       // Step 3 stores one TH2D grid per (cone, etaMode, method); fall back to
-      // projecting each pT slice's row. JEC-only -- no JER SF grid exists yet.
-      if (!anyValid && !useJer) {
+      // projecting each pT slice's row.
+      if (!anyValid) {
         // try norm first (matches PlotAlphaFit), then direct
-        TString gridName =
-            L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[m]});
+        TString gridName = L2Name::ObjectName(
+            cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[m]});
         TString gridNormName = gridName + "_norm";
         TH2D *h2 = GetH2Any(fIn, {cone + "/" + gridNormName, gridNormName,
                                   cone + "/" + gridName, gridName});
@@ -150,7 +151,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
         hists[ip]->GetXaxis()->SetRangeUser(xMin, xMax);
         hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
-        hists[ip]->GetYaxis()->SetTitle(kFinalsYTitle);
+        hists[ip]->GetYaxis()->SetTitle(useJer ? kFinalsYTitleJer
+                                               : kFinalsYTitle);
         hists[ip]->GetYaxis()->SetTitleSize(0.048);
         hists[ip]->GetYaxis()->SetTitleOffset(2.0);
         hists[ip]->GetYaxis()->SetLabelSize(0.038);
@@ -195,6 +197,57 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       pb.Update();
 
       delete c; // cascade-deletes hists, legInfo, legPt, rl (and rl99/rl101 if drawn)
+    }
+  }
+}
+
+// Same Step 3 corrfinal/corrfinal_jer grid PlotFinals slices into 1D pT-slice
+// overlays above, drawn directly as a 2D eta-vs-pT_avg color map instead.
+// Step 3 output only -- no Step 2 fallback, since Step 2 never stores this
+// shape (per-slice histograms only).
+inline void PlotFinalsGrid(TFile *fIn, const TString &outDir,
+                           const TString &cone, ProgressBar &pb,
+                           bool useJer = false) {
+  const TString calibKey = useJer ? "jer" : "jec";
+  for (int m = 0; m < kNMethods; m++) {
+    for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
+      if (!pb.ShouldKeep())
+        continue;
+      const bool fullEta = (ieta == 1);
+      const TString xTitle = fullEta ? "#eta_{probe}" : "|#eta_{probe}|";
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
+
+      TString gridName = L2Name::ObjectName(
+          cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[m]});
+      TH2D *h2 =
+          GetH2Any(fIn, {cone + "/" + gridName + "_norm", gridName + "_norm",
+                        cone + "/" + gridName, gridName});
+      if (!h2) {
+        continue;
+      }
+
+      const TString cvName =
+          Form("finalsgrid_%s_%s_%s_%s", cone.Data(), calibKey.Data(),
+               kMethodKeys[m], etaMode.Data());
+      TCanvas *c = new TCanvas(cvName, "", 800, 600);
+      RealAspectRatio(c);
+      c->SetLeftMargin(0.13);
+      c->SetRightMargin(0.17);
+      c->SetBottomMargin(0.12);
+
+      h2->SetTitle("");
+      h2->GetXaxis()->SetTitle(xTitle);
+      h2->GetXaxis()->CenterTitle();
+      h2->GetYaxis()->CenterTitle();
+      h2->GetZaxis()->SetTitle(useJer ? "JER SF" : "Correction factor");
+      h2->Draw("COLZ");
+
+      DrawAsymHeader(0.13);
+
+      SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
+      pb.Update();
+
+      delete c; // cascade-deletes h2 (drawn on the canvas, same as PlotFinals)
     }
   }
 }

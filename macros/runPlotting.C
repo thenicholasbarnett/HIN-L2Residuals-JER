@@ -115,12 +115,8 @@ bool WantsFinalsByDefault(TFile *fIn, const TString &cone,
   if (HasHAny(fIn, {cone + "/" + interceptName}))
     return false;
 
-  // no JER SF equivalent of the corrfinal grid exists yet -- see PlotFinals
-  if (useJer)
-    return false;
-
-  const TString gridName =
-      L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[0]});
+  const TString gridName = L2Name::ObjectName(
+      cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[0]});
   return HasHAny(fIn, {cone + "/" + gridName + "_norm", gridName + "_norm",
                        cone + "/" + gridName, gridName});
 }
@@ -140,7 +136,7 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   }
 
   if (outDir.IsNull())
-    outDir = MakePlotDir("plots_residuals");
+    outDir = MakePlotDir("plots");
   if (!tag.IsNull()) {
     if (tag.Contains("/")) {
       std::cerr << "ERROR: -tag must not contain '/': " << tag << "\n";
@@ -198,6 +194,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
       totalPlots += CountMethodCompPlots(fIn, cone, bins, true, useJer);
     if (doFinals)
       totalPlots += CountFinalsPlots(fIn, cone, bins, useJer);
+    if (doFinals)
+      totalPlots += CountFinalsGridPlots(fIn, cone, useJer);
     if (doNormComp)
       totalPlots += CountNormCompPlots(fIn, cone, bins, false, useJer);
     if (doNormComp)
@@ -241,6 +239,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
         PlotMethodComp(fIn, outDir, cone, bins, true, pb, useJer);
       if (doFinals)
         PlotFinals(fIn, outDir, cone, bins, pb, isClosure, useJer);
+      if (doFinals)
+        PlotFinalsGrid(fIn, outDir, cone, pb, useJer);
       if (doNormComp)
         PlotNormComp(fIn, outDir, cone, bins, false, pb, useJer);
       if (doNormComp)

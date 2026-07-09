@@ -639,6 +639,27 @@ void TestJerSfWriter() {
     delete obj;
   }
 
+  TFile *fOut = TFile::Open(rootPath, "read");
+  TH2D *hGridAbs =
+      fOut ? (TH2D *)fOut->Get("ak4PF/ak4PF_corrfinal_jer_abseta_gauss")
+           : nullptr;
+  Check(hGridAbs != nullptr, "corrfinal_jer_abseta_gauss TH2D exists in output");
+  if (hGridAbs) {
+    Check(hGridAbs->GetNbinsX() == 18 && hGridAbs->GetNbinsY() == 6,
+          "corrfinal_jer grid is 18 eta bins x 6 pT slices");
+    Check(std::fabs(hGridAbs->GetBinContent(1, 1) - 1.02) < 1e-4,
+          "corrfinal_jer grid carries the JER SF value directly (no fit)");
+  }
+  TH2D *hGridFull =
+      fOut ? (TH2D *)fOut->Get("ak4PF/ak4PF_corrfinal_jer_fulleta_gauss")
+           : nullptr;
+  Check(hGridFull != nullptr,
+        "corrfinal_jer_fulleta_gauss TH2D exists in output");
+  if (fOut) {
+    fOut->Close();
+    delete fOut;
+  }
+
   CleanupFiles(trigPath, notrigPath, rootPath, tag);
 }
 

@@ -192,15 +192,33 @@ inline int CountFinalsPlots(TFile *fIn, const TString &cone,
           break;
         }
       }
-      // no JER SF equivalent of Step 3's corrfinal grid exists yet -- see PlotFinals
-      if (!anyValid && !useJer) {
-        const TString gridName =
-            L2Name::ObjectName(cone, "corrfinal", {etaMode}, {kMethodKeys[m]});
+      if (!anyValid) {
+        const TString gridName = L2Name::ObjectName(
+            cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[m]});
         anyValid =
             HasHAny(fIn, {cone + "/" + gridName + "_norm", gridName + "_norm",
                           cone + "/" + gridName, gridName});
       }
       if (anyValid)
+        n++;
+    }
+  }
+  return n;
+}
+
+// Companion to CountFinalsPlots: PlotFinalsGrid draws the same Step 3
+// corrfinal/corrfinal_jer grid as a 2D color map, Step 3 output only.
+inline int CountFinalsGridPlots(TFile *fIn, const TString &cone,
+                                bool useJer = false) {
+  int n = 0;
+  for (int m = 0; m < kNMethods; m++) {
+    for (int mode = 0; mode < 2; mode++) {
+      const bool fullEta = (mode == 1);
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
+      const TString gridName = L2Name::ObjectName(
+          cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[m]});
+      if (HasHAny(fIn, {cone + "/" + gridName + "_norm", gridName + "_norm",
+                        cone + "/" + gridName, gridName}))
         n++;
     }
   }

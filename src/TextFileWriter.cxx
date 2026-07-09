@@ -398,18 +398,17 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                   << objKind << " histogram not found)\n";
       }
 
-      if (!doJEC) {
-        continue; // JER SF is direct binned grid, no corrfinal, no fit
-      }
-
-      // final corrections grid: x = eta/|eta|, y = pT_avg slices, z = correction
+      // final corrections grid: x = eta/|eta|, y = pT_avg slices, z =
+      // correction/JER SF -- direct binned values for both JEC and JER SF
+      // (JER SF has no pT-dependence fit, see below)
+      const TString gridKind = doJEC ? "corrfinal" : "corrfinal_jer";
       TString gridName =
-          L2Name::ObjectName(cone, "corrfinal", {etaMode}, {method}) + suffix;
+          L2Name::ObjectName(cone, gridKind, {etaMode}, {method}) + suffix;
       TH2D *hGrid =
           new TH2D(gridName, "", nEta, etaEdges.data(), nPt, ptEdges.data());
       hGrid->GetXaxis()->SetTitle(fullEta ? "#eta_{probe}" : "|#eta_{probe}|");
       hGrid->GetYaxis()->SetTitle("p_{T,avg} [GeV]");
-      hGrid->GetZaxis()->SetTitle("Correction factor");
+      hGrid->GetZaxis()->SetTitle(doJEC ? "Correction factor" : "JER SF");
       hGrid->Sumw2();
       for (int ip = 0; ip < nPt; ip++) {
         if (!hSlice[ip]) {
@@ -425,6 +424,10 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       coneDirOut->cd();
       hGrid->Write();
       delete hGrid;
+
+      if (!doJEC) {
+        continue; // JER SF has no pT-dependence fit -- flat grid only
+      }
 
       // pT-dependence fit, one per eta bin
       std::vector<FitResult> &fits = fullEta ? fitsFullEta : fitsAbsEta;
