@@ -6,7 +6,7 @@
 <include_path path="include"/>
 <include_path path="cfg"/>
 <include_path path="external"/>
-<flags CXXFLAGS="-Isrc/Analysis/L2Residuals/include -Isrc/Analysis/L2Residuals/external -Isrc/Analysis/L2Residuals/external/jetmet -Isrc/Analysis/L2Residuals/external/jetmet_jer -Isrc/Analysis/L2Residuals/cfg -DSTANDALONE"/>
+<flags CXXFLAGS="-Isrc/Analysis/HIN-L2Residuals-JER/include -Isrc/Analysis/HIN-L2Residuals-JER/external -Isrc/Analysis/HIN-L2Residuals-JER/external/jetmet -Isrc/Analysis/HIN-L2Residuals-JER/external/jetmet_jer -Isrc/Analysis/HIN-L2Residuals-JER/cfg -DSTANDALONE"/>
 <flags ADD_SUBDIR="1"/>
 
 <export>

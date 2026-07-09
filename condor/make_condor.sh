@@ -290,7 +290,7 @@ choose_binary() {
   if [[ ! -f "${BINARY}" ]]; then
     echo "ERROR: no runAsymmetry executable found." >&2
     echo "       For CMake, run: cmake --build build" >&2
-    echo "       For SCRAM, put the repo at \$CMSSW_BASE/src/Analysis/L2Residuals and run: scram b -j4" >&2
+    echo "       For SCRAM, put the repo at \$CMSSW_BASE/src/Analysis/HIN-L2Residuals-JER and run: scram b -j4" >&2
     exit 1
   fi
   if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
