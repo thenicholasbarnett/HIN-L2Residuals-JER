@@ -16,7 +16,8 @@
 
 // R_data/R_MC overlay with ratio panel. Two-panel canvas per (cone, method,
 // alpha slice, pT slice): top = R_data (blue) and R_MC (red) vs |eta|,
-// bottom = R_data/R_MC, both with a reference line at 1.
+// bottom = R_MC/R_data (JEC) or R_data/R_MC (JER, matching the smearing-SF
+// convention), both with a reference line at 1.
 
 inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
                          const BinningConfig &bins, ProgressBar &pb,
@@ -58,7 +59,11 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         hRdc->SetDirectory(0);
         TH1D *hRmc = (TH1D *)hRm->Clone(rmName + "_c");
         hRmc->SetDirectory(0);
-        TH1D *hRat = RatioH(hRmc, hRdc, rdName + "_rat");
+        // JEC: R_MC/R_data (matches the correction convention). JER: inverted,
+        // R_data/R_MC (matches the smearing-SF convention) -- see
+        // CalibrationExtractor.cxx's ratio computation.
+        TH1D *hRat = useJer ? RatioH(hRdc, hRmc, rdName + "_rat")
+                            : RatioH(hRmc, hRdc, rdName + "_rat");
 
         const TString calibKey = useJer ? "jer" : "jec";
         const TString cvName =
@@ -123,7 +128,8 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
 
         StyleH(hRat, kBlack, 20, 1.5f);
         hRat->GetXaxis()->SetRangeUser(xMin, xMax);
-        TuneRatio(hRat, "|#eta_{reco}|", "MC/Data", 0.93, 1.07);
+        TuneRatio(hRat, "|#eta_{reco}|", useJer ? "Data/MC" : "MC/Data", 0.93,
+                 1.07);
         hRat->Draw("E1");
         RefLine(cv.ratio, xMin, xMax, 1.0);
 
