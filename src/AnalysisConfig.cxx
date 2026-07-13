@@ -154,8 +154,6 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   cfg.residualAlphaFitHi = doc["cuts"]["residual_alpha_fit_hi"].value_or(0.31);
   cfg.responseGausFitHalfWidth =
       doc["cuts"]["response_gaus_fit_half_width"].value_or(0.3);
-  cfg.responseTruncFraction =
-      doc["cuts"]["response_trunc_fraction"].value_or(0.95);
 
   // Step 3 output selection
   cfg.defaultMethod = TString(

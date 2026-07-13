@@ -17,7 +17,7 @@
 // else nonTriggeredResidualsFile.
 // outputTag: filename prefix (no '/'), default "L2Residual". Text files land
 // in <repo root>/data/jec/preliminary/, independent of outputRootFile's path.
-// method: "gauss" | "doubleGauss" | "trunc90" | "trunc95".
+// method: "gauss" | "doubleGauss" | "trunc90" | "trunc95" | "crystalball".
 void runTextFile(TString triggeredResidualsFile,
                  TString nonTriggeredResidualsFile, TString outputRootFile,
                  CalibrationMode mode, TString outputTag = "",
@@ -38,7 +38,10 @@ void runTextFile(TString residualsFile, SingleDatasetKind kind,
 
 // Reads a runResponse output file, writes a CMS JER pT-resolution text file
 // per cone (JER = sigma/mean, "corr" variant, "incl" collection). Same
-// flat-grid format as the JER SF file.
-void runTextFilePtResolution(TString responseFile, TString outputTag = "");
+// flat-grid format as the JER SF file. method defaults to cfg.defaultMethod
+// when empty (same "pick one method for a downstream text file" convention
+// as the JEC/JER SF writers above).
+void runTextFilePtResolution(TString responseFile, TString outputTag = "",
+                             TString method = "");
 
 #endif

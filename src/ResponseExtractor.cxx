@@ -2,12 +2,16 @@
 
 #include "TFile.h"
 #include "TH1D.h"
+#include "TF1.h"
+#include "TFitResult.h"
 #include "THnSparse.h"
 #include "TDirectory.h"
 #include "TString.h"
 #include "TMath.h"
 
 #include "Binning.h"
+#include "CrystalBall.h"
+#include "Methods.h" // kNMethods, kMethodKeys
 #include "Naming.h"
 #include "Utilities.h"
 #include "Truncation.h"
@@ -17,6 +21,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 // axis order {cone}_incl_resp/_tag_resp/_probe_resp
 static constexpr int kRespEtaRecoAxis = 0;
@@ -48,57 +53,227 @@ static const ResponseVariant kVariants[kNVariants] = {
     {kRespRawRAxis, "raw", "p_{T}^{raw}/p_{T}^{gen}"},
 };
 
-// truncated RMS -> JES (mean) and JER (sigma/mean). Same trunc95 estimator as
-// Step 2's A-distribution extraction (CalibrationExtractor's
-// FindTruncBins/TruncMeanInRange), here on the response ratio peaked at 1.0
-// rather than A peaked at 0 -- trims the long non-Gaussian tail toward the
-// response axis's [0,2] edges without a fit window. Fraction comes from
-// cfg.responseTruncFraction ([cuts] response_trunc_fraction, default 0.95).
+// Five parallel extraction methods -- Gauss/doubleGauss/trunc90/trunc95/
+// crystalball -- matching Step 2's method set (Methods.h), each converting
+// a fitted/truncated (mean, sigma) of the response ratio into JES (mean)
+// and JER (sigma/mean).
 
 struct ResponseFitResult {
   double jes = 0, jesErr = 0, jer = 0, jerErr = 0;
   bool valid = false;
 };
 
-static ResponseFitResult ExtractResponse(TH1D *h, double fraction,
-                                         int minEntries) {
+static ResponseFitResult ToJesJer(double mean, double meanErr, double sigma,
+                                  double sigmaErr) {
   ResponseFitResult r;
-  auto [binLo, binHi] = FindTruncBins(h, fraction, minEntries);
-  TruncResult t = TruncMeanInRange(h, binLo, binHi);
-  if (!t.valid || std::abs(t.mean) < 1e-6) {
+  if (std::abs(mean) < 1e-6) {
     return r;
   }
-  r.jes = t.mean;
-  r.jesErr = t.meanErr;
-  r.jer = t.sigma / t.mean;
-  r.jerErr = r.jer * TMath::Sqrt(TMath::Power(t.sigmaErr / t.sigma, 2.0) +
-                                 TMath::Power(t.meanErr / t.mean, 2.0));
+  r.jes = mean;
+  r.jesErr = meanErr;
+  r.jer = sigma / mean;
+  r.jerErr = r.jer * TMath::Sqrt(TMath::Power(sigmaErr / sigma, 2.0) +
+                                 TMath::Power(meanErr / mean, 2.0));
   r.valid = true;
   return r;
 }
 
-// vs pt_gen
+struct PeakLocation {
+  double mean = 1.0, sigma = 0.1;
+  bool valid = false;
+};
+
+// Pass 1 of the two-pass strategy already proven for this histogram shape in
+// runPlotting's response_dist QA guide fit (ResponsePlots.h::FitResponseGuide):
+// locate the real peak within [1-halfWidth, 1+halfWidth] before any of the
+// Gauss/doubleGauss/crystalball methods below run their own, narrower
+// (+-2 sigma) fit -- a single unconstrained pass chases the response axis's
+// long non-Gaussian tail toward its hard [0,2] edges. trunc90/trunc95 don't
+// need this, they read a fraction of the integral directly.
+static PeakLocation LocateResponsePeak(TH1D *h, double halfWidth,
+                                       int minEntries) {
+  PeakLocation loc;
+  if (!CanFit(h, minEntries)) {
+    return loc;
+  }
+  TF1 pass1(Form("_resploc_%s", h->GetName()), "gaus", 1.0 - halfWidth,
+           1.0 + halfWidth);
+  pass1.SetParameter(0, h->GetMaximum());
+  pass1.SetParameter(1, h->GetMean());
+  pass1.SetParameter(2, std::max(h->GetRMS(), 1e-3));
+  TFitResultPtr res = h->Fit(&pass1, "NQSR");
+  if (!res.Get() || !res->IsValid()) {
+    return loc;
+  }
+  loc.mean = res->Parameter(1);
+  loc.sigma = std::max(res->Parameter(2), 1e-3);
+  loc.valid = true;
+  return loc;
+}
+
+static ResponseFitResult ExtractResponseGauss(TH1D *h, double halfWidth,
+                                              int minEntries) {
+  ResponseFitResult r;
+  PeakLocation loc = LocateResponsePeak(h, halfWidth, minEntries);
+  if (!loc.valid) {
+    return r;
+  }
+  TF1 fit(Form("_respg_%s", h->GetName()), "gaus", loc.mean - 2.0 * loc.sigma,
+         loc.mean + 2.0 * loc.sigma);
+  fit.SetParameters(h->GetMaximum(), loc.mean, loc.sigma);
+  TFitResultPtr res = h->Fit(&fit, "NQSR");
+  if (res.Get() && res->IsValid()) {
+    r = ToJesJer(res->Parameter(1), res->ParError(1), res->Parameter(2),
+                res->ParError(2));
+  }
+  return r;
+}
+
+// mirrors CalibrationExtractor.cxx's FitDoubleGauss weighting scheme
+// (amplitude-sigma-weighted mixture mean/sigma), windowed around the
+// response ratio's own located peak instead of a fixed +-halfWidth about 0.
+static ResponseFitResult ExtractResponseDoubleGauss(TH1D *h, double halfWidth,
+                                                     int minEntries) {
+  ResponseFitResult r;
+  PeakLocation loc = LocateResponsePeak(h, halfWidth, minEntries);
+  if (!loc.valid) {
+    return r;
+  }
+  TF1 fit(Form("_respdg_%s", h->GetName()), "gaus(0)+gaus(3)",
+         loc.mean - 2.0 * loc.sigma, loc.mean + 2.0 * loc.sigma);
+  fit.SetParameter(0, h->GetMaximum());
+  fit.SetParameter(1, loc.mean);
+  fit.SetParameter(2, 0.5 * loc.sigma);
+  fit.SetParameter(3, 0.3 * h->GetMaximum());
+  fit.SetParameter(4, loc.mean);
+  fit.SetParameter(5, 1.5 * loc.sigma);
+  TFitResultPtr res = h->Fit(&fit, "NQSR");
+  if (!res.Get() || !res->IsValid()) {
+    return r;
+  }
+  const double amp1 = res->Parameter(0), mean1 = res->Parameter(1),
+              sigma1 = res->Parameter(2);
+  const double amp2 = res->Parameter(3), mean2 = res->Parameter(4),
+              sigma2 = res->Parameter(5);
+  const double w1 = std::fabs(amp1 * sigma1);
+  const double w2 = std::fabs(amp2 * sigma2);
+  const double wsum = w1 + w2;
+  if (wsum <= 0) {
+    return r;
+  }
+  const double f1 = w1 / wsum, f2 = w2 / wsum;
+  const double mean = f1 * mean1 + f2 * mean2;
+  const double meanErr = std::sqrt(TMath::Power(f1 * res->ParError(1), 2) +
+                                   TMath::Power(f2 * res->ParError(4), 2));
+  const double sigma = std::sqrt(std::max(
+      0.0, f1 * (sigma1 * sigma1 + mean1 * mean1) +
+               f2 * (sigma2 * sigma2 + mean2 * mean2) - mean * mean));
+  const double sigmaErr = std::sqrt(TMath::Power(f1 * res->ParError(2), 2) +
+                                    TMath::Power(f2 * res->ParError(5), 2));
+  return ToJesJer(mean, meanErr, sigma, sigmaErr);
+}
+
+// Central-fraction truncated mean/RMS, same estimator as Step 2's
+// trunc90/trunc95 (CalibrationExtractor.cxx), fed the response ratio
+// (peaked at 1.0) instead of A (peaked at 0). fraction is hardcoded at the
+// call site (0.90 or 0.95), matching Step 2's own hardcoded fractions --
+// the whole point of trunc90/trunc95 side by side is a fixed comparison,
+// not a tunable single fraction (this used to be config-driven via
+// [cuts] response_trunc_fraction; dropped when this became one of five
+// parallel methods instead of the sole estimator).
+static ResponseFitResult ExtractResponseTrunc(TH1D *h, double fraction,
+                                              int minEntries) {
+  auto [binLo, binHi] = FindTruncBins(h, fraction, minEntries);
+  TruncResult t = TruncMeanInRange(h, binLo, binHi);
+  if (!t.valid) {
+    return ResponseFitResult{};
+  }
+  return ToJesJer(t.mean, t.meanErr, t.sigma, t.sigmaErr);
+}
+
+// double-sided Crystal Ball (DoubleSidedCB, include/CrystalBall.h), same
+// two-stage seeding as CalibrationExtractor.cxx's FitCrystalBall but
+// windowed around the response ratio's own located peak instead of a fixed
+// +-halfWidth about 0.
+static ResponseFitResult ExtractResponseCrystalBall(TH1D *h, double halfWidth,
+                                                     int minEntries) {
+  ResponseFitResult r;
+  PeakLocation loc = LocateResponsePeak(h, halfWidth, minEntries);
+  if (!loc.valid) {
+    return r;
+  }
+  TF1 *cb = new TF1(Form("_respcb_%s", h->GetName()), DoubleSidedCB,
+                    loc.mean - 2.0 * loc.sigma, loc.mean + 2.0 * loc.sigma, 7);
+  cb->SetParameter(0, h->GetMaximum());
+  cb->SetParameter(1, loc.mean);
+  cb->SetParameter(2, loc.sigma);
+  cb->SetParameter(3, 2.0); // a1
+  cb->SetParameter(4, 5.0); // p1
+  cb->SetParameter(5, 2.0); // a2
+  cb->SetParameter(6, 5.0); // p2
+  cb->SetParLimits(3, 0.1, 10.0);
+  cb->SetParLimits(4, 0.1, 100.0);
+  cb->SetParLimits(5, 0.1, 10.0);
+  cb->SetParLimits(6, 0.1, 100.0);
+  TFitResultPtr res = h->Fit(cb, "NQSR");
+  if (res.Get() && res->IsValid()) {
+    r = ToJesJer(res->Parameter(1), res->ParError(1), res->Parameter(2),
+                res->ParError(2));
+  }
+  delete cb;
+  return r;
+}
+
+static ResponseFitResult ExtractResponseMethod(TH1D *h, int method,
+                                                double halfWidth,
+                                                int minEntries) {
+  switch (method) {
+  case 0:
+    return ExtractResponseGauss(h, halfWidth, minEntries);
+  case 1:
+    return ExtractResponseDoubleGauss(h, halfWidth, minEntries);
+  case 2:
+    return ExtractResponseTrunc(h, 0.90, minEntries);
+  case 3:
+    return ExtractResponseTrunc(h, 0.95, minEntries);
+  case 4:
+    return ExtractResponseCrystalBall(h, halfWidth, minEntries);
+  default:
+    return ResponseFitResult{};
+  }
+}
+
+// vs pt_gen -- one JES/JER histogram pair per method (5 parallel estimators,
+// see the block above), all fit against the same per-bin projection.
 static void ExtractVsPtGen(THnSparse *h, const TString &cone,
                            const TString &collection,
                            const ResponseVariant &variant,
                            const AxisBins &ptBins, TDirectory *dQA,
-                           TDirectory *dOut, double fraction, int minEntries) {
+                           TDirectory *dOut, double halfWidth,
+                           int minEntries) {
 
   const int nPt = ptBins.nBins;
   const double lo = ptBins.lo;
   const double hi = ptBins.hi;
   const double width = (hi - lo) / nPt;
 
-  TString jesName =
-      L2Name::ObjectName(cone, "JES", {variant.tag, "vs_ptgen"}, {collection});
-  TString jerName =
-      L2Name::ObjectName(cone, "JER", {variant.tag, "vs_ptgen"}, {collection});
-  TH1D *hJES = new TH1D(jesName, "", nPt, lo, hi);
-  TH1D *hJER = new TH1D(jerName, "", nPt, lo, hi);
-  hJES->GetXaxis()->SetTitle("p_{T}^{gen} [GeV]");
-  hJES->GetYaxis()->SetTitle(Form("JES = #LT %s #GT", variant.label));
-  hJER->GetXaxis()->SetTitle(hJES->GetXaxis()->GetTitle());
-  hJER->GetYaxis()->SetTitle(Form("JER = #sigma / #LT %s #GT", variant.label));
+  TH1D *hJES[kNMethods];
+  TH1D *hJER[kNMethods];
+  for (int m = 0; m < kNMethods; m++) {
+    TString jesName =
+        L2Name::ObjectName(cone, "JES", {variant.tag, "vs_ptgen"},
+                           {collection, kMethodKeys[m]});
+    TString jerName =
+        L2Name::ObjectName(cone, "JER", {variant.tag, "vs_ptgen"},
+                           {collection, kMethodKeys[m]});
+    hJES[m] = new TH1D(jesName, "", nPt, lo, hi);
+    hJER[m] = new TH1D(jerName, "", nPt, lo, hi);
+    hJES[m]->GetXaxis()->SetTitle("p_{T}^{gen} [GeV]");
+    hJES[m]->GetYaxis()->SetTitle(Form("JES = #LT %s #GT", variant.label));
+    hJER[m]->GetXaxis()->SetTitle(hJES[m]->GetXaxis()->GetTitle());
+    hJER[m]->GetYaxis()->SetTitle(
+        Form("JER = #sigma / #LT %s #GT", variant.label));
+  }
 
   for (int ip = 0; ip < nPt; ip++) {
     const double ptLo = lo + ip * width;
@@ -115,21 +290,26 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
     dQA->cd();
     hProj->Write();
 
-    ResponseFitResult fr = ExtractResponse(hProj, fraction, minEntries);
-    if (fr.valid) {
-      hJES->SetBinContent(ip + 1, fr.jes);
-      hJES->SetBinError(ip + 1, fr.jesErr);
-      hJER->SetBinContent(ip + 1, fr.jer);
-      hJER->SetBinError(ip + 1, fr.jerErr);
+    for (int m = 0; m < kNMethods; m++) {
+      ResponseFitResult fr =
+          ExtractResponseMethod(hProj, m, halfWidth, minEntries);
+      if (fr.valid) {
+        hJES[m]->SetBinContent(ip + 1, fr.jes);
+        hJES[m]->SetBinError(ip + 1, fr.jesErr);
+        hJER[m]->SetBinContent(ip + 1, fr.jer);
+        hJER[m]->SetBinError(ip + 1, fr.jerErr);
+      }
     }
     delete hProj;
   }
 
   dOut->cd();
-  hJES->Write();
-  hJER->Write();
-  delete hJES;
-  delete hJER;
+  for (int m = 0; m < kNMethods; m++) {
+    hJES[m]->Write();
+    hJER[m]->Write();
+    delete hJES[m];
+    delete hJER[m];
+  }
 }
 
 // Adjacent-pair (disjoint) bins from a flat sorted edge array, e.g.
@@ -169,7 +349,7 @@ EtaRangeSlicesToPairs(const std::vector<RangeBin> &slices) {
 static void
 ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
                      const TString &collection, const ResponseVariant &variant,
-                     const AxisBins &ptBins, TDirectory *dOut, double fraction,
+                     const AxisBins &ptBins, TDirectory *dOut, double halfWidth,
                      int minEntries,
                      const std::vector<std::pair<double, double>> &etaRanges) {
 
@@ -182,17 +362,23 @@ ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
 
     h->GetAxis(kRespEtaRecoAxis)->SetRangeUser(etaRange.first, etaRange.second);
 
-    TString jesName = L2Name::ObjectName(
-        cone, "JES", {variant.tag, "vs_ptgen", etaKey}, {collection});
-    TString jerName = L2Name::ObjectName(
-        cone, "JER", {variant.tag, "vs_ptgen", etaKey}, {collection});
-    TH1D *hJES = new TH1D(jesName, "", nPt, lo, hi);
-    TH1D *hJER = new TH1D(jerName, "", nPt, lo, hi);
-    hJES->GetXaxis()->SetTitle("p_{T}^{gen} [GeV]");
-    hJES->GetYaxis()->SetTitle(Form("JES = #LT %s #GT", variant.label));
-    hJER->GetXaxis()->SetTitle(hJES->GetXaxis()->GetTitle());
-    hJER->GetYaxis()->SetTitle(
-        Form("JER = #sigma / #LT %s #GT", variant.label));
+    TH1D *hJES[kNMethods];
+    TH1D *hJER[kNMethods];
+    for (int m = 0; m < kNMethods; m++) {
+      TString jesName =
+          L2Name::ObjectName(cone, "JES", {variant.tag, "vs_ptgen", etaKey},
+                             {collection, kMethodKeys[m]});
+      TString jerName =
+          L2Name::ObjectName(cone, "JER", {variant.tag, "vs_ptgen", etaKey},
+                             {collection, kMethodKeys[m]});
+      hJES[m] = new TH1D(jesName, "", nPt, lo, hi);
+      hJER[m] = new TH1D(jerName, "", nPt, lo, hi);
+      hJES[m]->GetXaxis()->SetTitle("p_{T}^{gen} [GeV]");
+      hJES[m]->GetYaxis()->SetTitle(Form("JES = #LT %s #GT", variant.label));
+      hJER[m]->GetXaxis()->SetTitle(hJES[m]->GetXaxis()->GetTitle());
+      hJER[m]->GetYaxis()->SetTitle(
+          Form("JER = #sigma / #LT %s #GT", variant.label));
+    }
 
     for (int ip = 0; ip < nPt; ip++) {
       const double ptLo = lo + ip * width;
@@ -202,12 +388,15 @@ ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
       TH1D *hProj = ProjectTHnSparse1D(h, variant.axis, {});
       h->GetAxis(kRespPtGenAxis)->SetRange(0, 0);
 
-      ResponseFitResult fr = ExtractResponse(hProj, fraction, minEntries);
-      if (fr.valid) {
-        hJES->SetBinContent(ip + 1, fr.jes);
-        hJES->SetBinError(ip + 1, fr.jesErr);
-        hJER->SetBinContent(ip + 1, fr.jer);
-        hJER->SetBinError(ip + 1, fr.jerErr);
+      for (int m = 0; m < kNMethods; m++) {
+        ResponseFitResult fr =
+            ExtractResponseMethod(hProj, m, halfWidth, minEntries);
+        if (fr.valid) {
+          hJES[m]->SetBinContent(ip + 1, fr.jes);
+          hJES[m]->SetBinError(ip + 1, fr.jesErr);
+          hJER[m]->SetBinContent(ip + 1, fr.jer);
+          hJER[m]->SetBinError(ip + 1, fr.jerErr);
+        }
       }
       delete hProj;
     }
@@ -215,10 +404,12 @@ ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
     h->GetAxis(kRespEtaRecoAxis)->SetRange(0, 0);
 
     dOut->cd();
-    hJES->Write();
-    hJER->Write();
-    delete hJES;
-    delete hJER;
+    for (int m = 0; m < kNMethods; m++) {
+      hJES[m]->Write();
+      hJER[m]->Write();
+      delete hJES[m];
+      delete hJER[m];
+    }
   }
 }
 
@@ -230,7 +421,7 @@ void runResponse(TString inputFile, TString outputFile) {
 
   const int minEntries =
       (cfg.minEntriesPerBin > 0) ? cfg.minEntriesPerBin : 100;
-  const double truncFraction = cfg.responseTruncFraction;
+  const double halfWidth = cfg.responseGausFitHalfWidth;
 
   TFile *fIn = TFile::Open(inputFile, "read");
   if (!fIn || fIn->IsZombie()) {
@@ -301,7 +492,7 @@ void runResponse(TString inputFile, TString outputFile) {
 
       for (int iv = 0; iv < kNVariants; iv++) {
         ExtractVsPtGen(hRaw, cone, collection, kVariants[iv], bins.pt,
-                       dQA_ptgen, coneDirOut, truncFraction, minEntries);
+                       dQA_ptgen, coneDirOut, halfWidth, minEntries);
         pb.Update();
       }
 
@@ -312,20 +503,20 @@ void runResponse(TString inputFile, TString outputFile) {
         THnSparse *hFolded = FoldEtaAxis(
             hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerAbsEta, truncFraction, minEntries,
+                             dPerAbsEta, halfWidth, minEntries,
                              EdgesToPairs(kAbsEtaEdges));
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerEtaRange, truncFraction, minEntries,
+                             dPerEtaRange, halfWidth, minEntries,
                              EdgesToPairs(kEtaRangeEdges));
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
-                             dPerEtaRangeCumulative, truncFraction, minEntries,
+                             dPerEtaRangeCumulative, halfWidth, minEntries,
                              EtaRangeSlicesToPairs(BuildEtaRangeSlicesCumulative()));
         delete hFolded;
       }
       // per (signed) eta_reco extraction for the full-eta pT-resolution files
       if (wantFullEta) {
         ExtractPerEtaVsPtGen(hRaw, cone, collection, kVariants[0], bins.pt,
-                             dPerEta, truncFraction, minEntries,
+                             dPerEta, halfWidth, minEntries,
                              EdgesToPairs(kEtaEdges));
       }
     }

@@ -65,7 +65,11 @@ int main(int argc, char *argv[]) {
       "  -resolution: write JER pT resolution text file from a runResponse "
       "output\n"
       "               (independent of -triggered/-nontriggered/-mode; can "
-      "be combined)\n"
+      "be combined).\n"
+      "               -method also governs which method's values land in "
+      "this file,\n"
+      "               same default (cfg.defaultMethod) as the jec/jer text "
+      "writers.\n"
       "  tag: plain filename prefix (no '/'), defaults to \"L2Residual\" "
       "(-mode jec) or\n"
       "       \"JER_SF\" (-mode jer)\n"
@@ -136,7 +140,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (hasResolution) {
-    runTextFilePtResolution(resolution, tag);
+    runTextFilePtResolution(resolution, tag, method);
   }
 
   if (hasTrig || hasNoTrig) {

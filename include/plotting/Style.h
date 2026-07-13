@@ -11,22 +11,24 @@
 #include "TString.h"
 
 #include "Colors.h"
+#include "Methods.h" // kNMethods, kMethodKeys
 
 #include <cmath>
 
 // method palette: shared across every plot family comparing
-// Gauss/double-Gauss/trunc90/trunc95
+// Gauss/double-Gauss/trunc90/trunc95/crystalball. kNMethods/kMethodKeys
+// live in Methods.h (shared with non-plotting extraction code); the rest
+// here is presentation-only.
 
-static const char *const kMethodKeys[] = {"gauss", "doubleGauss", "trunc90",
-                                          "trunc95"};
 static const char *const kMethodLabels[] = {
-    "Gauss fit", "Double-Gauss fit", "Trunc. mean 90%", "Trunc. mean 95%"};
+    "Gauss fit", "Double-Gauss fit", "Trunc. mean 90%", "Trunc. mean 95%",
+    "Crystal Ball fit"};
 // avoid red/green together -- the classic colorblind-unsafe pairing
 static const Color_t kMethodColors[] = {HiroshigeNightBlue(), KlimtPurple(),
-                                        HiroshigeOrange(), HiroshigeYellow()};
+                                        HiroshigeOrange(), HiroshigeYellow(),
+                                        HiroshigeGrayBlue()};
 static const int kMethodStyles[] = {
-    20, 34, 21, 22}; // circle / cross / square / triangle-up
-static constexpr int kNMethods = 4;
+    20, 34, 21, 22, 29}; // circle / cross / square / triangle-up / star
 
 // A = (p_T^probe - p_T^tag) / (p_T^probe + p_T^tag), see Dijet.h::MakeDijet.
 // R (roverlay/finals) is the same underlying quantity one step further
@@ -54,11 +56,12 @@ inline TString CalibYTitle(bool useJer) {
 // width (see CalibrationExtractor.cxx) -- the generic kMethodLabels
 // ("Gauss fit", ...) don't say which.
 inline TString CalibMethodLabel(int m, bool useJer) {
-  static const char *const kMeanLabels[] = {"Gauss mean", "Double-Gauss mean",
-                                            "Trunc. mean 90%",
-                                            "Trunc. mean 95%"};
-  static const char *const kRmsLabels[] = {"Gauss RMS", "Double-Gauss RMS",
-                                           "Trunc. RMS 90%", "Trunc. RMS 95%"};
+  static const char *const kMeanLabels[] = {
+      "Gauss mean", "Double-Gauss mean", "Trunc. mean 90%",
+      "Trunc. mean 95%", "Crystal Ball mean"};
+  static const char *const kRmsLabels[] = {
+      "Gauss RMS", "Double-Gauss RMS", "Trunc. RMS 90%", "Trunc. RMS 95%",
+      "Crystal Ball RMS"};
   return useJer ? kRmsLabels[m] : kMeanLabels[m];
 }
 
