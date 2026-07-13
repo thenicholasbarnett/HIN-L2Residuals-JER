@@ -377,15 +377,22 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   delete c; // cascade-deletes h[*], leg, lab (and rl if drawn)
 }
 
-// overlays JES/JER vs pT_gen across the coarse |eta| detector regions
-// (kEtaRangeEdges), incl jets only -- the collection with real eta reach
-// (tag is barrel-confined, probe limited). Reads runResponse's
-// JER_per_etarange corr-variant output.
+// overlays JES/JER vs pT_gen across coarse |eta| detector regions, either
+// disjoint (kEtaRangeEdges, BuildEtaRangeSlices) or cumulative/nested-from-
+// zero (BuildEtaRangeSlicesCumulative), for a given collection (incl/tag/
+// probe -- tag is barrel-confined and probe limited in reach, but the
+// underlying histograms exist for all three, so the caller picks). Reads
+// runResponse's JER_per_etarange/JER_per_etarange_cumulative corr-variant
+// output.
 inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
                                    const TString &cone,
                                    const TString &quantity, // "JES" or "JER"
-                                   ProgressBar &pb) {
-  const std::vector<RangeBin> slices = BuildEtaRangeSlices();
+                                   const TString &collection, // "incl"/"tag"/"probe"
+                                   bool cumulative, ProgressBar &pb) {
+  const std::vector<RangeBin> slices =
+      cumulative ? BuildEtaRangeSlicesCumulative() : BuildEtaRangeSlices();
+  const TString dirName =
+      cumulative ? "JER_per_etarange_cumulative" : "JER_per_etarange";
   const int nSl = (int)slices.size();
   std::vector<TH1D *> h(nSl, nullptr);
   bool any = false;
@@ -393,8 +400,8 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
     TString name = L2Name::ObjectName(
         cone, quantity,
         {"corr", "vs_ptgen", L2Name::EtaKey(slices[is].lo, slices[is].hi)},
-        {"incl"});
-    h[is] = GetHAny(fIn, {cone + "/JER_per_etarange/" + name});
+        {collection});
+    h[is] = GetHAny(fIn, {cone + "/" + dirName + "/" + name});
     if (h[is]) {
       any = true;
     }
@@ -417,8 +424,9 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
-  TCanvas *c =
-      new TCanvas("response_etarange_" + cone + "_" + quantity, "", 800, 800);
+  const TString cvName = "response_etarange_" + cone + "_" + quantity + "_" +
+                         collection + (cumulative ? "_cumulative" : "");
+  TCanvas *c = new TCanvas(cvName, "", 800, 800);
   RealAspectRatio(c);
   c->SetLogx();
   c->SetLeftMargin(0.14);
@@ -441,7 +449,7 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
   leg->SetFillStyle(0);
   leg->SetTextSize(0.032);
   leg->SetTextFont(42);
-  leg->AddEntry((TObject *)nullptr, cone + ", incl jets", "");
+  leg->AddEntry((TObject *)nullptr, cone + ", " + collection + " jets", "");
   for (int is = 0; is < nSl; is++) {
     if (!h[is]) {
       continue;
@@ -463,7 +471,9 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
 
   DrawCMSInternalHeader(0.14, 0.90);
 
-  SavePlot(c, outDir, cone, "response_etarange", {quantity}, c->GetName());
+  SavePlot(c, outDir, cone, "response_etarange",
+          {quantity, collection, cumulative ? "cumulative" : "disjoint"},
+          c->GetName());
   pb.Update();
 
   delete c; // cascade-deletes h[*], leg (and rl if drawn)
@@ -532,9 +542,18 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                           pb);
   }
 
-  // detector-region overlay: coarse |eta| slices, incl jets
-  DrawEtaRangeComparison(fIn, outDir, cone, "JES", pb);
-  DrawEtaRangeComparison(fIn, outDir, cone, "JER", pb);
+  // detector-region overlay: coarse |eta| slices (disjoint + cumulative),
+  // incl/tag/probe
+  for (int ic = 0; ic < kNResponseCollections; ic++) {
+    const TString collection = kResponseCollections[ic];
+    for (int icum = 0; icum < 2; icum++) {
+      const bool cumulative = (icum == 1);
+      DrawEtaRangeComparison(fIn, outDir, cone, "JES", collection, cumulative,
+                             pb);
+      DrawEtaRangeComparison(fIn, outDir, cone, "JER", collection, cumulative,
+                             pb);
+    }
+  }
 }
 
 #endif

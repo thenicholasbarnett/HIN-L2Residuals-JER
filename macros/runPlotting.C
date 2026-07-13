@@ -11,6 +11,7 @@
 //   [-calibration JEC|JER]
 //   [-tag name]
 //   [-sample true]
+//   [-inputClosure closure-residuals.root]
 //   [-flags "..."]
 //
 // ./build/bin/runPlotting args.config  # config file lines: key = value
@@ -53,6 +54,7 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 
 #include "plotting/AlphaExtrapolations.h"
 #include "plotting/AsymmetryDistributions.h"
+#include "plotting/ClosureCompare.h"
 #include "plotting/Counters.h"
 #include "plotting/EtaSymmetry.h"
 #include "plotting/EventQA.h"
@@ -90,8 +92,12 @@ R__LOAD_LIBRARY(build/lib/libl2residuals.so)
 //   "event"     : vz, primary vertex filter, HLT trigger
 //   "response"  : per-bin response distributions with gauss fit,
 //                 JES/JER vs pT_gen summary overlays (incl/tag/probe),
-//                 corr/reco/raw variant overlays, and a coarse |eta|
-//                 detector-region overlay (incl jets)
+//                 corr/reco/raw variant overlays, and coarse |eta|
+//                 detector-region overlays (disjoint + cumulative,
+//                 incl/tag/probe)
+//   "closurecompare": original vs closure-check overlay + ratio panel per
+//                 (method, etaMode, pT slice) -- needs -inputClosure, no-op
+//                 (silently 0 plots) if it's omitted
 //
 // CALIBRATION=JEC|JER (default JEC, orthogonal to FLAGS)
 // JEC: mean-derived
@@ -123,7 +129,8 @@ bool WantsFinalsByDefault(TFile *fIn, const TString &cone,
 
 void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
                  bool isClosure = false, bool useJer = false,
-                 TString tag = "", bool sample = false) {
+                 TString tag = "", bool sample = false,
+                 TString inputClosureFile = "") {
   const AnalysisConfig &cfg = Config();
   PrintConfigSummary(cfg);
 
@@ -133,6 +140,17 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
   if (!fIn || fIn->IsZombie()) {
     std::cerr << "Cannot open " << residualsFile << "\n";
     return;
+  }
+
+  // second input for "closurecompare" only -- every other flag ignores this
+  TFile *fInClosure = nullptr;
+  if (!inputClosureFile.IsNull()) {
+    fInClosure = TFile::Open(inputClosureFile, "read");
+    if (!fInClosure || fInClosure->IsZombie()) {
+      std::cerr << "Cannot open -inputClosure file " << inputClosureFile
+                << "\n";
+      return;
+    }
   }
 
   if (outDir.IsNull())
@@ -174,6 +192,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
       doAllLiteral || doSmartDefault || flags.Contains("event");
   const bool doResponse =
       doAllLiteral || doSmartDefault || flags.Contains("response");
+  const bool doClosureCompare =
+      doAllLiteral || flags.Contains("closurecompare");
 
   // kinematics
   const bool kineIncludeIncl = doAllLiteral || flags.Contains("kinematics");
@@ -196,6 +216,10 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
       totalPlots += CountFinalsPlots(fIn, cone, bins, useJer);
     if (doFinals)
       totalPlots += CountFinalsGridPlots(fIn, cone, useJer);
+  }
+  if (doFinals)
+    totalPlots += CountFinalsByConePlots(fIn, bins, useJer);
+  for (const TString &cone : cfg.coneLabels) {
     if (doNormComp)
       totalPlots += CountNormCompPlots(fIn, cone, bins, false, useJer);
     if (doNormComp)
@@ -208,6 +232,9 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
       totalPlots += CountAlphaFitPlots(fIn, cone, bins, useJer);
     if (doPtFit)
       totalPlots += CountPtFitPlots(fIn, cone);
+    if (doClosureCompare)
+      totalPlots += CountClosureComparePlots(fIn, fInClosure, cone, bins,
+                                             useJer);
     if (doKine)
       totalPlots += CountKinematicsPlots(fIn, cone, kineIncludeIncl);
     if (doResponse)
@@ -218,6 +245,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     std::cout << "No matching plots found for " << residualsFile
               << " with flags \"" << flags << "\"\n";
     fIn->Close();
+    if (fInClosure)
+      fInClosure->Close();
     return;
   }
 
@@ -241,6 +270,10 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
         PlotFinals(fIn, outDir, cone, bins, pb, isClosure, useJer);
       if (doFinals)
         PlotFinalsGrid(fIn, outDir, cone, pb, useJer);
+    }
+    if (doFinals)
+      PlotFinalsByCone(fIn, outDir, bins, pb, isClosure, useJer);
+    for (const TString &cone : cfg.coneLabels) {
       if (doNormComp)
         PlotNormComp(fIn, outDir, cone, bins, false, pb, useJer);
       if (doNormComp)
@@ -253,6 +286,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
         PlotAlphaFit(fIn, outDir, cone, bins, pb, useJer);
       if (doPtFit)
         PlotPtFit(fIn, outDir, cone, pb);
+      if (doClosureCompare && fInClosure)
+        PlotClosureCompare(fIn, fInClosure, outDir, cone, bins, pb, useJer);
       if (doKine)
         PlotKinematics(fIn, outDir, cone, kineIncludeIncl, pb);
       if (doResponse)
@@ -274,6 +309,8 @@ void runPlotting(TString residualsFile, TString outDir = "", TString flags = "",
     pb.Finish();
   }
   fIn->Close();
+  if (fInClosure)
+    fInClosure->Close();
 }
 
 #ifndef __CLING__
@@ -299,17 +336,25 @@ int main(int argc, char *argv[]) {
       "  -flags: omit for the curated smart default, \"all\" for every plot\n"
       "         unconditionally, or a space-separated list of:\n"
       "         etasym methods finals normcomp adist roverlay alpha ptfit "
-      "kinematics event response\n"
+      "kinematics event response closurecompare\n"
       "  -closure true: \"finals\" plots use a fixed 0.95-1.05 y-range with "
       "0.99/1.01\n"
       "         guide lines instead of the auto-scaled range, for checking a\n"
       "         closure pass's R_MC/R_data ~= 1. No effect on any other flag.\n"
       "  -calibration JEC|JER (default JEC): switches "
       "etasym/methods/finals/normcomp/\n"
-      "         roverlay/alpha between the mean-derived JEC output and the\n"
+      "         roverlay/alpha/closurecompare between the mean-derived JEC "
+      "output and the\n"
       "         stddev-derived JER SF output. No effect on "
       "adist/kinematics/event/\n"
       "         ptfit/response.\n"
+      "  -inputClosure path: second residuals file for \"closurecompare\" "
+      "only (e.g. a\n"
+      "         closure-check re-derivation of -input's original values) -- "
+      "overlays the\n"
+      "         two with a ratio panel below. Every other flag ignores this. "
+      "closurecompare\n"
+      "         silently produces no plots if -inputClosure is omitted.\n"
       "  -tag: optional, plain name (no '/'). Plots land in outdir/tag/ "
       "instead of\n"
       "         outdir/ directly, so separate runs against the same outdir "
@@ -334,6 +379,8 @@ int main(int argc, char *argv[]) {
   std::string tag = cl.getValue<std::string>("tag", std::string(""));
   bool sample = cl.getValue<bool>("sample", false);
   std::string config = cl.getValue<std::string>("config");
+  std::string inputClosure =
+      cl.getValue<std::string>("inputClosure", std::string(""));
 
   if (!cl.check()) {
     std::cerr << kUsage;
@@ -350,7 +397,8 @@ int main(int argc, char *argv[]) {
   }
   bool useJer = (calibration == "JER");
 
-  runPlotting(input, outDir, flags, isClosure, useJer, tag, sample);
+  runPlotting(input, outDir, flags, isClosure, useJer, tag, sample,
+             inputClosure);
   return 0;
 }
 #endif
