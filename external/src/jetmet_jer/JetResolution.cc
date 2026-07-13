@@ -16,6 +16,7 @@
 #endif
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace JME {
 
