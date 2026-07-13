@@ -11,6 +11,7 @@
 #include "plotting/AsymmetryDistributions.h"
 #include "plotting/Kinematics.h" // kNKinematicsCollections, kKinematicsCollections, kNKinematicsPtMins
 #include "plotting/ResponsePlots.h" // kNResponseCollections, kResponseCollections, kNResponseVariants, kResponseVariants
+#include "AnalysisConfig.h"
 #include "Binning.h"
 #include "Naming.h"
 
@@ -225,6 +226,84 @@ inline int CountFinalsGridPlots(TFile *fIn, const TString &cone,
   return n;
 }
 
+// Companion to CountFinalsPlots: PlotFinalsByCone overlays cone sizes
+// instead of pT slices, called once (not once per cone).
+inline int CountFinalsByConePlots(TFile *fIn, const BinningConfig &bins,
+                                  bool useJer = false) {
+  const std::vector<TString> &cones = Config().coneLabels;
+  int n = 0;
+  for (int m = 0; m < kNMethods; m++) {
+    for (int mode = 0; mode < 2; mode++) {
+      const bool fullEta = (mode == 1);
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
+      for (const auto &ptSl : bins.ptavgSlices) {
+        bool anyValid = false;
+        for (const TString &cone : cones) {
+          const TString name = L2Name::ObjectName(
+              cone, CalibKind("intercept", useJer),
+              {etaMode, L2Name::PtKey(ptSl)}, {kMethodKeys[m]});
+          if (HasHAny(fIn, {cone + "/" + name})) {
+            anyValid = true;
+            break;
+          }
+        }
+        if (!anyValid) {
+          for (const TString &cone : cones) {
+            const TString gridName =
+                L2Name::ObjectName(cone, CalibKind("corrfinal", useJer),
+                                   {etaMode}, {kMethodKeys[m]});
+            if (HasHAny(fIn, {cone + "/" + gridName + "_norm",
+                              gridName + "_norm", cone + "/" + gridName,
+                              gridName})) {
+              anyValid = true;
+              break;
+            }
+          }
+        }
+        if (anyValid)
+          n++;
+      }
+    }
+  }
+  return n;
+}
+
+// Companion to PlotClosureCompare: counts (method, etaMode, pT slice)
+// combinations where both fIn (original) and fInClosure have a value,
+// either as a direct Step 2 histogram or a Step 3 grid to project.
+inline int CountClosureComparePlots(TFile *fIn, TFile *fInClosure,
+                                    const TString &cone,
+                                    const BinningConfig &bins,
+                                    bool useJer = false) {
+  if (!fInClosure) {
+    return 0;
+  }
+  int n = 0;
+  for (int m = 0; m < kNMethods; m++) {
+    for (int mode = 0; mode < 2; mode++) {
+      const bool fullEta = (mode == 1);
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
+      const TString gridName = L2Name::ObjectName(
+          cone, CalibKind("corrfinal", useJer), {etaMode}, {kMethodKeys[m]});
+      const std::vector<TString> gridNames = {
+          cone + "/" + gridName + "_norm", gridName + "_norm",
+          cone + "/" + gridName, gridName};
+      for (const auto &ptSl : bins.ptavgSlices) {
+        const TString name = L2Name::ObjectName(
+            cone, CalibKind("intercept", useJer),
+            {etaMode, L2Name::PtKey(ptSl)}, {kMethodKeys[m]});
+        const bool hasOrig =
+            HasHAny(fIn, {cone + "/" + name}) || HasHAny(fIn, gridNames);
+        const bool hasClos = HasHAny(fInClosure, {cone + "/" + name}) ||
+                             HasHAny(fInClosure, gridNames);
+        if (hasOrig && hasClos)
+          n++;
+      }
+    }
+  }
+  return n;
+}
+
 inline int CountNormCompPlots(TFile *fIn, const TString &cone,
                               const BinningConfig &bins, bool fullEta,
                               bool useJer = false) {
@@ -364,22 +443,33 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone,
     }
   }
 
-  // detector-region overlay: 2 canvases per (cone, method) (JES/JER), each
-  // drawn whenever any coarse |eta| slice has the corresponding incl object.
-  auto countEtaRange = [&](const TString &quantity, int m) -> int {
-    for (const RangeBin &sl : BuildEtaRangeSlices()) {
+  // detector-region overlay: up to 2 (JES/JER) x 3 (incl/tag/probe) x 2
+  // (disjoint/cumulative) x kNMethods canvases per cone, each drawn whenever
+  // any coarse |eta| slice has the corresponding object.
+  auto countEtaRange = [&](const TString &quantity, const TString &collection,
+                           bool cumulative, int m) -> int {
+    const TString dirName =
+        cumulative ? "JER_per_etarange_cumulative" : "JER_per_etarange";
+    const std::vector<RangeBin> slices =
+        cumulative ? BuildEtaRangeSlicesCumulative() : BuildEtaRangeSlices();
+    for (const RangeBin &sl : slices) {
       TString name = L2Name::ObjectName(
           cone, quantity, {"corr", "vs_ptgen", L2Name::EtaKey(sl.lo, sl.hi)},
-          {"incl", kMethodKeys[m]});
-      if (HasHAny(fIn, {cone + "/JER_per_etarange/" + name})) {
+          {collection, kMethodKeys[m]});
+      if (HasHAny(fIn, {cone + "/" + dirName + "/" + name})) {
         return 1;
       }
     }
     return 0;
   };
-  for (int m = 0; m < kNMethods; m++) {
-    n += countEtaRange("JES", m);
-    n += countEtaRange("JER", m);
+  for (int ic = 0; ic < kNResponseCollections; ic++) {
+    for (int icum = 0; icum < 2; icum++) {
+      const bool cumulative = (icum == 1);
+      for (int m = 0; m < kNMethods; m++) {
+        n += countEtaRange("JES", kResponseCollections[ic], cumulative, m);
+        n += countEtaRange("JER", kResponseCollections[ic], cumulative, m);
+      }
+    }
   }
 
   // 5-method comparison: 2 canvases per cone (JES/JER), fixed at incl+corr,

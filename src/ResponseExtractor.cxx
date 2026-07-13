@@ -312,30 +312,55 @@ static void ExtractVsPtGen(THnSparse *h, const TString &cone,
   }
 }
 
-// JES/JER vs pT_gen for each eta bin of etaEdges. The caller supplies the
-// scheme and the matching sparse: kAbsEtaEdges/kEtaRangeEdges on a folded
-// |eta| sparse, kEtaEdges on the raw signed one. Feeds both the pT-resolution
-// text writer (fine schemes) and the detector-region overlay (coarse scheme).
-//
-// restricts axis 0 to each eta bin in turn, projects and extracts per pT_gen bin
-// writes {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection} to dOut
-static void ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
-                                 const TString &collection,
-                                 const ResponseVariant &variant,
-                                 const AxisBins &ptBins, TDirectory *dOut,
-                                 double halfWidth, int minEntries,
-                                 const std::vector<Double_t> &etaEdges) {
+// Adjacent-pair (disjoint) bins from a flat sorted edge array, e.g.
+// kAbsEtaEdges/kEtaRangeEdges/kEtaEdges -- the shape ExtractPerEtaVsPtGen
+// always took before it needed to also support cumulative (overlapping,
+// all-from-zero) ranges, which can't be expressed as one flat edge array.
+static std::vector<std::pair<double, double>>
+EdgesToPairs(const std::vector<Double_t> &edges) {
+  std::vector<std::pair<double, double>> pairs;
+  for (int i = 0; i + 1 < (int)edges.size(); i++) {
+    pairs.push_back({edges[i], edges[i + 1]});
+  }
+  return pairs;
+}
 
-  const int nEta = (int)etaEdges.size() - 1;
+// RangeBin's lo/hi as (lo,hi) pairs -- BuildEtaRangeSlicesCumulative's
+// ranges overlap (all start at 0), so they can't round-trip through
+// EdgesToPairs' flat-edge-array assumption.
+static std::vector<std::pair<double, double>>
+EtaRangeSlicesToPairs(const std::vector<RangeBin> &slices) {
+  std::vector<std::pair<double, double>> pairs;
+  for (const auto &sl : slices) {
+    pairs.push_back({sl.lo, sl.hi});
+  }
+  return pairs;
+}
+
+// JES/JER vs pT_gen for each (lo,hi) eta range in etaRanges. The caller
+// supplies the scheme and the matching sparse: kAbsEtaEdges/kEtaRangeEdges
+// (via EdgesToPairs) on a folded |eta| sparse, kEtaEdges on the raw signed
+// one, or an explicit cumulative pair list (BuildEtaRangeSlicesCumulative).
+// Feeds the pT-resolution text writer (fine schemes) and the detector-region
+// overlay plots (coarse disjoint + cumulative schemes).
+//
+// restricts axis 0 to each eta range in turn, projects and extracts per pT_gen bin
+// writes {cone}_JES_{variant}_vs_ptgen_{etaKey}_{collection} to dOut
+static void
+ExtractPerEtaVsPtGen(THnSparse *h, const TString &cone,
+                     const TString &collection, const ResponseVariant &variant,
+                     const AxisBins &ptBins, TDirectory *dOut, double halfWidth,
+                     int minEntries,
+                     const std::vector<std::pair<double, double>> &etaRanges) {
+
   const int nPt = ptBins.nBins;
   const double lo = ptBins.lo, hi = ptBins.hi;
   const double width = (hi - lo) / nPt;
 
-  for (int ieta = 0; ieta < nEta; ieta++) {
-    const TString etaKey = L2Name::EtaKey(etaEdges[ieta], etaEdges[ieta + 1]);
+  for (const auto &etaRange : etaRanges) {
+    const TString etaKey = L2Name::EtaKey(etaRange.first, etaRange.second);
 
-    h->GetAxis(kRespEtaRecoAxis)
-        ->SetRangeUser(etaEdges[ieta], etaEdges[ieta + 1]);
+    h->GetAxis(kRespEtaRecoAxis)->SetRangeUser(etaRange.first, etaRange.second);
 
     TH1D *hJES[kNMethods];
     TH1D *hJER[kNMethods];
@@ -450,6 +475,10 @@ void runResponse(TString inputFile, TString outputFile) {
     // coarse |eta| detector-region slices for the JES/JER overlay plot
     TDirectory *dPerEtaRange =
         wantAbsEta ? coneDirOut->mkdir("JER_per_etarange") : nullptr;
+    // cumulative (nested-from-zero) variant of the same coarse regions
+    TDirectory *dPerEtaRangeCumulative =
+        wantAbsEta ? coneDirOut->mkdir("JER_per_etarange_cumulative")
+                  : nullptr;
 
     for (int ic = 0; ic < kNCollections; ic++) {
       const TString collection = kCollectionKeys[ic];
@@ -475,16 +504,20 @@ void runResponse(TString inputFile, TString outputFile) {
             hRaw, kRespEtaRecoAxis, cone + kCollectionSuffixes[ic] + "_abseta");
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
                              dPerAbsEta, halfWidth, minEntries,
-                             kAbsEtaEdges);
+                             EdgesToPairs(kAbsEtaEdges));
         ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
                              dPerEtaRange, halfWidth, minEntries,
-                             kEtaRangeEdges);
+                             EdgesToPairs(kEtaRangeEdges));
+        ExtractPerEtaVsPtGen(hFolded, cone, collection, kVariants[0], bins.pt,
+                             dPerEtaRangeCumulative, halfWidth, minEntries,
+                             EtaRangeSlicesToPairs(BuildEtaRangeSlicesCumulative()));
         delete hFolded;
       }
       // per (signed) eta_reco extraction for the full-eta pT-resolution files
       if (wantFullEta) {
         ExtractPerEtaVsPtGen(hRaw, cone, collection, kVariants[0], bins.pt,
-                             dPerEta, halfWidth, minEntries, kEtaEdges);
+                             dPerEta, halfWidth, minEntries,
+                             EdgesToPairs(kEtaEdges));
       }
     }
   }
