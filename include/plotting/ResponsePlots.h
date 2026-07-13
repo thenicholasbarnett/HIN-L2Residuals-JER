@@ -179,12 +179,13 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
                                 const std::vector<TString> &orderedKeys,
                                 const TString &xTitle,
                                 const TString &ratioLabel, const TString &tag,
-                                ProgressBar &pb) {
+                                int method, ProgressBar &pb) {
   TH1D *h[kNResponseCollections] = {};
   bool any = false;
   for (int ic = 0; ic < kNResponseCollections; ic++) {
-    TString name = L2Name::ObjectName(cone, quantity, orderedKeys,
-                                      {kResponseCollections[ic]});
+    TString name = L2Name::ObjectName(
+        cone, quantity, orderedKeys,
+        {kResponseCollections[ic], kMethodKeys[method]});
     h[ic] = GetHAny(fIn, {cone + "/" + name});
     if (h[ic])
       any = true;
@@ -211,8 +212,9 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
-  TCanvas *c =
-      new TCanvas("response_summary_" + cone + "_" + tag, "", 800, 800);
+  TCanvas *c = new TCanvas(
+      "response_summary_" + cone + "_" + tag + "_" + kMethodKeys[method], "",
+      800, 800);
   RealAspectRatio(c);
   c->SetLogx();
   c->SetLeftMargin(0.14);
@@ -268,7 +270,8 @@ inline void DrawResponseSummary(TFile *fIn, const TString &outDir,
 
   DrawCMSInternalHeader(0.14, 0.90);
 
-  SavePlot(c, outDir, cone, "response_summary", {tag}, c->GetName());
+  SavePlot(c, outDir, cone, "response_summary", {tag, kMethodKeys[method]},
+          c->GetName());
   pb.Update();
 
   delete c; // cascade-deletes h[*], leg, lab (and rl if drawn)
@@ -279,12 +282,13 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
                                   const TString &cone,
                                   const TString &collection,
                                   const TString &quantity, // "JES" or "JER"
-                                  ProgressBar &pb) {
+                                  int method, ProgressBar &pb) {
   TH1D *h[kNResponseVariants] = {};
   bool any = false;
   for (int iv = 0; iv < kNResponseVariants; iv++) {
-    TString name = L2Name::ObjectName(
-        cone, quantity, {kResponseVariants[iv], "vs_ptgen"}, {collection});
+    TString name =
+        L2Name::ObjectName(cone, quantity, {kResponseVariants[iv], "vs_ptgen"},
+                           {collection, kMethodKeys[method]});
     h[iv] = GetHAny(fIn, {cone + "/" + name});
     if (h[iv])
       any = true;
@@ -311,9 +315,10 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
-  TCanvas *c = new TCanvas("response_variants_" + cone + "_" + collection +
-                               "_" + quantity,
-                           "", 800, 800);
+  TCanvas *c = new TCanvas(
+      "response_variants_" + cone + "_" + collection + "_" + quantity + "_" +
+          kMethodKeys[method],
+      "", 800, 800);
   RealAspectRatio(c);
   c->SetLogx();
   c->SetLeftMargin(0.14);
@@ -370,8 +375,8 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
   DrawCMSInternalHeader(0.14, 0.90);
   DrawInfoLegend(0.16, 0.80, 0.36, 0.885, {collection});
 
-  SavePlot(c, outDir, cone, "response_variants", {collection, quantity},
-           c->GetName());
+  SavePlot(c, outDir, cone, "response_variants",
+          {collection, quantity, kMethodKeys[method]}, c->GetName());
   pb.Update();
 
   delete c; // cascade-deletes h[*], leg, lab (and rl if drawn)
@@ -384,7 +389,7 @@ inline void DrawVariantComparison(TFile *fIn, const TString &outDir,
 inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
                                    const TString &cone,
                                    const TString &quantity, // "JES" or "JER"
-                                   ProgressBar &pb) {
+                                   int method, ProgressBar &pb) {
   const std::vector<RangeBin> slices = BuildEtaRangeSlices();
   const int nSl = (int)slices.size();
   std::vector<TH1D *> h(nSl, nullptr);
@@ -393,7 +398,7 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
     TString name = L2Name::ObjectName(
         cone, quantity,
         {"corr", "vs_ptgen", L2Name::EtaKey(slices[is].lo, slices[is].hi)},
-        {"incl"});
+        {"incl", kMethodKeys[method]});
     h[is] = GetHAny(fIn, {cone + "/JER_per_etarange/" + name});
     if (h[is]) {
       any = true;
@@ -417,8 +422,9 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
   const double xMin = ResponsePtGenMin(frame->GetXaxis());
   const double xMax = frame->GetXaxis()->GetXmax();
 
-  TCanvas *c =
-      new TCanvas("response_etarange_" + cone + "_" + quantity, "", 800, 800);
+  TCanvas *c = new TCanvas(
+      "response_etarange_" + cone + "_" + quantity + "_" + kMethodKeys[method],
+      "", 800, 800);
   RealAspectRatio(c);
   c->SetLogx();
   c->SetLeftMargin(0.14);
@@ -463,19 +469,136 @@ inline void DrawEtaRangeComparison(TFile *fIn, const TString &outDir,
 
   DrawCMSInternalHeader(0.14, 0.90);
 
-  SavePlot(c, outDir, cone, "response_etarange", {quantity}, c->GetName());
+  SavePlot(c, outDir, cone, "response_etarange", {quantity, kMethodKeys[method]},
+          c->GetName());
   pb.Update();
 
   delete c; // cascade-deletes h[*], leg (and rl if drawn)
 }
 
+// method comparison for JES/JER vs pT_gen (Gauss/doubleGauss/trunc90/
+// trunc95/crystalball), one canvas per (cone, quantity), fixed at
+// incl+corr (the collection/variant with the most real entries and eta
+// reach) -- top = all 5 methods overlaid, bottom = ratio to Gauss. Mirrors
+// MethodComparisons.h's PlotMethodComp (Step 2's eta-axis analog).
+inline void DrawResponseMethodComparison(TFile *fIn, const TString &outDir,
+                                         const TString &cone,
+                                         const TString &quantity, // "JES" or "JER"
+                                         ProgressBar &pb) {
+  static const TString kCollection = "incl";
+  static const TString kVariant = "corr";
+
+  std::vector<TH1D *> hists(kNMethods, nullptr);
+  for (int m = 0; m < kNMethods; m++) {
+    TString name = L2Name::ObjectName(cone, quantity, {kVariant, "vs_ptgen"},
+                                      {kCollection, kMethodKeys[m]});
+    hists[m] = GetHAny(fIn, {cone + "/" + name});
+  }
+  if (!hists[0]) {
+    for (auto *h : hists)
+      delete h;
+    return;
+  }
+
+  std::vector<TH1D *> ratios;
+  std::vector<int> ratioIdx;
+  for (int m = 1; m < kNMethods; m++) {
+    if (!hists[m])
+      continue;
+    TString rname = Form("%s_respmcomp_%s_r%d", cone.Data(), quantity.Data(), m);
+    ratios.push_back(RatioH(hists[m], hists[0], rname));
+    ratioIdx.push_back(m);
+  }
+
+  const double xMin = ResponsePtGenMin(hists[0]->GetXaxis());
+  const double xMax = hists[0]->GetXaxis()->GetXmax();
+
+  const TString cvName = "response_methods_" + cone + "_" + quantity;
+  TwoPad cv = MakeTwoPad(cvName);
+
+  cv.main->cd();
+  cv.main->SetLogx();
+  cv.main->SetGridx();
+  cv.main->SetGridy();
+
+  auto [ylo, yhi] = YRange(hists);
+  if (quantity == "JES") {
+    ylo = 0.97;
+    yhi = 1.02;
+  }
+
+  bool first = true;
+  TLegend *leg = new TLegend(0.16, 0.14, 0.55, 0.14 + 0.045 * kNMethods);
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(0.040);
+  for (int m = 0; m < kNMethods; m++) {
+    if (!hists[m])
+      continue;
+    StyleH(hists[m], kMethodColors[m], kMethodStyles[m], 1.5f);
+    hists[m]->GetXaxis()->SetRangeUser(xMin, xMax);
+    hists[m]->GetYaxis()->SetRangeUser(ylo, yhi);
+    hists[m]->GetYaxis()->SetTitle(
+        ResponseYTitle(quantity, kResponseVariantLabels[0]));
+    hists[m]->GetYaxis()->SetTitleSize(0.048);
+    hists[m]->GetYaxis()->SetTitleOffset(1.30);
+    hists[m]->GetYaxis()->SetLabelSize(0.045);
+    hists[m]->GetXaxis()->SetLabelSize(0.0);
+    hists[m]->GetXaxis()->SetTitle("");
+    hists[m]->SetTitle("");
+    hists[m]->Draw(first ? "E1" : "E1 same");
+    first = false;
+    leg->AddEntry(hists[m], kMethodLabels[m], "lp");
+  }
+
+  if (quantity == "JES") {
+    RefLine(cv.main, xMin, xMax, 1.0);
+  }
+  leg->Draw();
+
+  DrawInfoLegend(0.60, 0.78, 0.94, 0.90, {cone, kCollection + " " + kVariant});
+
+  cv.ratio->cd();
+  cv.ratio->SetLogx();
+  cv.ratio->SetGridx();
+  cv.ratio->SetGridy();
+
+  TLegend *rleg = new TLegend(0.16, 0.62, 0.55, 0.95);
+  rleg->SetBorderSize(0);
+  rleg->SetFillStyle(0);
+  rleg->SetTextSize(0.10);
+
+  bool firstR = true;
+  for (int k = 0; k < (int)ratios.size(); k++) {
+    const int m = ratioIdx[k];
+    StyleH(ratios[k], kMethodColors[m], kMethodStyles[m], 1.5f);
+    ratios[k]->GetXaxis()->SetRangeUser(xMin, xMax);
+    TuneRatio(ratios[k], kPtGenAxisTitle, "/ Gauss", 0.93, 1.07);
+    ratios[k]->Draw(firstR ? "E1" : "E1 same");
+    firstR = false;
+    rleg->AddEntry(ratios[k], kMethodLabels[m], "lp");
+  }
+  if (!firstR) {
+    RefLine(cv.ratio, xMin, xMax, 1.0);
+    rleg->Draw();
+  }
+
+  cv.c->cd();
+  SavePlot(cv.c, outDir, cone, "response_methods", {quantity}, cvName);
+  pb.Update();
+
+  delete cv.c; // cascade-deletes hists, ratios, leg, rleg (and rl if drawn)
+}
+
 inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
                          double halfWidth, int minEntries, ProgressBar &pb) {
-  // sentinel: does this cone have runResponse output at all?
+  // sentinel: does this cone have runResponse output at all? (gauss, the
+  // default method, always gets written if any extraction ran)
   bool any = false;
   for (int ic = 0; ic < kNResponseCollections && !any; ic++) {
     TString name = L2Name::ObjectName(cone, "JES", {"corr", "vs_ptgen"},
-                                      {kResponseCollections[ic]});
+                                      {kResponseCollections[ic],
+                                       kMethodKeys[0]});
     if (HasHAny(fIn, {cone + "/" + name}))
       any = true;
   }
@@ -485,12 +608,13 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
   for (int ic = 0; ic < kNResponseCollections; ic++) {
     const TString collection = kResponseCollections[ic];
 
-    // QA dists vs pt_gen; bin edges read from each variant's own JES output,
-    // not re-derived
+    // QA dists vs pt_gen; bin edges read from each variant's own gauss JES
+    // output (any method's binning is identical, this is just for the
+    // pT_gen bin loop, not the fit itself), not re-derived
     for (int iv = 0; iv < kNResponseVariants; iv++) {
       const TString variant = kResponseVariants[iv];
-      TString jesName =
-          L2Name::ObjectName(cone, "JES", {variant, "vs_ptgen"}, {collection});
+      TString jesName = L2Name::ObjectName(cone, "JES", {variant, "vs_ptgen"},
+                                           {collection, kMethodKeys[0]});
       TH1D *hJes = GetHAny(fIn, {cone + "/" + jesName});
       if (hJes) {
         for (int ip = 1; ip <= hJes->GetNbinsX(); ip++) {
@@ -513,28 +637,38 @@ inline void PlotResponse(TFile *fIn, const TString &outDir, const TString &cone,
     }
   }
 
-  // per-variant summary: 3 collections overlaid
+  // per-variant summary: 3 collections overlaid, one per method
   for (int iv = 0; iv < kNResponseVariants; iv++) {
     const TString variant = kResponseVariants[iv];
-    DrawResponseSummary(fIn, outDir, cone, "JES", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, kResponseVariantLabels[iv],
-                        "JES_" + variant + "_vs_ptgen", pb);
-    DrawResponseSummary(fIn, outDir, cone, "JER", {variant, "vs_ptgen"},
-                        kPtGenAxisTitle, kResponseVariantLabels[iv],
-                        "JER_" + variant + "_vs_ptgen", pb);
+    for (int m = 0; m < kNMethods; m++) {
+      DrawResponseSummary(fIn, outDir, cone, "JES", {variant, "vs_ptgen"},
+                          kPtGenAxisTitle, kResponseVariantLabels[iv],
+                          "JES_" + variant + "_vs_ptgen", m, pb);
+      DrawResponseSummary(fIn, outDir, cone, "JER", {variant, "vs_ptgen"},
+                          kPtGenAxisTitle, kResponseVariantLabels[iv],
+                          "JER_" + variant + "_vs_ptgen", m, pb);
+    }
   }
 
-  // variant comparison: corr/reco/raw overlaid, one per collection
+  // variant comparison: corr/reco/raw overlaid, one per (collection, method)
   for (int ic = 0; ic < kNResponseCollections; ic++) {
-    DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic], "JES",
-                          pb);
-    DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic], "JER",
-                          pb);
+    for (int m = 0; m < kNMethods; m++) {
+      DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic],
+                            "JES", m, pb);
+      DrawVariantComparison(fIn, outDir, cone, kResponseCollections[ic],
+                            "JER", m, pb);
+    }
   }
 
-  // detector-region overlay: coarse |eta| slices, incl jets
-  DrawEtaRangeComparison(fIn, outDir, cone, "JES", pb);
-  DrawEtaRangeComparison(fIn, outDir, cone, "JER", pb);
+  // detector-region overlay: coarse |eta| slices, incl jets, one per method
+  for (int m = 0; m < kNMethods; m++) {
+    DrawEtaRangeComparison(fIn, outDir, cone, "JES", m, pb);
+    DrawEtaRangeComparison(fIn, outDir, cone, "JER", m, pb);
+  }
+
+  // 5-method comparison, fixed at incl+corr
+  DrawResponseMethodComparison(fIn, outDir, cone, "JES", pb);
+  DrawResponseMethodComparison(fIn, outDir, cone, "JER", pb);
 }
 
 #endif

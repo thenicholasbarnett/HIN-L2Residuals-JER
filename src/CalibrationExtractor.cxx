@@ -12,6 +12,8 @@
 #include "TMath.h"
 
 #include "Binning.h"
+#include "CrystalBall.h"
+#include "Methods.h" // kNMethods, kMethodKeys
 #include "Naming.h"
 #include "Utilities.h"
 #include "Truncation.h"
@@ -30,11 +32,6 @@ static constexpr int kEtaAxis = 0;
 static constexpr int kPtAvgAxis = 1;
 static constexpr int kAlphaAxis = 2;
 static constexpr int kAAxis = 3;
-
-// methods to capture mean
-static constexpr int kNMethods = 4;
-static const char *const kMethodNames[] = {"gauss", "doubleGauss", "trunc90",
-                                           "trunc95"};
 
 struct GaussResult {
   double mean = 0, meanErr = 0, sigma = 0, sigmaErr = 0, chi2ndf = -1;
@@ -134,6 +131,54 @@ static GaussResult FitDoubleGauss(TH1D *h,
     }
   }
   delete g;
+  return r;
+}
+
+// double-sided Crystal Ball fitting (DoubleSidedCB, include/CrystalBall.h):
+// a plain Gaussian pre-fit first locates/seeds mean and sigma (same window
+// and seeding FitGauss uses), then the 7-parameter DSCB fit runs from those
+// starting values -- mirrors the reference implementation's two-stage
+// strategy (JetMETAnalysis's jet_response_fitter_x.cc) without its
+// TSpectrum peak-finding or iterative parameter-fixing loop.
+static GaussResult FitCrystalBall(TH1D *h, const ResidualFitControls &controls) {
+  GaussResult r;
+  if (!CanFit(h, controls.minEntries))
+    return r;
+
+  TF1 pre(Form("_cbpre_%s", h->GetName()), "gaus", -controls.gausFitHalfWidth,
+         controls.gausFitHalfWidth);
+  pre.SetParameter(0, h->GetMaximum());
+  pre.SetParameter(1, h->GetMean());
+  pre.SetParameter(2, std::max(h->GetRMS(), 1e-3));
+  TFitResultPtr preRes = h->Fit(&pre, "NQSR");
+  if (!preRes.Get() || !preRes->IsValid()) {
+    return r;
+  }
+
+  TF1 *cb = new TF1(Form("_cbf_%s", h->GetName()), DoubleSidedCB,
+                    -controls.gausFitHalfWidth, controls.gausFitHalfWidth, 7);
+  cb->SetParameter(0, preRes->Parameter(0));
+  cb->SetParameter(1, preRes->Parameter(1));
+  cb->SetParameter(2, std::max(preRes->Parameter(2), 1e-3));
+  cb->SetParameter(3, 2.0); // a1
+  cb->SetParameter(4, 5.0); // p1
+  cb->SetParameter(5, 2.0); // a2
+  cb->SetParameter(6, 5.0); // p2
+  cb->SetParLimits(3, 0.1, 10.0);
+  cb->SetParLimits(4, 0.1, 100.0);
+  cb->SetParLimits(5, 0.1, 10.0);
+  cb->SetParLimits(6, 0.1, 100.0);
+
+  TFitResultPtr res = h->Fit(cb, "NQSR");
+  if (res.Get() && res->IsValid()) {
+    r.mean = res->Parameter(1);
+    r.meanErr = res->ParError(1);
+    r.sigma = res->Parameter(2);
+    r.sigmaErr = res->ParError(2);
+    r.chi2ndf = (res->Ndf() > 0) ? res->Chi2() / res->Ndf() : -1.0;
+    r.valid = true;
+  }
+  delete cb;
   return r;
 }
 
@@ -355,16 +400,16 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
             etaMode, L2Name::PtKey(bins.ptavgSlices[ip]),
             L2Name::AlphaKey(bins.alphaSlices[ia])};
         hRd[m][ia][ip] = new TH1D(
-            L2Name::ObjectName(cone, "R_data", keys, {kMethodNames[m]}), "",
+            L2Name::ObjectName(cone, "R_data", keys, {kMethodKeys[m]}), "",
             (int)etaEdges.size() - 1, etaEdges.data());
         hRm[m][ia][ip] =
-            new TH1D(L2Name::ObjectName(cone, "R_mc", keys, {kMethodNames[m]}),
+            new TH1D(L2Name::ObjectName(cone, "R_mc", keys, {kMethodKeys[m]}),
                      "", (int)etaEdges.size() - 1, etaEdges.data());
         hRdJer[m][ia][ip] = new TH1D(
-            L2Name::ObjectName(cone, "R_data_jer", keys, {kMethodNames[m]}), "",
+            L2Name::ObjectName(cone, "R_data_jer", keys, {kMethodKeys[m]}), "",
             (int)etaEdges.size() - 1, etaEdges.data());
         hRmJer[m][ia][ip] = new TH1D(
-            L2Name::ObjectName(cone, "R_mc_jer", keys, {kMethodNames[m]}), "",
+            L2Name::ObjectName(cone, "R_mc_jer", keys, {kMethodKeys[m]}), "",
             (int)etaEdges.size() - 1, etaEdges.data());
       }
     }
@@ -428,6 +473,8 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         TruncResult tm90 = TruncMeanInRange(hAMC, mlo90, mhi90);
         TruncResult td95 = TruncMeanInRange(hAData, dlo95, dhi95);
         TruncResult tm95 = TruncMeanInRange(hAMC, mlo95, mhi95);
+        GaussResult cbd = FitCrystalBall(hAData, controls);
+        GaussResult cbm = FitCrystalBall(hAMC, controls);
 
         double alphaX = aSlice.hi;
 
@@ -444,13 +491,13 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
               bool outsideConfiguredRange = false;
               if (std::abs(Ad) > controls.maxAbsA) {
                 WarnOutOfRangeValue(controls, cone, etaMode, etaKey, ptKey,
-                                    alphaKey, kMethodNames[method], "data",
+                                    alphaKey, kMethodKeys[method], "data",
                                     quantity, Ad);
                 outsideConfiguredRange = true;
               }
               if (std::abs(Am) > controls.maxAbsA) {
                 WarnOutOfRangeValue(controls, cone, etaMode, etaKey, ptKey,
-                                    alphaKey, kMethodNames[method], "MC",
+                                    alphaKey, kMethodKeys[method], "MC",
                                     quantity, Am);
                 outsideConfiguredRange = true;
               }
@@ -483,6 +530,8 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
                      tm90.mean, tm90.meanErr, td90.valid && tm90.valid);
           accumulate(rpts, hRd, hRm, "mean A", 3, td95.mean, td95.meanErr,
                      tm95.mean, tm95.meanErr, td95.valid && tm95.valid);
+          accumulate(rpts, hRd, hRm, "mean A", 4, cbd.mean, cbd.meanErr,
+                     cbm.mean, cbm.meanErr, cbd.valid && cbm.valid);
         }
         if (doJER) {
           accumulate(rptsJer, hRdJer, hRmJer, "stddev A", 0, gd.sigma,
@@ -496,6 +545,9 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
           accumulate(rptsJer, hRdJer, hRmJer, "stddev A", 3, td95.sigma,
                      td95.sigmaErr, tm95.sigma, tm95.sigmaErr,
                      td95.valid && tm95.valid);
+          accumulate(rptsJer, hRdJer, hRmJer, "stddev A", 4, cbd.sigma,
+                     cbd.sigmaErr, cbm.sigma, cbm.sigmaErr,
+                     cbd.valid && cbm.valid);
         }
 
         delete hAData;
@@ -542,9 +594,9 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
 
       TString ptKey = L2Name::PtKey(ptSlice);
       TString corrName = L2Name::ObjectName(cone, "intercept", {etaMode, ptKey},
-                                            {kMethodNames[method]});
+                                            {kMethodKeys[method]});
       TString corrNameJer = L2Name::ObjectName(
-          cone, "intercept_jer", {etaMode, ptKey}, {kMethodNames[method]});
+          cone, "intercept_jer", {etaMode, ptKey}, {kMethodKeys[method]});
 
       const TString etaAxisTitle = nameSuffix.IsNull() ? "|#eta|" : "#eta";
       const int nEtaBins = (int)etaEdges.size() - 1;
@@ -582,7 +634,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
 
         if (doJEC) {
           TString gname = L2Name::ObjectName(
-              cone, "R", {etaMode, etaKey, ptKey}, {kMethodNames[method]});
+              cone, "R", {etaMode, etaKey, ptKey}, {kMethodKeys[method]});
           ExtrapResult jes =
               FitAndExtrapolate(rpts[method][ipt][ieta], gname, ptSlice.color,
                                 controls, dGraphs, false);
@@ -597,7 +649,7 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         }
         if (doJER) {
           TString gnameJer = L2Name::ObjectName(
-              cone, "R_jer", {etaMode, etaKey, ptKey}, {kMethodNames[method]});
+              cone, "R_jer", {etaMode, etaKey, ptKey}, {kMethodKeys[method]});
           ExtrapResult jer =
               FitAndExtrapolate(rptsJer[method][ipt][ieta], gnameJer,
                                 ptSlice.color, controls, dGraphs, true);

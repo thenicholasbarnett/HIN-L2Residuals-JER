@@ -284,10 +284,12 @@ inline int CountEventPlots(TFile *fIn) {
 
 inline int CountResponsePlots(TFile *fIn, const TString &cone,
                               int minEntries) {
+  // gauss (method 0), the default, always gets written if any extraction ran
   bool any = false;
   for (int ic = 0; ic < kNResponseCollections && !any; ic++) {
-    TString name = L2Name::ObjectName(cone, "JES", {"corr", "vs_ptgen"},
-                                      {kResponseCollections[ic]});
+    TString name = L2Name::ObjectName(
+        cone, "JES", {"corr", "vs_ptgen"},
+        {kResponseCollections[ic], kMethodKeys[0]});
     if (HasHAny(fIn, {cone + "/" + name}))
       any = true;
   }
@@ -298,10 +300,12 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone,
   for (int ic = 0; ic < kNResponseCollections; ic++) {
     const TString collection = kResponseCollections[ic];
 
+    // QA dists: bin edges read off the gauss JES output only (any method's
+    // binning is identical), same convention PlotResponse itself uses
     for (int iv = 0; iv < kNResponseVariants; iv++) {
       const TString variant = kResponseVariants[iv];
-      TString jesName =
-          L2Name::ObjectName(cone, "JES", {variant, "vs_ptgen"}, {collection});
+      TString jesName = L2Name::ObjectName(cone, "JES", {variant, "vs_ptgen"},
+                                           {collection, kMethodKeys[0]});
       TH1D *hJes = (TH1D *)fIn->Get(cone + "/" + jesName);
       if (hJes) {
         TDirectory *dPt = (TDirectory *)fIn->Get(cone + "/QA_response_ptgen");
@@ -319,55 +323,74 @@ inline int CountResponsePlots(TFile *fIn, const TString &cone,
     }
   }
 
-  // per-variant summary: up to 6 canvases per cone (JES/JER x corr/reco/raw),
-  // each drawn whenever at least one collection has the corresponding object.
+  // per-variant summary: up to 6 canvases per (cone, method) (JES/JER x
+  // corr/reco/raw), each drawn whenever at least one collection has the
+  // corresponding object.
   auto countSummary = [&](const TString &quantity,
-                          const std::vector<TString> &keys) -> int {
+                          const std::vector<TString> &keys, int m) -> int {
     for (int ic = 0; ic < kNResponseCollections; ic++) {
-      TString name =
-          L2Name::ObjectName(cone, quantity, keys, {kResponseCollections[ic]});
+      TString name = L2Name::ObjectName(
+          cone, quantity, keys, {kResponseCollections[ic], kMethodKeys[m]});
       if (HasHAny(fIn, {cone + "/" + name}))
         return 1;
     }
     return 0;
   };
   for (int iv = 0; iv < kNResponseVariants; iv++) {
-    n += countSummary("JES", {kResponseVariants[iv], "vs_ptgen"});
-    n += countSummary("JER", {kResponseVariants[iv], "vs_ptgen"});
+    for (int m = 0; m < kNMethods; m++) {
+      n += countSummary("JES", {kResponseVariants[iv], "vs_ptgen"}, m);
+      n += countSummary("JER", {kResponseVariants[iv], "vs_ptgen"}, m);
+    }
   }
 
-  // variant comparison: up to 6 canvases per cone (JES/JER x incl/tag/probe),
-  // each drawn whenever at least one variant has the corresponding object.
+  // variant comparison: up to 6 canvases per (cone, method) (JES/JER x
+  // incl/tag/probe), each drawn whenever at least one variant has the
+  // corresponding object.
   auto countVariantComparison = [&](const TString &collection,
-                                    const TString &quantity) -> int {
+                                    const TString &quantity, int m) -> int {
     for (int iv = 0; iv < kNResponseVariants; iv++) {
-      TString name = L2Name::ObjectName(
-          cone, quantity, {kResponseVariants[iv], "vs_ptgen"}, {collection});
+      TString name =
+          L2Name::ObjectName(cone, quantity, {kResponseVariants[iv], "vs_ptgen"},
+                             {collection, kMethodKeys[m]});
       if (HasHAny(fIn, {cone + "/" + name}))
         return 1;
     }
     return 0;
   };
   for (int ic = 0; ic < kNResponseCollections; ic++) {
-    n += countVariantComparison(kResponseCollections[ic], "JES");
-    n += countVariantComparison(kResponseCollections[ic], "JER");
+    for (int m = 0; m < kNMethods; m++) {
+      n += countVariantComparison(kResponseCollections[ic], "JES", m);
+      n += countVariantComparison(kResponseCollections[ic], "JER", m);
+    }
   }
 
-  // detector-region overlay: 2 canvases per cone (JES/JER), each drawn
-  // whenever any coarse |eta| slice has the corresponding incl object.
-  auto countEtaRange = [&](const TString &quantity) -> int {
+  // detector-region overlay: 2 canvases per (cone, method) (JES/JER), each
+  // drawn whenever any coarse |eta| slice has the corresponding incl object.
+  auto countEtaRange = [&](const TString &quantity, int m) -> int {
     for (const RangeBin &sl : BuildEtaRangeSlices()) {
       TString name = L2Name::ObjectName(
           cone, quantity, {"corr", "vs_ptgen", L2Name::EtaKey(sl.lo, sl.hi)},
-          {"incl"});
+          {"incl", kMethodKeys[m]});
       if (HasHAny(fIn, {cone + "/JER_per_etarange/" + name})) {
         return 1;
       }
     }
     return 0;
   };
-  n += countEtaRange("JES");
-  n += countEtaRange("JER");
+  for (int m = 0; m < kNMethods; m++) {
+    n += countEtaRange("JES", m);
+    n += countEtaRange("JER", m);
+  }
+
+  // 5-method comparison: 2 canvases per cone (JES/JER), fixed at incl+corr,
+  // drawn whenever the gauss (method 0) object exists there.
+  auto countMethodComparison = [&](const TString &quantity) -> int {
+    TString name = L2Name::ObjectName(cone, quantity, {"corr", "vs_ptgen"},
+                                      {"incl", kMethodKeys[0]});
+    return HasHAny(fIn, {cone + "/" + name}) ? 1 : 0;
+  };
+  n += countMethodComparison("JES");
+  n += countMethodComparison("JER");
 
   return n;
 }

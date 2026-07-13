@@ -43,7 +43,6 @@ struct AnalysisConfig {
   double residualGausFitHalfWidth = 0.5;
   double residualAlphaFitHi = 0.31;
   double responseGausFitHalfWidth = 0.3;
-  double responseTruncFraction = 0.95;
 
   TString defaultMethod = "gauss";
   TString etaModeOutput = "both";

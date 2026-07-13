@@ -564,12 +564,12 @@ void runTextFile(TString residualsFile, SingleDatasetKind kind,
 // records read back from runResponse's JER_per_abseta/JER_per_eta directory
 static std::vector<std::vector<JerRecord>>
 CollectPtResEtaRecords(TDirectory *dPerEta, const TString &cone, int nEta,
-                       bool fullEta) {
+                       bool fullEta, const TString &method) {
   std::vector<std::vector<JerRecord>> etaRecords(nEta);
   for (int ieta = 0; ieta < nEta; ieta++) {
     TString etaKey = L2Name::EtaKey(ieta, fullEta);
-    TString hName =
-        L2Name::ObjectName(cone, "JER", {"corr", "vs_ptgen", etaKey}, {"incl"});
+    TString hName = L2Name::ObjectName(cone, "JER", {"corr", "vs_ptgen", etaKey},
+                                       {"incl", method});
     TH1D *h = (TH1D *)dPerEta->Get(hName);
     if (!h) {
       continue;
@@ -611,7 +611,8 @@ static bool WritePtResolutionFile(const TString &path,
   return ok;
 }
 
-void runTextFilePtResolution(TString responseFile, TString outputTag) {
+void runTextFilePtResolution(TString responseFile, TString outputTag,
+                             TString method) {
   const AnalysisConfig &cfg = Config();
 
   TFile *fIn = TFile::Open(responseFile, "read");
@@ -622,6 +623,9 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
 
   if (outputTag.IsNull()) {
     outputTag = "JER_ptresolution";
+  }
+  if (method.IsNull()) {
+    method = cfg.defaultMethod;
   }
   if (outputTag.Contains("/")) {
     std::cerr << "ERROR: outputTag must not contain '/': " << outputTag << "\n";
@@ -652,7 +656,7 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
             << " -- was this file produced with abs-eta output enabled?\n";
       } else {
         auto etaRecords =
-            CollectPtResEtaRecords(dPerAbsEta, cone, nAbsEta, false);
+            CollectPtResEtaRecords(dPerAbsEta, cone, nAbsEta, false, method);
 
         TString path =
             textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
@@ -681,7 +685,8 @@ void runTextFilePtResolution(TString responseFile, TString outputTag) {
             << "No JER_per_eta/ directory for " << cone
             << " -- was this file produced with full-eta output enabled?\n";
       } else {
-        auto etaRecords = CollectPtResEtaRecords(dPerEta, cone, nFullEta, true);
+        auto etaRecords =
+            CollectPtResEtaRecords(dPerEta, cone, nFullEta, true, method);
 
         TString path =
             textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";

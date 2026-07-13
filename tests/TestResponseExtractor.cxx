@@ -91,12 +91,12 @@ int main() {
   {
     static const char *const kVariantTags[3] = {"corr", "reco", "raw"};
     for (const char *tag : kVariantTags) {
-      TH1D *hJES =
-          (TH1D *)fIn->Get(Form("ak4PF/ak4PF_JES_%s_vs_ptgen_incl", tag));
-      TH1D *hJER =
-          (TH1D *)fIn->Get(Form("ak4PF/ak4PF_JER_%s_vs_ptgen_incl", tag));
-      Check(hJES != nullptr, Form("JES_%s_vs_ptgen_incl exists", tag));
-      Check(hJER != nullptr, Form("JER_%s_vs_ptgen_incl exists", tag));
+      TH1D *hJES = (TH1D *)fIn->Get(
+          Form("ak4PF/ak4PF_JES_%s_vs_ptgen_incl_gauss", tag));
+      TH1D *hJER = (TH1D *)fIn->Get(
+          Form("ak4PF/ak4PF_JER_%s_vs_ptgen_incl_gauss", tag));
+      Check(hJES != nullptr, Form("JES_%s_vs_ptgen_incl_gauss exists", tag));
+      Check(hJER != nullptr, Form("JER_%s_vs_ptgen_incl_gauss exists", tag));
       if (hJES && hJER) {
         const int bin =
             hJES->GetXaxis()->FindBin(105.0); // pt_gen=105 -> [100,110) bin
@@ -125,9 +125,10 @@ int main() {
   {
     // ConeHistograms::Init always constructs three response sparses
     // extraction writes JES/JER TH1Ds for unfilled hists still (see fallback to unity)
-    TH1D *hJESTag = (TH1D *)fIn->Get("ak4PF/ak4PF_JES_corr_vs_ptgen_tag");
-    Check(hJESTag != nullptr,
-          "JES_corr_vs_ptgen_tag object still written (unfilled, not absent)");
+    TH1D *hJESTag =
+        (TH1D *)fIn->Get("ak4PF/ak4PF_JES_corr_vs_ptgen_tag_gauss");
+    Check(hJESTag != nullptr, "JES_corr_vs_ptgen_tag_gauss object still "
+                              "written (unfilled, not absent)");
     if (hJESTag) {
       bool allZero = true;
       for (int b = 1; b <= hJESTag->GetNbinsX(); b++) {
@@ -147,10 +148,11 @@ int main() {
     // eta=0.13 lands in |eta| bin 0 ([0,0.261])
     // signed full-eta bin 18 ([0,0.261]) 
     // both should carry the real fit
-    TH1D *hAbs = (TH1D *)fIn->Get(
-        "ak4PF/JER_per_abseta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+    TH1D *hAbs = (TH1D *)fIn->Get("ak4PF/JER_per_abseta/"
+                                  "ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_"
+                                  "incl_gauss");
     TH1D *hFull = (TH1D *)fIn->Get(
-        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl");
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_0p0_0p261_incl_gauss");
     Check(hAbs != nullptr, "JER_per_abseta eta_0p0_0p261 exists");
     Check(hFull != nullptr, "JER_per_eta eta_0p0_0p261 exists");
     if (hAbs && hFull) {
@@ -166,7 +168,7 @@ int main() {
     // the mirror-image negative-eta bin no real entries 
     // should stay all zero, proving JER_per_eta isn't JER_per_abseta mirrored
     TH1D *hFullNeg = (TH1D *)fIn->Get(
-        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_m0p261_0p0_incl");
+        "ak4PF/JER_per_eta/ak4PF_JER_corr_vs_ptgen_eta_m0p261_0p0_incl_gauss");
     Check(hFullNeg != nullptr,
           "JER_per_eta eta_m0p261_0p0 (negative side) exists");
     if (hFullNeg) {
