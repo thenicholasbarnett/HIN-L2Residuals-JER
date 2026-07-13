@@ -12,7 +12,9 @@
 
 #include "plotting/Style.h"
 #include "plotting/Utilities.h"
+#include "AnalysisConfig.h"
 #include "Binning.h"
+#include "Colors.h"
 #include "Naming.h"
 #include "ProgressBar.h"
 
@@ -250,6 +252,185 @@ inline void PlotFinalsGrid(TFile *fIn, const TString &outDir,
       pb.Update();
 
       delete c; // cascade-deletes h2 (drawn on the canvas, same as PlotFinals)
+    }
+  }
+}
+
+// Cone-size overlay: for each (method, etaMode, pT slice), overlay all cone
+// sizes across eta -- the transpose of PlotFinals' pT-slice overlay for one
+// fixed cone. Reads across every cone's directory in fIn, so unlike
+// PlotFinals/PlotFinalsGrid (called once per cone from runPlotting.C's
+// per-cone loop) this is called exactly once.
+inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
+                             const BinningConfig &bins, ProgressBar &pb,
+                             bool isClosure = false, bool useJer = false) {
+  static Color_t (*const kConeColors[])() = {KlimtPink, KlimtRed, KlimtYellow,
+                                             KlimtGreen, KlimtBlue};
+  static constexpr int kNConeColors =
+      sizeof(kConeColors) / sizeof(kConeColors[0]);
+
+  const std::vector<TString> &cones = Config().coneLabels;
+  const int nCones = (int)cones.size();
+  const TString calibKey = useJer ? "jer" : "jec";
+
+  for (int m = 0; m < kNMethods; m++) {
+    for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
+      const bool fullEta = (ieta == 1);
+      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
+      const double xFullMin =
+          fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
+      const double xFullMax =
+          fullEta ? kEtaEdges.back() : (double)kAbsEtaEdges.back();
+      const TString etaMode = L2Name::EtaModeKey(fullEta);
+
+      for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
+        if (!pb.ShouldKeep())
+          continue;
+        const auto &ptSl = bins.ptavgSlices[ip];
+
+        std::vector<TH1D *> hists(nCones, nullptr);
+        for (int ic = 0; ic < nCones; ic++) {
+          TString name = L2Name::ObjectName(
+              cones[ic], CalibKind("intercept", useJer),
+              {etaMode, L2Name::PtKey(ptSl)}, {kMethodKeys[m]});
+          hists[ic] = GetHAny(fIn, {cones[ic] + "/" + name});
+        }
+
+        bool anyValid = false;
+        for (auto *h : hists)
+          if (h) {
+            anyValid = true;
+            break;
+          }
+
+        // Step 3 grid fallback per cone, same convention as PlotFinals --
+        // project this pT slice's row out of each cone's own grid.
+        if (!anyValid) {
+          for (int ic = 0; ic < nCones; ic++) {
+            TString gridName =
+                L2Name::ObjectName(cones[ic], CalibKind("corrfinal", useJer),
+                                   {etaMode}, {kMethodKeys[m]});
+            TString gridNormName = gridName + "_norm";
+            TH2D *h2 = GetH2Any(
+                fIn, {cones[ic] + "/" + gridNormName, gridNormName,
+                     cones[ic] + "/" + gridName, gridName});
+            if (!h2) {
+              continue;
+            }
+            TH1D *px;
+            {
+              TDirectory::TContext nodir(nullptr);
+              px = h2->ProjectionX(Form("%s_px%d", gridName.Data(), ip),
+                                   ip + 1, ip + 1);
+            }
+            px->SetDirectory(0);
+            hists[ic] = px;
+            anyValid = true;
+            delete h2;
+          }
+        }
+
+        if (!anyValid) {
+          for (auto *h : hists)
+            delete h;
+          continue;
+        }
+
+        const TString cvName =
+            Form("finalscone_%s_%s_%s_%s", calibKey.Data(), kMethodKeys[m],
+                 etaMode.Data(), L2Name::PtKey(ptSl).Data());
+        TCanvas *c = new TCanvas(cvName, "", 800, 800);
+        RealAspectRatio(c);
+        c->SetLeftMargin(0.20);
+        c->SetBottomMargin(0.12);
+        c->SetGridx();
+        c->SetGridy();
+
+        double ylo = 0.9, yhi = 1.6;
+        if (isClosure) {
+          ylo = 0.95;
+          yhi = 1.05;
+        }
+
+        auto [xMin, xMax] = OccupiedRangeWithMargin(hists, ylo, yhi);
+        if (xMin >= xMax) {
+          xMin = xFullMin;
+          xMax = xFullMax;
+        }
+
+        const double legX1 = fullEta ? 0.34 : 0.215;
+        const double legX2 = fullEta ? 0.67 : 0.54;
+        TLegend *legInfo = new TLegend(legX1, 0.82, legX2, 0.895);
+        legInfo->SetBorderSize(0);
+        legInfo->SetFillStyle(0);
+        legInfo->SetTextFont(42);
+        legInfo->SetTextSize(0.028);
+        legInfo->AddEntry((TObject *)nullptr, ptSl.title.Data(), "");
+        legInfo->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(),
+                          "");
+
+        const double coneLegY1 = isClosure ? 0.135 : 0.29;
+        const double coneLegY2 = coneLegY1 + 0.032 * (double)nCones;
+        TLegend *legCone = new TLegend(legX1, coneLegY1, legX2, coneLegY2);
+        legCone->SetBorderSize(0);
+        legCone->SetFillStyle(0);
+        legCone->SetTextFont(42);
+        legCone->SetTextSize(0.028);
+
+        bool first = true;
+        for (int ic = 0; ic < nCones; ic++) {
+          if (!hists[ic])
+            continue;
+          StyleH(hists[ic], kConeColors[ic % kNConeColors](), kMethodStyles[m],
+                1.5f);
+          hists[ic]->GetXaxis()->SetRangeUser(xMin, xMax);
+          hists[ic]->GetYaxis()->SetRangeUser(ylo, yhi);
+          hists[ic]->GetYaxis()->SetTitle(useJer ? kFinalsYTitleJer
+                                                 : kFinalsYTitle);
+          hists[ic]->GetYaxis()->SetTitleSize(0.048);
+          hists[ic]->GetYaxis()->SetTitleOffset(2.0);
+          hists[ic]->GetYaxis()->SetLabelSize(0.038);
+          hists[ic]->GetXaxis()->SetTitle(xTitle);
+          hists[ic]->GetXaxis()->SetTitleSize(0.052);
+          hists[ic]->GetXaxis()->SetLabelSize(0.038);
+          hists[ic]->GetXaxis()->CenterTitle();
+          hists[ic]->GetYaxis()->CenterTitle();
+          hists[ic]->SetTitle("");
+          hists[ic]->Draw(first ? "E1" : "E1 same");
+          first = false;
+          legCone->AddEntry(hists[ic], cones[ic], "lp");
+        }
+
+        TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
+        rl->SetLineStyle(2);
+        rl->SetLineColor(kGray + 2);
+        rl->SetLineWidth(1);
+        rl->Draw();
+
+        if (isClosure) {
+          TLine *rl99 = new TLine(xMin, 0.99, xMax, 0.99);
+          rl99->SetLineStyle(3);
+          rl99->SetLineColor(kBlack);
+          rl99->SetLineWidth(2);
+          rl99->Draw();
+
+          TLine *rl101 = new TLine(xMin, 1.01, xMax, 1.01);
+          rl101->SetLineStyle(3);
+          rl101->SetLineColor(kBlack);
+          rl101->SetLineWidth(2);
+          rl101->Draw();
+        }
+
+        legInfo->Draw();
+        legCone->Draw();
+        DrawAsymHeader(0.20);
+
+        SavePlot(c, outDir, "finalscone", "finals",
+                {calibKey, etaMode, L2Name::PtKey(ptSl)}, cvName);
+        pb.Update();
+
+        delete c; // cascade-deletes hists, legInfo, legCone, rl (and rl99/rl101 if drawn)
+      }
     }
   }
 }

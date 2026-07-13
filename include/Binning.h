@@ -113,6 +113,32 @@ inline std::vector<RangeBin> BuildEtaRangeSlices() {
   return slices;
 }
 
+// Cumulative (nested-from-zero) variant of BuildEtaRangeSlices, same edge
+// values: [0, edge_i] for each edge_i > 0 in kEtaRangeEdges, e.g. "just
+// barrel", "barrel+endcap", ..., up to the full range -- lets a comparison
+// show how a quantity changes as progressively more of the endcap/forward
+// region gets folded in, alongside (not instead of) the disjoint detector
+// regions BuildEtaRangeSlices already covers.
+inline std::vector<RangeBin> BuildEtaRangeSlicesCumulative() {
+  static Color_t (*const kColorCycle[])() = {
+      HiroshigeNightBlue, HiroshigeLightBlue, HiroshigeOrange,
+      HiroshigeLightRed};
+  static constexpr int kNColors = sizeof(kColorCycle) / sizeof(kColorCycle[0]);
+
+  std::vector<RangeBin> slices;
+  const int n = (int)kEtaRangeEdges.size() - 1;
+  for (int i = 0; i < n; i++) {
+    RangeBin sl;
+    sl.lo = kEtaRangeEdges[0];
+    sl.hi = kEtaRangeEdges[i + 1];
+    sl.title = Form("|#eta| < %.1f", sl.hi);
+    sl.shortName = "";
+    sl.color = kColorCycle[i % kNColors]();
+    slices.push_back(sl);
+  }
+  return slices;
+}
+
 struct BinningConfig {
 
   // 4D THnSparse axes
