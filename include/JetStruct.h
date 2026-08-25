@@ -21,6 +21,7 @@ template <Int_t MAXNREF> struct JetStruct {
     Float_t pt[MAXNREF];
     Float_t eta[MAXNREF];
     Float_t phi[MAXNREF];
+    Float_t area[MAXNREF];
     struct PFInfo {
       // PF fractions
       Float_t CHF[MAXNREF];
@@ -55,7 +56,8 @@ template <Int_t MAXNREF> struct JetStruct {
     std::vector<std::pair<TString, void *>> map = {
         {"nref", &reco.nref},     {"rawpt", reco.rawpt},
         {"jtpt", reco.pt},        {"jteta", reco.eta},
-        {"jtphi", reco.phi},      {"jtPfCHF", reco.pf.CHF},
+        {"jtphi", reco.phi},      {"jtarea", reco.area},
+        {"jtPfCHF", reco.pf.CHF},
         {"jtPfNHF", reco.pf.NHF}, {"jtPfCEF", reco.pf.CEF},
         {"jtPfNEF", reco.pf.NEF}, {"jtPfMUF", reco.pf.MUF},
         {"jtPfCHM", reco.pf.CHM}, {"jtPfNHM", reco.pf.NHM},

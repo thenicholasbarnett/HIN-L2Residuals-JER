@@ -40,12 +40,17 @@ veto_map_histogram = "jetvetomap_all"
 labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
 
 [jec]
+# Chain applied in order, per cone -- L1FastJet before L2Relative, matching
+# the real correction sequence (L1 removes pileup offset, L2Relative flattens
+# the eta/pT response). Applied unconditionally to both data and MC, same as
+# L2Relative alone was before. To run without L1 (e.g. an era with no derived
+# L1FastJet yet), just drop the first entry from each cone's list.
 files = [
-    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK2PF.txt" ],
-    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK3PF.txt" ],
-    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK4PF.txt" ],
-    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK5PF.txt" ],
-    [ "data/jec/Prompt24HIpp_V1_MC_L2Relative_AK6PF.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK2PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK2PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK3PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK3PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK5PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK5PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK6PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK6PFchs.txt" ],
 ]
 
 [jer_closure]

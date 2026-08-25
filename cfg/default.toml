@@ -47,6 +47,9 @@ veto_map_histogram = "jetvetomap_all"
 labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
 
 [jec]
+# Each inner list is a per-cone correction chain, applied in order (e.g.
+# L1FastJet then L2Relative) -- a single-entry list applies just that one
+# level.
 files = [
     [ "REQUIRED_SET_ME/AK2PF.txt" ],
     [ "REQUIRED_SET_ME/AK3PF.txt" ],

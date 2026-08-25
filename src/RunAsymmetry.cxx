@@ -275,6 +275,8 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
         jecs[c].SetJetPT(jets[c].reco.rawpt[j]);
         jecs[c].SetJetEta(jets[c].reco.eta[j]);
         jecs[c].SetJetPhi(jets[c].reco.phi[j]);
+        jecs[c].SetJetArea(jets[c].reco.area[j]);
+        jecs[c].SetRho(event.rho);
         corrPt[c][j] = (float)jecs[c].GetCorrectedPT();
       }
     }
