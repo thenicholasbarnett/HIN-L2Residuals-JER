@@ -192,9 +192,14 @@ static ResponseFitResult ExtractResponseTrunc(TH1D *h, double fraction,
 }
 
 // double-sided Crystal Ball (DoubleSidedCB, include/CrystalBall.h), same
-// two-stage seeding as CalibrationExtractor.cxx's FitCrystalBall but
-// windowed around the response ratio's own located peak instead of a fixed
-// +-halfWidth about 0.
+// two-stage seeding as CalibrationExtractor.cxx's FitCrystalBall: LocateResponsePeak
+// plays the role of Step 2's Gaussian pre-fit (seeds mean/sigma), and the CB
+// itself fits the same fixed +-halfWidth window as the pre-fit (centered on
+// 1.0, the response ratio's natural center, mirroring Step 2's fixed window
+// centered on 0) -- not a narrower +-2 sigma window. A double-sided CB's four
+// tail parameters are constrained by the distribution's tails, which a tight
+// +-2 sigma window mostly excludes; that under-constraint was previously
+// causing MINOS to fail validity on the large majority of bins.
 static ResponseFitResult ExtractResponseCrystalBall(TH1D *h, double halfWidth,
                                                      int minEntries) {
   ResponseFitResult r;
@@ -203,7 +208,7 @@ static ResponseFitResult ExtractResponseCrystalBall(TH1D *h, double halfWidth,
     return r;
   }
   TF1 *cb = new TF1(Form("_respcb_%s", h->GetName()), DoubleSidedCB,
-                    loc.mean - 2.0 * loc.sigma, loc.mean + 2.0 * loc.sigma, 7);
+                    1.0 - halfWidth, 1.0 + halfWidth, 7);
   cb->SetParameter(0, h->GetMaximum());
   cb->SetParameter(1, loc.mean);
   cb->SetParameter(2, loc.sigma);
