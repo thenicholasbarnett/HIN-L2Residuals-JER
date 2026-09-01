@@ -94,7 +94,7 @@ response_gaus_fit_half_width = 0.3
 ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
 
 [step3]
-default_method = "gauss"
-# other options currently available: doubleGauss | trunc90 | trunc95
-eta_mode = "both"
+default_method = "trunc95"
+# other options currently available: gauss | doubleGauss | trunc90 | crystalball
+eta_mode = "eta"
 # other options currently available: abseta | eta
