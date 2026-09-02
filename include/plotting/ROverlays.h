@@ -94,7 +94,7 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         auto [ylo, yhi] = YRange({hRdc, hRmc});
         hRmc->GetXaxis()->SetRangeUser(xMin, xMax);
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
-        hRmc->GetYaxis()->SetTitle(kAsymFractionTitle);
+        hRmc->GetYaxis()->SetTitle(kRTitle);
         hRmc->GetYaxis()->SetTitleSize(0.040);
         hRmc->GetYaxis()->SetTitleOffset(1.9);
         hRmc->GetYaxis()->SetLabelSize(0.040);

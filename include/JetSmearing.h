@@ -10,7 +10,6 @@
 
 // CMS hybrid-method JER smearing (mirrors PhysicsTools/PatUtils's
 // SmearedJetProducerT.h, stripped of the EDProducer/EventSetup scaffolding).
-// Not yet wired into any pipeline step -- see JER smearing follow-up.
 namespace JetSmearing {
 
 struct Result {

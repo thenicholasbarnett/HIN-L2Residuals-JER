@@ -71,9 +71,10 @@ inline void SetRhoBins(THnSparse *h, Int_t axis) {
 
 // Build pT_avg RangeBins from cfg.ptavgEdges (cfg/2024ppRef.toml, [binning] ptavg_edges)
 inline std::vector<RangeBin> BuildPtAvgSlices(const std::vector<float> &edges) {
+  // Klimt instead of Hiroshige here -- the six pT slices need to read as
+  // distinct categories at a glance, not a blue-heavy gradient.
   static Color_t (*const kColorCycle[])() = {
-      HiroshigeYellow, HiroshigeIceBlue,  HiroshigeLightBlue,
-      HiroshigeBlue,   HiroshigeGrayBlue, HiroshigeNightBlue};
+      KlimtPink, KlimtRed, KlimtYellow, KlimtGreen, KlimtBlue, KlimtPurple};
   static constexpr int kNColors = sizeof(kColorCycle) / sizeof(kColorCycle[0]);
 
   std::vector<RangeBin> slices;

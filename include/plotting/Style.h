@@ -31,10 +31,14 @@ static const int kMethodStyles[] = {
     20, 34, 21, 22, 29}; // circle / cross / square / triangle-up / star
 
 // A = (p_T^probe - p_T^tag) / (p_T^probe + p_T^tag), see Dijet.h::MakeDijet.
-// R (roverlay/finals) is the same underlying quantity one step further
-// along (R = (1+A)/(1-A) = p_T^probe/p_T^tag), so it shares this label.
 static const TString kAsymFractionTitle =
     "#frac{p_{T}^{probe} - p_{T}^{tag}}{p_{T}^{probe} + p_{T}^{tag}}";
+
+// R (roverlay) is the same underlying quantity one step further along
+// (R = (1+A)/(1-A) = p_T^probe/p_T^tag), but it's an ensemble mean over
+// many events per bin, not a per-event ratio -- angle brackets say so,
+// instead of reusing kAsymFractionTitle's per-event A formula verbatim.
+static const TString kRTitle = "#frac{#LT p_{T}^{probe} #GT}{#LT p_{T}^{tag} #GT}";
 
 // JEC vs JER SF selector for Step 2 plots reading intercept/R/R_data/R_mc
 // objects (runCalibration's CALIBRATION=JEC|JER token); names differ by a

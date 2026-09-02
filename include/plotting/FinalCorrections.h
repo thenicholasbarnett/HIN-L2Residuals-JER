@@ -118,16 +118,18 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         xMax = xFullMax;
       }
 
-      // one legend (cone/method info + pT-slice entries), upper-middle of
-      // the plot, instead of two separate boxes
-      const double legX1 = 0.345, legX2 = 0.675;
-      const double legY1 = 0.62;
-      const double legY2 = legY1 + 0.032 * (double)(bins.ptavgSlices.size() + 2);
+      // one legend (cone/method info + pT-slice entries) -- upper-middle
+      // for full eta, upper-left for |eta| (its data only occupies x>=0,
+      // so upper-middle would sit on top of real points)
+      const double legX1 = fullEta ? 0.345 : 0.15;
+      const double legX2 = fullEta ? 0.675 : 0.42;
+      const double legY1 = fullEta ? 0.62 : 0.68;
+      const double legY2 = legY1 + 0.026 * (double)(bins.ptavgSlices.size() + 2);
       TLegend *leg = new TLegend(legX1, legY1, legX2, legY2);
       leg->SetBorderSize(0);
       leg->SetFillStyle(0);
       leg->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
-      leg->SetTextSize(0.028);
+      leg->SetTextSize(0.023);
       leg->SetTextAlign(22); // center entries instead of hugging the marker column
       leg->AddEntry((TObject *)nullptr, cone.Data(), "");
       leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
@@ -137,17 +139,26 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         if (!hists[ip])
           continue;
         const auto &ptSl = bins.ptavgSlices[ip];
-        StyleH(hists[ip], ptSl.color, kMethodStyles[m], 1.5f);
+        StyleH(hists[ip], ptSl.color, 20, 1.5f); // circles for every pT
+                                                 // slice -- kMethodStyles
+                                                 // varies by method, but
+                                                 // this plot fixes the
+                                                 // method and varies pT
         hists[ip]->GetXaxis()->SetRangeUser(xMin, xMax);
         hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
-        hists[ip]->GetYaxis()->SetTitle(useJer ? kFinalsYTitleJer
-                                               : kFinalsYTitle);
-        hists[ip]->GetYaxis()->SetTitleSize(0.040);
-        hists[ip]->GetYaxis()->SetTitleOffset(1.50);
-        hists[ip]->GetYaxis()->SetLabelSize(0.038);
+        // closure mode reads the fixed 0.95-1.05 band as "does this equal
+        // 1", not "what's the correction shape" -- a plain closure-factor
+        // label fits that better than the derivation-shaped kFSR fraction
+        hists[ip]->GetYaxis()->SetTitle(
+            isClosure ? (useJer ? TString("JER SF Closure Factor")
+                                : TString("L2Residual Closure Factors"))
+                     : (useJer ? kFinalsYTitleJer : kFinalsYTitle));
+        hists[ip]->GetYaxis()->SetTitleSize(isClosure ? 0.040 : 0.030);
+        hists[ip]->GetYaxis()->SetTitleOffset(isClosure ? 1.38 : 1.50);
+        hists[ip]->GetYaxis()->SetLabelSize(0.032);
         hists[ip]->GetXaxis()->SetTitle(xTitle);
         hists[ip]->GetXaxis()->SetTitleSize(0.052);
-        hists[ip]->GetXaxis()->SetLabelSize(0.038);
+        hists[ip]->GetXaxis()->SetLabelSize(0.032);
         hists[ip]->GetXaxis()->CenterTitle();
         hists[ip]->GetYaxis()->CenterTitle();
         hists[ip]->SetTitle("");

@@ -90,6 +90,12 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
         allMain.push_back(hNorm[ip]);
     }
     auto [ylo, yhi] = YRange(allMain);
+    auto [occXMin, occXMax] = OccupiedRangeWithMargin(allMain);
+    double plotXMin = xMin, plotXMax = xMax;
+    if (occXMin < occXMax) {
+      plotXMin = occXMin;
+      plotXMax = occXMax;
+    }
 
     // find first valid histogram for cloning dummy legend entries
     TH1D *firstD = nullptr;
@@ -104,19 +110,26 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
     TH1D *dummyN = (TH1D *)firstD->Clone("_nc_dn");
     dummyN->SetDirectory(0);
     StyleH(dummyD, kGray + 2, 20, 1.5f);
-    StyleH(dummyN, kGray + 2, 24, 1.5f);
+    StyleH(dummyN, kGray + 2, 25, 2.0f); // open square + dotted errors, distinct
+    dummyN->SetLineStyle(3);           // from Direct's filled circle/solid line
 
-    TLegend *legStyle = new TLegend(0.16, 0.14, 0.46, 0.25);
-    legStyle->SetBorderSize(0);
-    legStyle->SetFillStyle(0);
-    legStyle->SetTextSize(0.046);
-    legStyle->AddEntry(dummyD, "Direct", "lp");
-    legStyle->AddEntry(dummyN, "kFSR norm.", "lp");
-
-    TLegend *legPt = new TLegend(0.60, 0.88 - 0.055 * nPt, 0.94, 0.88);
-    legPt->SetBorderSize(0);
-    legPt->SetFillStyle(0);
-    legPt->SetTextSize(0.046);
+    // one legend (cone/method/calib-tag info, Direct/kFSR-norm marker key,
+    // pT-slice color key), upper-middle of the plot -- |eta| vs full-eta
+    // dropped, it's already the x-axis title
+    const int nLegEntries = 3 + 2 + nPt;
+    const double legX1 = 0.32, legX2 = 0.68;
+    const double legY1 = 0.55;
+    const double legY2 = legY1 + 0.026 * (double)nLegEntries;
+    TLegend *leg = new TLegend(legX1, legY1, legX2, legY2);
+    leg->SetBorderSize(0);
+    leg->SetFillStyle(0);
+    leg->SetTextFont(42);
+    leg->SetTextSize(0.030);
+    leg->AddEntry((TObject *)nullptr, cone, "");
+    leg->AddEntry((TObject *)nullptr, kMethodLabels[m], "");
+    leg->AddEntry((TObject *)nullptr, CalibTag(useJer), "");
+    leg->AddEntry(dummyD, "Direct", "lp");
+    leg->AddEntry(dummyN, "kFSR norm.", "lp");
 
     bool first = true;
     for (int ip = 0; ip < nPt; ip++) {
@@ -124,31 +137,33 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
         continue;
       const auto &ptSl = bins.ptavgSlices[ip];
       StyleH(hDirect[ip], ptSl.color, 20, 1.5f);
+      hDirect[ip]->GetXaxis()->SetRangeUser(plotXMin, plotXMax);
       hDirect[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
-      hDirect[ip]->GetYaxis()->SetTitle(CalibYTitle(useJer));
-      hDirect[ip]->GetYaxis()->SetTitleSize(0.052);
-      hDirect[ip]->GetYaxis()->SetTitleOffset(1.15);
-      hDirect[ip]->GetYaxis()->SetLabelSize(0.048);
+      hDirect[ip]->GetYaxis()->SetTitle(useJer ? "JER SF"
+                                               : "L2Residual Corr. Factor");
+      hDirect[ip]->GetYaxis()->SetTitleSize(0.048);
+      hDirect[ip]->GetYaxis()->SetTitleOffset(1.10);
+      hDirect[ip]->GetYaxis()->SetLabelSize(0.040);
       hDirect[ip]->GetXaxis()->SetLabelSize(0.0);
       hDirect[ip]->GetXaxis()->SetTitle("");
       hDirect[ip]->SetTitle("");
+      // Direct stays a filled circle with solid error bars; kFSR norm gets
+      // its own marker shape (open square) and dotted error bars/bin-width
+      // ticks so it reads as a genuinely different series instead of
+      // vanishing under a same-color, same-position filled point
       hDirect[ip]->Draw(first ? "E1" : "E1 same");
       first = false;
       if (hNorm[ip]) {
-        StyleH(hNorm[ip], ptSl.color, 24, 1.5f);
+        StyleH(hNorm[ip], ptSl.color, 25, 2.0f);
+        hNorm[ip]->SetLineStyle(3);
         hNorm[ip]->SetTitle("");
         hNorm[ip]->Draw("E1 same");
       }
-      legPt->AddEntry(hDirect[ip], ptSl.title, "lp");
+      leg->AddEntry(hDirect[ip], ptSl.title, "lp");
     }
-    RefLine(cv.main, xMin, xMax, 1.0);
-    legStyle->Draw();
-    legPt->Draw();
-
-    // legStyle (bottom-left) and legPt (top-right) already occupy those
-    // corners -- top-left is the free one
-    DrawInfoLegend(0.16, 0.68, 0.50, 0.90,
-                   {cone, kMethodLabels[m], xTitle, CalibTag(useJer)});
+    RefLine(cv.main, plotXMin, plotXMax, 1.0);
+    leg->Draw();
+    DrawCMSInternalHeader(0.13, 0.96, 0.915, 0.040);
 
     // ratio pad
     cv.ratio->cd();
@@ -166,12 +181,16 @@ inline void PlotNormComp(TFile *fIn, const TString &outDir, const TString &cone,
       if (!hRatios[ip])
         continue;
       StyleH(hRatios[ip], bins.ptavgSlices[ip].color, 20, 1.5f);
+      hRatios[ip]->GetXaxis()->SetRangeUser(plotXMin, plotXMax);
       TuneRatio(hRatios[ip], xTitle, "Norm / Direct", rlo, rhi);
+      // main/ratio pads are 0.69/0.30 of the canvas height (MakeTwoPad)
+      hRatios[ip]->GetYaxis()->SetLabelSize(0.092);
+      hRatios[ip]->GetXaxis()->SetLabelSize(0.092);
       hRatios[ip]->Draw(firstR ? "E1" : "E1 same");
       firstR = false;
     }
     if (!firstR)
-      RefLine(cv.ratio, xMin, xMax, 1.0);
+      RefLine(cv.ratio, plotXMin, plotXMax, 1.0);
 
     cv.c->cd();
     SavePlot(cv.c, outDir, cone, "normcomp", {calibKey, etaMode}, cvName);
