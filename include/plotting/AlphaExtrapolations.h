@@ -24,7 +24,7 @@ inline TString AlphaYTitle(bool useJer) {
 }
 
 inline TString AlphaEtaBinLabel(int ie) {
-  return Form("%.3f < |#eta_{reco}| < %.3f", kAbsEtaEdges[ie],
+  return Form("%.3f < |#eta^{probe}| < %.3f", kAbsEtaEdges[ie],
              kAbsEtaEdges[ie + 1]);
 }
 
@@ -83,11 +83,15 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
         gc->GetYaxis()->CenterTitle();
         gc->GetYaxis()->SetTitleSize(0.036);
         gc->GetYaxis()->SetTitleOffset(2.2);
-        gc->GetYaxis()->SetLabelSize(0.032);
+        gc->GetYaxis()->SetLabelSize(0.028);
+        gc->GetXaxis()->SetLabelSize(0.028);
         gc->GetXaxis()->SetLimits(0.0, 0.50);
         gc->SetTitle("");
 
         gc->Draw("AP"); // embedded fit function draws automatically
+        // xLeft matches the explicit left margin, xRight/y match the
+        // default 0.10 top/right margins (see roverlay's identical fix)
+        DrawCMSInternalHeader(0.18, 0.90, 0.915);
 
         TF1 *fitFn = GetGraphFit(gc);
         if (fitFn) {
@@ -202,7 +206,8 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
           gc[m]->GetYaxis()->CenterTitle();
           gc[m]->GetYaxis()->SetTitleSize(0.036);
           gc[m]->GetYaxis()->SetTitleOffset(2.2);
-          gc[m]->GetYaxis()->SetLabelSize(0.032);
+          gc[m]->GetYaxis()->SetLabelSize(0.028);
+          gc[m]->GetXaxis()->SetLabelSize(0.028);
           gc[m]->GetXaxis()->SetLimits(0.0, 0.50);
           gc[m]->Draw("AP");
           gc[m]->GetHistogram()->SetMinimum(ylo);
@@ -223,6 +228,7 @@ inline void PlotAlphaFit(TFile *fIn, const TString &outDir, const TString &cone,
         first = false;
       }
       leg->Draw();
+      DrawCMSInternalHeader(0.18, 0.90, 0.915);
 
       // vertical reference at x=0.30 to mark the fit boundary
       TLine *vl = new TLine(0.30, ylo, 0.30, yhi);

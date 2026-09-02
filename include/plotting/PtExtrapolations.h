@@ -85,9 +85,13 @@ inline void PlotPtFit(TFile *fIn, const TString &outDir, const TString &cone,
         hl->SetLineWidth(1);
         hl->Draw();
 
-        DrawInfoLegend(0.60, 0.68, 0.92, 0.90,
-                       {cone, kMethodLabels[m], etaMode,
-                        Form("eta bin %d", ie)});
+        const TString etaRangeLabel =
+            fullEta ? Form("%.3f < #eta^{probe} < %.3f", kEtaEdges[ie],
+                          kEtaEdges[ie + 1])
+                   : Form("%.3f < |#eta^{probe}| < %.3f", kAbsEtaEdges[ie],
+                          kAbsEtaEdges[ie + 1]);
+        DrawInfoLegend(0.44, 0.68, 0.89, 0.90,
+                       {cone, kMethodLabels[m], etaMode, etaRangeLabel}, 0.028);
 
         SavePlot(c, outDir, cone, "ptfit", {etaMode, etaKey}, cvName);
         pb.Update();

@@ -62,29 +62,41 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
       hRefl->SetLineStyle(2);
 
       auto [ylo, yhi] = YRange({hFull, hRefl});
+      auto [xMin, xMax] = OccupiedRangeWithMargin({hFull, hRefl});
+      if (xMin >= xMax) {
+        xMin = kEtaEdges.front();
+        xMax = kEtaEdges.back();
+      }
+      hFull->GetXaxis()->SetRangeUser(xMin, xMax);
       hFull->GetYaxis()->SetRangeUser(ylo, yhi);
       hFull->GetYaxis()->SetTitle(CalibYTitle(useJer));
       hFull->GetYaxis()->SetTitleSize(0.055);
       hFull->GetYaxis()->SetTitleOffset(1.10);
-      hFull->GetYaxis()->SetLabelSize(0.050);
+      hFull->GetYaxis()->SetLabelSize(0.040);
       hFull->GetXaxis()->SetLabelSize(0.0);
       hFull->GetXaxis()->SetTitle("");
       hFull->SetTitle("");
 
       hFull->Draw("E1");
       hRefl->Draw("E1 same");
-      RefLine(cv.main, kEtaEdges.front(), kEtaEdges.back(), 1.0);
+      RefLine(cv.main, xMin, xMax, 1.0);
+      DrawCMSInternalHeader(0.13, 0.96, 0.915, 0.040); // slightly larger
 
-      TLegend *leg = new TLegend(0.16, 0.14, 0.56, 0.28);
+      // one legend for both the Full/Reflected markers and the cone/
+      // method/pT/calib-tag info, upper-center of the plot
+      const double legX1 = 0.345, legX2 = 0.745;
+      TLegend *leg = new TLegend(legX1, 0.68, legX2, 0.872);
       leg->SetBorderSize(0);
       leg->SetFillStyle(0);
-      leg->SetTextSize(0.048);
+      leg->SetTextFont(42);
+      leg->SetTextSize(0.038);
+      leg->AddEntry((TObject *)nullptr, cone, "");
+      leg->AddEntry((TObject *)nullptr, kMethodLabels[m], "");
+      leg->AddEntry((TObject *)nullptr, sl.title, "");
+      leg->AddEntry((TObject *)nullptr, CalibTag(useJer), "");
       leg->AddEntry(hFull, "Full #eta", "lp");
       leg->AddEntry(hRefl, "|#eta| reflected", "lp");
       leg->Draw();
-
-      DrawInfoLegend(0.60, 0.68, 0.94, 0.90,
-                     {cone, kMethodLabels[m], sl.title, CalibTag(useJer)});
 
       // ratio pad
       cv.ratio->cd();
@@ -93,8 +105,13 @@ inline void PlotEtaSym(TFile *fIn, const TString &outDir, const TString &cone,
 
       StyleH(hRatio, kBlack, 20, 1.5f);
       TuneRatio(hRatio, "#eta", "Full / Refl.", 0.975, 1.025);
+      // main/ratio pads are 0.69/0.30 of the canvas height (MakeTwoPad) --
+      // same scaling roverlay uses to make label sizes read as equal
+      hRatio->GetYaxis()->SetLabelSize(0.092);
+      hRatio->GetXaxis()->SetLabelSize(0.092);
+      hRatio->GetXaxis()->SetRangeUser(xMin, xMax);
       hRatio->Draw("E1");
-      RefLine(cv.ratio, kEtaEdges.front(), kEtaEdges.back(), 1.0);
+      RefLine(cv.ratio, xMin, xMax, 1.0);
 
       cv.c->cd();
       SavePlot(cv.c, outDir, cone, "etasym", {calibKey, ptKey}, cvName);

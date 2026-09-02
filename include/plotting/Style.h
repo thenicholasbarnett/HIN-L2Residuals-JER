@@ -21,7 +21,7 @@
 // here is presentation-only.
 
 static const char *const kMethodLabels[] = {
-    "Gauss fit", "Double-Gauss fit", "Trunc. mean 90%", "Trunc. mean 95%",
+    "Gauss fit", "Double-Gauss fit", "90% Trunc. mean", "95% Trunc. mean",
     "Crystal Ball fit"};
 // avoid red/green together -- the classic colorblind-unsafe pairing
 static const Color_t kMethodColors[] = {HiroshigeNightBlue(), KlimtPurple(),
@@ -57,8 +57,8 @@ inline TString CalibYTitle(bool useJer) {
 // ("Gauss fit", ...) don't say which.
 inline TString CalibMethodLabel(int m, bool useJer) {
   static const char *const kMeanLabels[] = {
-      "Gauss mean", "Double-Gauss mean", "Trunc. mean 90%",
-      "Trunc. mean 95%", "Crystal Ball mean"};
+      "Gauss mean", "Double-Gauss mean", "90% Trunc. mean",
+      "95% Trunc. mean", "Crystal Ball mean"};
   static const char *const kRmsLabels[] = {
       "Gauss RMS", "Double-Gauss RMS", "Trunc. RMS 90%", "Trunc. RMS 95%",
       "Crystal Ball RMS"};
@@ -138,19 +138,19 @@ inline void TuneRatio(TH1D *h, const TString &xTitle, const TString &yTitle,
 // CMS/internal labels and common text labels
 
 inline void DrawCMSInternalHeader(double xLeft = 0.13, double xRight = 0.95,
-                                  double y = 0.905) {
+                                  double y = 0.905, double textSize = 0.035) {
   TLatex *cms = new TLatex(xLeft, y, "#bf{CMS} #it{Internal}");
   cms->SetNDC();
   cms->SetTextFont(42);
   cms->SetTextAlign(11);
-  cms->SetTextSize(0.035);
+  cms->SetTextSize(textSize);
   cms->Draw();
 
   TLatex *lumi = new TLatex(xRight, y, "2024 pp (5.36 TeV)");
   lumi->SetNDC();
   lumi->SetTextFont(42);
   lumi->SetTextAlign(31);
-  lumi->SetTextSize(0.035);
+  lumi->SetTextSize(textSize);
   lumi->Draw();
 }
 

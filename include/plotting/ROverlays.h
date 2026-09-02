@@ -81,8 +81,9 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
 
         // main pad
         cv.main->cd();
-        cv.main->SetLeftMargin(0.16); // wider than TwoPad's default 0.13 --
-                                      // the explicit fraction title needs it
+        cv.main->SetLeftMargin(0.19); // wider than TwoPad's default 0.13 --
+                                      // the explicit fraction title needs it,
+                                      // widened further to fit its offset
         cv.main->SetGridx();
         cv.main->SetGridy();
 
@@ -95,8 +96,8 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
         hRmc->GetYaxis()->SetTitle(kAsymFractionTitle);
         hRmc->GetYaxis()->SetTitleSize(0.040);
-        hRmc->GetYaxis()->SetTitleOffset(1.35);
-        hRmc->GetYaxis()->SetLabelSize(0.055);
+        hRmc->GetYaxis()->SetTitleOffset(1.9);
+        hRmc->GetYaxis()->SetLabelSize(0.040);
         hRmc->GetYaxis()->CenterTitle();
         hRmc->GetXaxis()->SetLabelSize(0.0);
         hRmc->GetXaxis()->SetTitle("");
@@ -105,31 +106,49 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         hRmc->Draw("E1");
         hRdc->Draw("E1 same");
         RefLine(cv.main, xMin, xMax, 1.0);
+        // xLeft matches the main pad's widened left margin, xRight matches
+        // its right margin (0.04) so "2024 pp..." sits flush with the frame's
+        // right edge, y nudged just above DrawAsymHeader's default (0.905,
+        // tuned for a single-pad canvas) to clear this pad's frame line
+        // without floating away from it
+        DrawCMSInternalHeader(0.19, 0.96, 0.915);
 
         // close to the left border/barrel, where R sits flat near 1 and
-        // stays out of the markers' way
-        TLegend *leg = new TLegend(0.18, 0.14, 0.40, 0.28);
+        // stays out of the markers' way -- one legend for both the R_MC/
+        // R_data markers and the cone/method/pT/alpha info, instead of a
+        // second, borderless legend floating in the top-right corner
+        TLegend *leg = new TLegend(0.21, 0.14, 0.49, 0.42);
         leg->SetBorderSize(0);
         leg->SetFillStyle(0);
-        leg->SetTextSize(0.048);
+        leg->SetTextFont(42);
+        leg->SetTextSize(0.038);
+        leg->AddEntry((TObject *)nullptr, cone, "");
+        leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer), "");
+        leg->AddEntry((TObject *)nullptr, ptSl.title, "");
+        leg->AddEntry((TObject *)nullptr, aSl.title, "");
         leg->AddEntry(hRmc, "R_{MC}", "lp");
         leg->AddEntry(hRdc, "R_{data}", "lp");
         leg->Draw();
 
-        DrawInfoLegend(
-            0.58, 0.60, 0.94, 0.90,
-            {cone, CalibMethodLabel(m, useJer), ptSl.title, aSl.title});
-
         // ratio pad
         cv.ratio->cd();
-        cv.ratio->SetLeftMargin(0.16); // match the main pad so the x-axes align
+        cv.ratio->SetLeftMargin(0.19); // match the main pad so the x-axes align
         cv.ratio->SetGridx();
         cv.ratio->SetGridy();
 
         StyleH(hRat, kBlack, 20, 1.5f);
         hRat->GetXaxis()->SetRangeUser(xMin, xMax);
-        TuneRatio(hRat, "|#eta_{reco}|", useJer ? "Data/MC" : "MC/Data", 0.93,
+        TuneRatio(hRat, "|#eta^{probe}|", useJer ? "Data/MC" : "MC/Data", 0.93,
                  1.07);
+        // main/ratio pads are 0.69/0.30 of the canvas height (MakeTwoPad),
+        // so a label size has to scale by that ratio to read as the same
+        // physical size in both panels -- 0.040 (main) * (0.69/0.30) = 0.092.
+        // X labels live entirely inside the ratio pad, so no cross-pad
+        // scaling needed there -- just match the ratio pad's own Y label size.
+        hRat->GetYaxis()->SetLabelSize(0.092);
+        hRat->GetXaxis()->SetLabelSize(0.092);
+        hRat->GetYaxis()->SetTitleOffset(0.50);
+        hRat->GetXaxis()->SetTitleOffset(0.90);
         hRat->Draw("E1");
         RefLine(cv.ratio, xMin, xMax, 1.0);
 

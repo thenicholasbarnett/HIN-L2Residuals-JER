@@ -13,6 +13,7 @@
 #include "Naming.h"
 #include "ProgressBar.h"
 
+#include <algorithm>
 #include <vector>
 
 // method comparison (gauss vs trunc90 vs trunc95). One canvas per (cone,
@@ -22,7 +23,6 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
                            const TString &cone, const BinningConfig &bins,
                            bool fullEta, ProgressBar &pb, bool useJer = false) {
   const TString etaMode = L2Name::EtaModeKey(fullEta);
-  const TString etaLabel = fullEta ? "Full #eta" : "|#eta|";
   const double xMin =
       fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
   const double xMax = fullEta ? kEtaEdges.back() : (double)kAbsEtaEdges.back();
@@ -70,23 +70,55 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
     cv.main->SetGridx();
     cv.main->SetGridy();
 
-    auto [ylo, yhi] = YRange({hists[0], hists[1], hists[2]});
+    // y starts fixed at 0.9, tops out just above the real max instead of a
+    // YRange() guess over only the first 3 methods
+    double ylo = 0.9, yhi = -1e9;
+    bool anyMax = false;
+    for (auto *h : hists) {
+      if (!h)
+        continue;
+      for (int i = 1; i <= h->GetNbinsX(); i++) {
+        const double v = h->GetBinContent(i), e = h->GetBinError(i);
+        if (v == 0 && e == 0)
+          continue;
+        yhi = std::max(yhi, v + e);
+        anyMax = true;
+      }
+    }
+    yhi = anyMax ? yhi + 0.10 * (yhi - ylo) : 1.3;
+
+    auto [occXMin, occXMax] = OccupiedRangeWithMargin(hists);
+    double plotXMin = xMin, plotXMax = xMax;
+    if (occXMin < occXMax) {
+      plotXMin = occXMin;
+      plotXMax = occXMax;
+    }
+
     bool first = true;
 
-    TLegend *leg = new TLegend(0.16, 0.14, 0.58, 0.14 + 0.065 * kNMethods);
+    // one legend (method markers + cone/pT/calib-tag info, |eta|/full-eta
+    // dropped), upper-left, clear of the curve's low-|eta| flat region
+    TLegend *leg = new TLegend(0.16, 0.60, 0.56, 0.88);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
-    leg->SetTextSize(0.046);
+    leg->SetTextFont(42);
+    leg->SetTextSize(0.038);
+    leg->AddEntry((TObject *)nullptr, cone, "");
+    leg->AddEntry((TObject *)nullptr, sl.title, "");
+    // this repo calls the mean-derived Step 2 output "JEC" everywhere else,
+    // but the legend here is meant to read as the correction product itself
+    leg->AddEntry((TObject *)nullptr, useJer ? "JER SF" : "L2Residual", "");
 
     for (int m = 0; m < kNMethods; m++) {
       if (!hists[m])
         continue;
       StyleH(hists[m], kMethodColors[m], kMethodStyles[m], 2.f);
+      hists[m]->GetXaxis()->SetRangeUser(plotXMin, plotXMax);
       hists[m]->GetYaxis()->SetRangeUser(ylo, yhi);
       hists[m]->GetYaxis()->SetTitle(CalibYTitle(useJer));
       hists[m]->GetYaxis()->SetTitleSize(0.055);
       hists[m]->GetYaxis()->SetTitleOffset(1.10);
-      hists[m]->GetYaxis()->SetLabelSize(0.050);
+      hists[m]->GetYaxis()->SetLabelSize(0.040);
       hists[m]->GetXaxis()->SetLabelSize(0.0);
       hists[m]->GetXaxis()->SetTitle("");
       hists[m]->SetTitle("");
@@ -95,34 +127,29 @@ inline void PlotMethodComp(TFile *fIn, const TString &outDir,
       leg->AddEntry(hists[m], kMethodLabels[m], "lp");
     }
 
-    RefLine(cv.main, xMin, xMax, 1.0);
+    RefLine(cv.main, plotXMin, plotXMax, 1.0);
     leg->Draw();
-
-    DrawInfoLegend(0.60, 0.68, 0.94, 0.90,
-                   {cone, etaLabel, sl.title, CalibTag(useJer)});
+    DrawCMSInternalHeader(0.13, 0.96, 0.915, 0.040);
 
     // ratio pad
     cv.ratio->cd();
     cv.ratio->SetGridx();
     cv.ratio->SetGridy();
 
-    TLegend *rleg = new TLegend(0.16, 0.62, 0.58, 0.95);
-    rleg->SetBorderSize(0);
-    rleg->SetFillStyle(0);
-    rleg->SetTextSize(0.115);
-
     bool firstR = true;
     for (int k = 0; k < (int)ratios.size(); k++) {
       const int m = ratioIdx[k];
       StyleH(ratios[k], kMethodColors[m], kMethodStyles[m], 1.5f);
+      ratios[k]->GetXaxis()->SetRangeUser(plotXMin, plotXMax);
       TuneRatio(ratios[k], xTitle, "/ Gauss", 0.993, 1.007);
+      // main/ratio pads are 0.69/0.30 of the canvas height (MakeTwoPad)
+      ratios[k]->GetYaxis()->SetLabelSize(0.092);
+      ratios[k]->GetXaxis()->SetLabelSize(0.092);
       ratios[k]->Draw(firstR ? "E1" : "E1 same");
       firstR = false;
-      rleg->AddEntry(ratios[k], kMethodLabels[m], "lp");
     }
     if (!firstR) {
-      RefLine(cv.ratio, xMin, xMax, 1.0);
-      rleg->Draw();
+      RefLine(cv.ratio, plotXMin, plotXMax, 1.0);
     }
 
     cv.c->cd();

@@ -40,7 +40,10 @@ struct TwoPad {
   TPad *ratio = nullptr;
 };
 
-// Main panel: y [0.30, 1.0].  Ratio panel: y [0.00, 0.32].
+// Main panel: y [0.31, 1.0].  Ratio panel: y [0.00, 0.30]. The 0.01 gap
+// between them is deliberate -- they used to touch at 0.30/0.32 (a 0.02
+// overlap), which let the ratio pad's opaque background, drawn second,
+// paint over the main pad's own bottom frame line.
 // Pads are added to the canvas's primitive list; delete canvas to cascade-delete both.
 inline TwoPad MakeTwoPad(const TString &name) {
   TwoPad cv;
@@ -48,14 +51,14 @@ inline TwoPad MakeTwoPad(const TString &name) {
   RealAspectRatio(cv.c);
   cv.c->cd();
 
-  cv.main = new TPad(name + "_m", "", 0.0, 0.30, 1.0, 1.00);
+  cv.main = new TPad(name + "_m", "", 0.0, 0.31, 1.0, 1.00);
   cv.main->SetBottomMargin(0.025);
   cv.main->SetTopMargin(0.10);
   cv.main->SetLeftMargin(0.13);
   cv.main->SetRightMargin(0.04);
   cv.main->Draw();
 
-  cv.ratio = new TPad(name + "_r", "", 0.0, 0.00, 1.0, 0.32);
+  cv.ratio = new TPad(name + "_r", "", 0.0, 0.00, 1.0, 0.30);
   cv.ratio->SetTopMargin(0.05);
   cv.ratio->SetBottomMargin(0.33);
   cv.ratio->SetLeftMargin(0.13);

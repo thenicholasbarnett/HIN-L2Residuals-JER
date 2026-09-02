@@ -34,7 +34,7 @@ inline void PlotClosureCompare(TFile *fIn, TFile *fInClosure,
     for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
       const bool fullEta = (ieta == 1);
       const TString etaMode = L2Name::EtaModeKey(fullEta);
-      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
+      const TString xTitle = fullEta ? "#eta^{probe}" : "|#eta^{probe}|";
 
       for (int ip = 0; ip < nPt; ip++) {
         if (!pb.ShouldKeep())

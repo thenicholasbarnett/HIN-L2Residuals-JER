@@ -25,7 +25,7 @@ static const TString kFinalsYTitle =
 static const TString kFinalsYTitleJer = "JER SF_{#alpha=0.30}";
 
 // Final extrapolated values, all pT slices overlaid.
-// finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_reco.
+// finals_{cone}_{method}_abseta/fulleta: kFSR*R_MC/R_data at alpha=0.30 vs eta_probe.
 
 inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                        const BinningConfig &bins, ProgressBar &pb,
@@ -36,7 +36,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
       if (!pb.ShouldKeep())
         continue;
       const bool fullEta = (ieta == 1);
-      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
+      const TString xTitle = fullEta ? "#eta^{probe}" : "|#eta^{probe}|";
       const double xFullMin =
           fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
       const double xFullMax =
@@ -94,7 +94,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
                kMethodKeys[m], etaMode.Data());
       TCanvas *c = new TCanvas(cvName, "", 800, 800);
       RealAspectRatio(c);
-      c->SetLeftMargin(0.20);
+      c->SetLeftMargin(0.14); // matches finalscone's tightened margin --
+                              // same tall fraction title, same fix
       c->SetBottomMargin(0.12);
       c->SetGridx();
       c->SetGridy();
@@ -117,33 +118,19 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         xMax = xFullMax;
       }
 
-      // cone/method header stays top -- upper-left for |eta|, upper-middle
-      // for full eta so it doesn't sit over the eta<0 half of the data;
-      // pulled in almost flush with the frame, just enough buffer to clear
-      // the inward-facing tick marks, not sitting on top of them
-      const double legX1 = fullEta ? 0.34 : 0.215;
-      const double legX2 = fullEta ? 0.67 : 0.54;
-      TLegend *legInfo = new TLegend(legX1, 0.82, legX2, 0.895);
-      legInfo->SetBorderSize(0);
-      legInfo->SetFillStyle(0);
-      legInfo->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
-      legInfo->SetTextSize(0.028);
-      legInfo->AddEntry((TObject *)nullptr, cone.Data(), "");
-      legInfo->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
-
-      // pT-slice entries sit low in the same column instead of stacked under
-      // the header -- for closures the data band hugs 1.0 so the bottom
-      // border itself is clear, right down to the tick-mark buffer; the
-      // normal wide 0.9-1.6 range has the opposite problem (1.0 sits close
-      // to the *bottom* of that range), so it keeps the higher anchor that
-      // already sat clear of the data. Box height scales with slice count.
-      const double ptLegY1 = isClosure ? 0.135 : 0.29;
-      const double ptLegY2 = ptLegY1 + 0.032 * (double)bins.ptavgSlices.size();
-      TLegend *legPt = new TLegend(legX1, ptLegY1, legX2, ptLegY2);
-      legPt->SetBorderSize(0);
-      legPt->SetFillStyle(0);
-      legPt->SetTextFont(42);
-      legPt->SetTextSize(0.028);
+      // one legend (cone/method info + pT-slice entries), upper-middle of
+      // the plot, instead of two separate boxes
+      const double legX1 = 0.345, legX2 = 0.675;
+      const double legY1 = 0.62;
+      const double legY2 = legY1 + 0.032 * (double)(bins.ptavgSlices.size() + 2);
+      TLegend *leg = new TLegend(legX1, legY1, legX2, legY2);
+      leg->SetBorderSize(0);
+      leg->SetFillStyle(0);
+      leg->SetTextFont(42); // non-bold -- was inheriting tdrStyle's bold default
+      leg->SetTextSize(0.028);
+      leg->SetTextAlign(22); // center entries instead of hugging the marker column
+      leg->AddEntry((TObject *)nullptr, cone.Data(), "");
+      leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(), "");
 
       bool first = true;
       for (int ip = 0; ip < (int)bins.ptavgSlices.size(); ip++) {
@@ -155,8 +142,8 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         hists[ip]->GetYaxis()->SetRangeUser(ylo, yhi);
         hists[ip]->GetYaxis()->SetTitle(useJer ? kFinalsYTitleJer
                                                : kFinalsYTitle);
-        hists[ip]->GetYaxis()->SetTitleSize(0.048);
-        hists[ip]->GetYaxis()->SetTitleOffset(2.0);
+        hists[ip]->GetYaxis()->SetTitleSize(0.040);
+        hists[ip]->GetYaxis()->SetTitleOffset(1.50);
         hists[ip]->GetYaxis()->SetLabelSize(0.038);
         hists[ip]->GetXaxis()->SetTitle(xTitle);
         hists[ip]->GetXaxis()->SetTitleSize(0.052);
@@ -168,7 +155,7 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         first = false;
         TString label = ptSl.title;
         label.ReplaceAll(" GeV", "");
-        legPt->AddEntry(hists[ip], label, "lp");
+        leg->AddEntry(hists[ip], label, "lp");
       }
 
       TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
@@ -191,14 +178,13 @@ inline void PlotFinals(TFile *fIn, const TString &outDir, const TString &cone,
         rl101->Draw();
       }
 
-      legInfo->Draw();
-      legPt->Draw();
-      DrawAsymHeader(0.20);
+      leg->Draw();
+      DrawAsymHeader(0.14);
 
       SavePlot(c, outDir, cone, "finals", {calibKey, etaMode}, cvName);
       pb.Update();
 
-      delete c; // cascade-deletes hists, legInfo, legPt, rl (and rl99/rl101 if drawn)
+      delete c; // cascade-deletes hists, leg, rl (and rl99/rl101 if drawn)
     }
   }
 }
@@ -276,7 +262,7 @@ inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
   for (int m = 0; m < kNMethods; m++) {
     for (int ieta = 0; ieta < 2; ieta++) { // 0 = |eta|, 1 = full eta
       const bool fullEta = (ieta == 1);
-      const TString xTitle = fullEta ? "#eta_{reco}" : "|#eta_{reco}|";
+      const TString xTitle = fullEta ? "#eta^{probe}" : "|#eta^{probe}|";
       const double xFullMin =
           fullEta ? kEtaEdges.front() : (double)kAbsEtaEdges.front();
       const double xFullMax =
@@ -336,15 +322,27 @@ inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
           continue;
         }
 
+        // find ak4PF for the ratio panel -- absent from this run period's
+        // cone list, the ratio panel is simply skipped below
+        int refIdx = -1;
+        for (int ic = 0; ic < nCones; ic++) {
+          if (cones[ic] == "ak4PF") {
+            refIdx = ic;
+            break;
+          }
+        }
+
         const TString cvName =
             Form("finalscone_%s_%s_%s_%s", calibKey.Data(), kMethodKeys[m],
                  etaMode.Data(), L2Name::PtKey(ptSl).Data());
-        TCanvas *c = new TCanvas(cvName, "", 800, 800);
-        RealAspectRatio(c);
-        c->SetLeftMargin(0.20);
-        c->SetBottomMargin(0.12);
-        c->SetGridx();
-        c->SetGridy();
+        TwoPad cv = MakeTwoPad(cvName);
+
+        // main pad
+        cv.main->cd();
+        cv.main->SetLeftMargin(0.14); // wider than TwoPad's default -- the
+                                      // explicit fraction title needs it
+        cv.main->SetGridx();
+        cv.main->SetGridy();
 
         double ylo = 0.9, yhi = 1.6;
         if (isClosure) {
@@ -358,24 +356,47 @@ inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
           xMax = xFullMax;
         }
 
-        const double legX1 = fullEta ? 0.34 : 0.215;
-        const double legX2 = fullEta ? 0.67 : 0.54;
-        TLegend *legInfo = new TLegend(legX1, 0.82, legX2, 0.895);
-        legInfo->SetBorderSize(0);
-        legInfo->SetFillStyle(0);
-        legInfo->SetTextFont(42);
-        legInfo->SetTextSize(0.028);
-        legInfo->AddEntry((TObject *)nullptr, ptSl.title.Data(), "");
-        legInfo->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(),
-                          "");
+        // non-closure yhi was a flat 1.6 regardless of what's actually
+        // plotted -- rescale to the real max (plus a small pad) instead,
+        // same padding convention as the alpha combined-overlay's dynamic
+        // range. Closure mode keeps its fixed 0.95-1.05 window untouched.
+        if (!isClosure) {
+          double realMax = -1e9;
+          bool any = false;
+          for (auto *h : hists) {
+            if (!h)
+              continue;
+            for (int i = 1; i <= h->GetNbinsX(); i++) {
+              const double v = h->GetBinContent(i), e = h->GetBinError(i);
+              if (v == 0 && e == 0)
+                continue;
+              const double x = h->GetBinCenter(i);
+              if (x < xMin || x > xMax)
+                continue;
+              realMax = std::max(realMax, v + e);
+              any = true;
+            }
+          }
+          if (any)
+            yhi = realMax + 0.10 * (realMax - ylo);
+        }
 
-        const double coneLegY1 = isClosure ? 0.135 : 0.29;
-        const double coneLegY2 = coneLegY1 + 0.032 * (double)nCones;
-        TLegend *legCone = new TLegend(legX1, coneLegY1, legX2, coneLegY2);
-        legCone->SetBorderSize(0);
-        legCone->SetFillStyle(0);
-        legCone->SetTextFont(42);
-        legCone->SetTextSize(0.028);
+        // one legend, upper-middle of the plot (clear of the curve's
+        // central dip) instead of two separate boxes or dead center --
+        // centered on the frame itself (same margins in both eta modes)
+        // rather than data range, since the frame's NDC width is fixed
+        const double legX1 = 0.405, legX2 = 0.735;
+        const double legY1 = 0.62;
+        const double legY2 = legY1 + 0.032 * (double)(nCones + 2);
+        TLegend *leg = new TLegend(legX1, legY1, legX2, legY2);
+        leg->SetBorderSize(0);
+        leg->SetFillStyle(0);
+        leg->SetTextFont(42);
+        leg->SetTextSize(0.028);
+        leg->SetTextAlign(22); // center entries instead of hugging the marker column
+        leg->AddEntry((TObject *)nullptr, ptSl.title.Data(), "");
+        leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer).Data(),
+                     "");
 
         bool first = true;
         for (int ic = 0; ic < nCones; ic++) {
@@ -388,17 +409,15 @@ inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
           hists[ic]->GetYaxis()->SetTitle(useJer ? kFinalsYTitleJer
                                                  : kFinalsYTitle);
           hists[ic]->GetYaxis()->SetTitleSize(0.048);
-          hists[ic]->GetYaxis()->SetTitleOffset(2.0);
+          hists[ic]->GetYaxis()->SetTitleOffset(1.20);
           hists[ic]->GetYaxis()->SetLabelSize(0.038);
-          hists[ic]->GetXaxis()->SetTitle(xTitle);
-          hists[ic]->GetXaxis()->SetTitleSize(0.052);
-          hists[ic]->GetXaxis()->SetLabelSize(0.038);
-          hists[ic]->GetXaxis()->CenterTitle();
+          hists[ic]->GetXaxis()->SetLabelSize(0.0);
+          hists[ic]->GetXaxis()->SetTitle("");
           hists[ic]->GetYaxis()->CenterTitle();
           hists[ic]->SetTitle("");
           hists[ic]->Draw(first ? "E1" : "E1 same");
           first = false;
-          legCone->AddEntry(hists[ic], cones[ic], "lp");
+          leg->AddEntry(hists[ic], cones[ic], "lp");
         }
 
         TLine *rl = new TLine(xMin, 1.0, xMax, 1.0);
@@ -421,15 +440,52 @@ inline void PlotFinalsByCone(TFile *fIn, const TString &outDir,
           rl101->Draw();
         }
 
-        legInfo->Draw();
-        legCone->Draw();
-        DrawAsymHeader(0.20);
+        leg->Draw();
+        DrawCMSInternalHeader(0.14, 0.96, 0.915, 0.040); // matches etasym/methods
 
-        SavePlot(c, outDir, "finalscone", "finals",
+        // ratio pad: each cone's correction relative to ak4PF's, same idea
+        // as the methods plot's "/ Gauss" panel
+        cv.ratio->cd();
+        cv.ratio->SetLeftMargin(0.14); // match the main pad so the x-axes align
+        cv.ratio->SetGridx();
+        cv.ratio->SetGridy();
+
+        std::vector<TH1D *> ratios;
+        std::vector<int> ratioConeIdx;
+        const double rlo = 0.975, rhi = 1.025;
+        if (refIdx >= 0 && hists[refIdx]) {
+          for (int ic = 0; ic < nCones; ic++) {
+            if (ic == refIdx || !hists[ic])
+              continue;
+            TH1D *r = RatioH(hists[ic], hists[refIdx],
+                             Form("%s_finalscone_rat%d", cones[ic].Data(), ic));
+            r->GetXaxis()->SetRangeUser(xMin, xMax);
+            ratios.push_back(r);
+            ratioConeIdx.push_back(ic);
+          }
+        }
+
+        bool firstR = true;
+        for (size_t k = 0; k < ratios.size(); k++) {
+          const int ic = ratioConeIdx[k];
+          StyleH(ratios[k], kConeColors[ic % kNConeColors](), kMethodStyles[m],
+                1.5f);
+          TuneRatio(ratios[k], xTitle, "/ ak4PF", rlo, rhi);
+          ratios[k]->GetYaxis()->SetLabelSize(0.092);
+          ratios[k]->GetXaxis()->SetLabelSize(0.092);
+          ratios[k]->Draw(firstR ? "E1" : "E1 same");
+          firstR = false;
+        }
+        if (!firstR) {
+          RefLine(cv.ratio, xMin, xMax, 1.0);
+        }
+
+        cv.c->cd();
+        SavePlot(cv.c, outDir, "finalscone", "finals",
                 {calibKey, etaMode, L2Name::PtKey(ptSl)}, cvName);
         pb.Update();
 
-        delete c; // cascade-deletes hists, legInfo, legCone, rl (and rl99/rl101 if drawn)
+        delete cv.c; // cascade-deletes hists, ratios, leg, rl (and rl99/rl101 if drawn)
       }
     }
   }
