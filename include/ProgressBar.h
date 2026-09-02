@@ -6,6 +6,7 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <vector>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -59,6 +60,13 @@ struct ProgressBar {
   time_t startTime;
   int sampleLimit = -1;      // -1 == no cap; set via EnableSample()
   time_t sampleDeadline = 0; // absolute time(nullptr) cutoff; 0 == no cap
+
+  // trailing-window rate/ETA state -- see Draw()'s comment
+  std::vector<int> histCur;
+  std::vector<time_t> histTime;
+  std::string lastRateStr;
+  std::string lastEtaStr;
+  time_t lastEtaTime = 0;
 
   ProgressBar(const std::string &label, int total, Color color = kRandom)
       : label(label), total(total), color(color), startTime(time(nullptr)) {
@@ -179,7 +187,7 @@ private:
 
   static constexpr int kMinBarWidth = 10;
 
-  void Draw() const {
+  void Draw() {
     if (total <= 0) {
       printf("\r  %s  [%s\033[0m]  0/0  100%%  00:00\033[K", label.c_str(),
              AnsiColor());
@@ -191,27 +199,63 @@ private:
     char countBuf[32];
     snprintf(countBuf, sizeof(countBuf), "%d/%d", current, total);
 
-    long elapsed = (long)(time(nullptr) - startTime);
-
-    char rateBuf[16] = "";
-    if (current > 0 && elapsed >= 1)
-      snprintf(rateBuf, sizeof(rateBuf), "  %4.1f/s",
-               (double)current / elapsed);
+    time_t now = time(nullptr);
+    long elapsed = (long)(now - startTime);
 
     char timeBuf[24] = "  --:-- ETA";
-    if (current >= total && elapsed > 0)
-      snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld", elapsed / 60,
-               elapsed % 60);
-    else if (current > 0 && pct >= 5 && elapsed >= 1) {
-      long eta = elapsed * (long)(total - current) / (long)current;
-      snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld ETA", eta / 60,
-               eta % 60);
+    if (current >= total)
+      timeBuf[0] = '\0';
+
+    if (current > 0) {
+      // rate is a trailing window over the last ~5% of total, not a
+      // since-start running average -- a real slowdown would get smoothed
+      // away by a full-run average instead of showing up in the number
+      histCur.push_back(current);
+      histTime.push_back(now);
+      int window = total * 5 / 100;
+      if (window < 1)
+        window = 1;
+      int threshold = current - window;
+      while (histCur.size() > 1 && histCur.front() < threshold) {
+        histCur.erase(histCur.begin());
+        histTime.erase(histTime.begin());
+      }
+      long winElapsed = (long)(now - histTime.front());
+      int winDelta = current - histCur.front();
+      if (winElapsed >= 1 && winDelta > 0) {
+        char rateBuf[16];
+        snprintf(rateBuf, sizeof(rateBuf), "  %4.1f/s",
+                 (double)winDelta / (double)winElapsed);
+        lastRateStr = rateBuf;
+      }
+
+      if (elapsed >= 1) {
+        if (current >= total) {
+          snprintf(timeBuf, sizeof(timeBuf), "  %02ld:%02ld", elapsed / 60,
+                   elapsed % 60);
+        } else if (pct >= 5) {
+          // ETA text only refreshes once a second -- the windowed rate
+          // above still updates every call, this just stops the countdown
+          // from jittering with it
+          if (lastEtaTime == 0 || now - lastEtaTime >= 1) {
+            long eta = (winElapsed >= 1 && winDelta > 0)
+                          ? winElapsed * (long)(total - current) / winDelta
+                          : elapsed * (long)(total - current) / (long)current;
+            char etaBuf[24];
+            snprintf(etaBuf, sizeof(etaBuf), "  %02ld:%02ld ETA", eta / 60,
+                     eta % 60);
+            lastEtaStr = etaBuf;
+            lastEtaTime = now;
+          }
+          snprintf(timeBuf, sizeof(timeBuf), "%s", lastEtaStr.c_str());
+        }
+      }
     }
 
     // drop rate, then time, then label as the terminal narrows, so the bar
     // is last to go; below kMinBarWidth, drop the bar too
     const char *useLabel = label.c_str();
-    const char *useRate = rateBuf;
+    const char *useRate = lastRateStr.c_str();
     const char *useTime = timeBuf;
     int termWidth = TerminalWidth();
     int barWidth = 0;

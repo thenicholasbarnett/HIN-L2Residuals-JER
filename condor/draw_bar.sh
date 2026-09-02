@@ -5,10 +5,22 @@ _COLOR_QUEUE=()
 BAR_COLOR=""
 _BAR_START_TIME=""
 _TERM_COLS=80
+_BAR_HIST_CUR=()
+_BAR_HIST_TIME=()
+_LAST_RATE_STR=""
+_LAST_ETA_STR=""
+_LAST_ETA_TIME=""
 
 trap 'printf "\r\033[2K"' WINCH
 
-start_bar_timer() { _BAR_START_TIME=$(date +%s); }
+start_bar_timer() {
+  _BAR_START_TIME=$(date +%s)
+  _BAR_HIST_CUR=()
+  _BAR_HIST_TIME=()
+  _LAST_RATE_STR=""
+  _LAST_ETA_STR=""
+  _LAST_ETA_TIME=""
+}
 
 # scales with terminal width
 terminal_width() {
@@ -68,17 +80,50 @@ draw_bar() {
   local reset='\033[0m'
   local grey='\033[90m'
   local count_str="${current}/${total}"
-  local rate_str="" time_str="  --:-- ETA"
+  local rate_str="$_LAST_RATE_STR" time_str="  --:-- ETA"
   if ((current >= total)); then time_str=""; fi
   if [[ -n "$_BAR_START_TIME" && "$current" -gt 0 ]]; then
-    local elapsed=$(($(date +%s) - _BAR_START_TIME))
+    local now
+    now=$(date +%s)
+    local elapsed=$((now - _BAR_START_TIME))
+
+    # rate is a trailing window over the last ~5% of total, not a
+    # since-start running average -- a real slowdown would get smoothed
+    # away by a full-run average instead of showing up in the number
+    _BAR_HIST_CUR+=("$current")
+    _BAR_HIST_TIME+=("$now")
+    local window=$((total * 5 / 100))
+    ((window < 1)) && window=1
+    local threshold=$((current - window))
+    while ((${#_BAR_HIST_CUR[@]} > 1)) && ((_BAR_HIST_CUR[0] < threshold)); do
+      _BAR_HIST_CUR=("${_BAR_HIST_CUR[@]:1}")
+      _BAR_HIST_TIME=("${_BAR_HIST_TIME[@]:1}")
+    done
+    local win_elapsed=$((now - _BAR_HIST_TIME[0]))
+    local win_delta=$((current - _BAR_HIST_CUR[0]))
+    if ((win_elapsed >= 1 && win_delta > 0)); then
+      _LAST_RATE_STR=$(awk "BEGIN{printf \"  %4.1f/s\", $win_delta/$win_elapsed}")
+      rate_str="$_LAST_RATE_STR"
+    fi
+
     if ((elapsed >= 1)); then
-      rate_str=$(awk "BEGIN{printf \"  %4.1f/s\", $current/$elapsed}")
       if ((current >= total)); then
         time_str=$(printf "  %02d:%02d" "$((elapsed / 60))" "$((elapsed % 60))")
       elif ((pct >= 5)); then
-        local eta_secs=$((elapsed * (total - current) / current))
-        time_str=$(printf "  %02d:%02d ETA" "$((eta_secs / 60))" "$((eta_secs % 60))")
+        # ETA text only refreshes once a second -- the windowed rate above
+        # still updates every call, this just stops the countdown from
+        # jittering with it
+        if [[ -z "$_LAST_ETA_TIME" || $((now - _LAST_ETA_TIME)) -ge 1 ]]; then
+          local eta_secs
+          if ((win_elapsed >= 1 && win_delta > 0)); then
+            eta_secs=$((win_elapsed * (total - current) / win_delta))
+          else
+            eta_secs=$((elapsed * (total - current) / current))
+          fi
+          _LAST_ETA_STR=$(printf "  %02d:%02d ETA" "$((eta_secs / 60))" "$((eta_secs % 60))")
+          _LAST_ETA_TIME="$now"
+        fi
+        time_str="$_LAST_ETA_STR"
       fi
     fi
   fi
