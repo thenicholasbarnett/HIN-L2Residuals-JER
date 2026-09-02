@@ -89,9 +89,19 @@ foreach(test ${TESTS})
     add_test(NAME ${name} COMMAND ${name})
     # WORKING_DIRECTORY keeps test-created paths predictable; L2RESIDUALS_CONFIG
     # is set explicitly since Config() has no implicit fallback (AnalysisConfig.cxx).
-    set_tests_properties(${name} PROPERTIES
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/2024ppRef.toml")
+    # TestResponseExtractor/TestTextFileWriter check both abseta and eta
+    # output in one process, so they get cfg/test_eta_both.toml (eta_mode =
+    # "both") instead of the real cfg/2024ppRef.toml, whose signed-eta-only
+    # default would never produce the abseta objects they check for.
+    if(name STREQUAL "TestResponseExtractor" OR name STREQUAL "TestTextFileWriter")
+        set_tests_properties(${name} PROPERTIES
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/test_eta_both.toml")
+    else()
+        set_tests_properties(${name} PROPERTIES
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            ENVIRONMENT "L2RESIDUALS_CONFIG=${PROJECT_SOURCE_DIR}/cfg/2024ppRef.toml")
+    endif()
 endforeach()
 
 add_test(NAME TestBuild

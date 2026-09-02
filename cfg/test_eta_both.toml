@@ -1,0 +1,104 @@
+[paths]
+veto_map = "data/veto/Winter25Prompt25_RunCDE.root"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[condor]
+# Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
+# triggered | non-triggered | mc. make_condor.sh looks up each filelist it
+# would submit here; comment out (or omit) an entry to skip submitting jobs
+# for that filelist without moving or renaming the file. The physical dataset
+# name (HP0, ZB0, ...) is free-form; only the mapped mode matters.
+[condor.filelist_modes]
+"filelist_HiForest_2024ppref_DATA_HP*" = "triggered"
+"filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
+filelist_HiForest_2024ppref_MC = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+# Primary vertex filter branch, read from the skim tree (data only).
+filter = "pprimaryVertexFilter"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[jet_id]
+veto_map_histogram = "jetvetomap_all"
+
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+# Chain applied in order, per cone -- L1FastJet before L2Relative, matching
+# the real correction sequence (L1 removes pileup offset, L2Relative flattens
+# the eta/pT response). Applied unconditionally to both data and MC, same as
+# L2Relative alone was before. To run without L1 (e.g. an era with no derived
+# L1FastJet yet), just drop the first entry from each cone's list.
+files = [
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK2PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK2PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK3PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK3PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK5PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK5PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK6PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK6PFchs.txt" ],
+]
+
+[jer_closure]
+# Only read when runAsymmetry is run with -calibration jer -closure true:
+# MC jets get JER-smeared (hybrid method, JetSmearing.h) before histogramming,
+# to produce the smeared MC input for the JER SF closure check. One text
+# file per cone, same order as cones.labels above -- unset/empty means no
+# JER closure smearing has been derived for this run period yet.
+resolution_files = [
+    "data/jec/preliminary/JER_ptresolution_ak2PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak3PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak4PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak5PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak6PF_abseta_ptresolution.txt",
+]
+scale_factor_files = [
+    "data/jec/preliminary/JER_SF_ak2PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak3PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak4PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak5PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak6PF_abseta_jer_norm.txt",
+]
+
+[cuts]
+min_jet_pt = 10.0
+dphi = 2.7
+max_abs_a = 0.7
+min_entries_per_bin = 100
+residual_gaus_fit_half_width = 0.5
+residual_alpha_fit_hi = 0.31
+# Gaussian fit window: [1-x, 1+x] around the pT_reco/pT_gen response,
+# analogous to residual_gaus_fit_half_width above (centered at 0, not 1).
+# Used both by runPlotting's response_dist QA guide curve and, since the
+# Gauss/doubleGauss/crystalball extraction methods, as the initial
+# peak-locate window in runResponse's JES/JER extraction (ResponseExtractor.cxx)
+# -- the trunc90/trunc95 methods don't use this, they read the fraction of
+# the integral directly (hardcoded, matching Step 2's own trunc90/trunc95).
+response_gaus_fit_half_width = 0.3
+
+[binning]
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
+
+[step3]
+default_method = "trunc95"
+# other options currently available: gauss | doubleGauss | trunc90 | crystalball
+eta_mode = "both"
+# other options currently available: abseta | eta -- "both" here (unlike the
+# real cfg/2024ppRef.toml's "eta") so TestResponseExtractor/TestTextFileWriter
+# can exercise the abseta output path in the same process as the eta path;
+# Config() is a load-once singleton, so one process can't test both eta_mode
+# values against the real production config
