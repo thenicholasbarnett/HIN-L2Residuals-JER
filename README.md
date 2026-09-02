@@ -111,7 +111,7 @@ bash condor/batch_hadd.sh \
 ```
 
 `-calibration jer -closure true` JER-smears MC jets (hybrid method,
-`JetSmearing.h`) before histogramming, using
+`JetSmearer.h`) before histogramming, using
 `jer_closure.resolution_files`/`scale_factor_files` from the config, to
 produce the smeared-MC half of the JER SF closure check fed into
 `runCalibration -mode jer` (see Step 2 below). Only valid with `-mode mc`;

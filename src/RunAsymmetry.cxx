@@ -11,7 +11,7 @@
 #include "jetcorrector/JetCorrector.h"
 #include "JetSelection.h"
 #include "json_handler/JSON_handler.h"
-#include "JetSmearing.h"
+#include "JetSmearer.h"
 
 #include "BranchMapping.h"
 #include "EventStructs.h"
@@ -101,7 +101,7 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
     jecs.emplace_back(chain);
   }
 
-  // JER SF closure: MC jets get smeared (JetSmearing.h) using previously
+  // JER SF closure: MC jets get smeared (JetSmearer.h) using previously
   // derived per-cone resolution + scale-factor text files
   if (jerClosure && (cfg.jerResolutionFilesPerCone.size() != nCones ||
                      cfg.jerScaleFactorFilesPerCone.size() != nCones)) {
@@ -110,8 +110,8 @@ void runAsymmetry(TString input, TString output, TString modeFlag,
                  "per cone, in the config\n";
     return;
   }
-  std::vector<JME::JetResolution> jerResolution;
-  std::vector<JME::JetResolutionScaleFactor> jerScaleFactor;
+  std::vector<JetSmearerJME::JetResolution> jerResolution;
+  std::vector<JetSmearerJME::JetResolutionScaleFactor> jerScaleFactor;
   std::mt19937 jerRng(kJerClosureSeed);
   if (jerClosure) {
     jerResolution.reserve(nCones);

@@ -15,7 +15,7 @@
 // ./build/bin/runAsymmetry args.config  # config file lines: key = value
 //
 // -calibration jer -closure true JER-smears MC jets (hybrid method,
-// JetSmearing.h) before histogramming, using jer_closure.resolution_files/
+// JetSmearer.h) before histogramming, using jer_closure.resolution_files/
 // scale_factor_files from the config -- only valid combined with -mode mc,
 // for producing the smeared-MC input to the JER SF closure check. Any other
 // -calibration/-closure combination is a no-op, mirroring runPlotting's

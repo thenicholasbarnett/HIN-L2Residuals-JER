@@ -53,7 +53,8 @@ int main() {
     Check(r.matched, "matched == true for a close gen pT");
     Check(r.resolution > 0.0, "resolution > 0");
 
-    // deterministic scaling formula from JetSmearing.h -- recompute
+    // deterministic scaling formula from JetSmearer.h's JetSmearing::
+    // namespace -- recompute
     // independently against the same resolution/SF objects and compare
     JetSmearerJME::JetResolution resolution(kResFile);
     JetSmearerJME::JetResolutionScaleFactor scaleFactor(kSfFile);
