@@ -45,8 +45,9 @@ template <Int_t MAXNREF> struct JetStruct {
     Float_t phi[MAXNREF];
   } ref;
 
-  // gen jets
+  // gen jets, pT ordered, independent of the reco jets
   struct GenMomenta {
+    Int_t n = 0;
     Float_t pt[MAXNREF];
     Float_t eta[MAXNREF];
     Float_t phi[MAXNREF];
@@ -71,6 +72,7 @@ template <Int_t MAXNREF> struct JetStruct {
                                 {"refpt", ref.pt},
                                 {"refeta", ref.eta},
                                 {"refphi", ref.phi},
+                                {"ngen", &gen.n},
                                 {"genpt", gen.pt},
                                 {"geneta", gen.eta},
                                 {"genphi", gen.phi},

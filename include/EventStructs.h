@@ -16,6 +16,9 @@ struct EventStruct {
   ULong64_t event;
   UInt_t lumi;
 
+  // generator pT-hat, MC only
+  Float_t pthat = -1.0f;
+
   // pileup density, ggHiNtuplizer/EventTree (separate tree from vz/evt above)
   Float_t rho;
 
@@ -23,7 +26,7 @@ struct EventStruct {
     std::vector<std::pair<TString, void *>> branches = {{"vz", &vz},
                                                         {"evt", &event}};
     if (isMC) {
-      branches.push_back({"weight", &w});
+      branches.insert(branches.end(), {{"weight", &w}, {"pthat", &pthat}});
     } else {
       branches.insert(branches.end(), {{"run", &run}, {"lumi", &lumi}});
     }
