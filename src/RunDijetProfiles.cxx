@@ -261,8 +261,11 @@ void runDijetProfiles(TString input, TString output, TString modeFlag,
   TFile *fo = CreateOutputFile(output);
   loop.WriteEventHists(fo);
   for (size_t c = 0; c < nCones; c++) {
-    cones[c].Write(fo->mkdir(cfg.coneLabels[c] + "/Dijet2"));
-    jerc[c].Write(fo->mkdir(cfg.coneLabels[c] + "/DiJetJERC"));
+    // one level at a time: mkdir("a/b") returns "a" on older ROOT (CMSSW)
+    // but "b" on newer releases
+    TDirectory *coneDir = fo->mkdir(cfg.coneLabels[c]);
+    cones[c].Write(coneDir->mkdir("Dijet2"));
+    jerc[c].Write(coneDir->mkdir("DiJetJERC"));
   }
   fo->Close();
 }
