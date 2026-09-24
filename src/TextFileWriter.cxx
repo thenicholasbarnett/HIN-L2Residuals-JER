@@ -32,11 +32,6 @@ static const char *const kDefaultTag = "L2Residual";
 static const char *const kDefaultJerTag = "JER_SF";
 static const char *const kTextOutputSubdir = "data/jec/preliminary";
 
-// NEED TO CHANGE
-// REFERENCE BINNING IN TOML
-static constexpr double kPtLo = 40.0;
-static constexpr double kPtHi = 1000.0;
-
 static constexpr int kNPar = 3;
 
 // Fit function: 1/(p0 + p1*log10(0.01*x) + p2/(x/10))
@@ -67,10 +62,13 @@ static TH1D *FetchIntercept(TFile *f, const TString &cone,
 }
 
 // fit corr(pT_avg) per eta bin, write TGraphErrors to dGraphs, return the fit parameters
+// fit range [ptLo, ptHi] = the configured pT_avg slice range, so every slice
+// point (at its <pT_avg> or midpoint) is inside it
 static FitResult FitPtSlices(const std::vector<double> &ptCenters,
                              const std::vector<double> &corr,
                              const std::vector<double> &corrErr,
-                             const TString &graphName, TDirectory *dGraphs) {
+                             const TString &graphName, TDirectory *dGraphs,
+                             double ptLo, double ptHi) {
   FitResult r;
   int n = (int)ptCenters.size();
   if (n < kMinSlices) {
@@ -83,7 +81,7 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
   gr->SetName(graphName);
   gr->SetTitle(";p_{T,avg} [GeV];Correction factor");
 
-  TF1 *f = new TF1(graphName + "_fit", FitFunc, kPtLo, kPtHi, kNPar);
+  TF1 *f = new TF1(graphName + "_fit", FitFunc, ptLo, ptHi, kNPar);
   // start at unity correction (1/(1+0+0)=1)
   // Starting at (1.5,1.5,1.5) gives a negative denominator at low pT
   f->SetParameter(0, 1.0);
@@ -110,9 +108,9 @@ static FitResult FitPtSlices(const std::vector<double> &ptCenters,
 
 // one CMS L2Residual JEC data line for the [etaLo, etaHi] range
 static void WriteJECLine(std::ofstream &out, double etaLo, double etaHi,
-                         const FitResult &fit) {
-  out << etaLo << "\t" << etaHi << "\t" << (kNPar + 2) << "\t" << kPtLo << "\t"
-      << kPtHi;
+                         const FitResult &fit, double ptLo, double ptHi) {
+  out << etaLo << "\t" << etaHi << "\t" << (kNPar + 2) << "\t" << ptLo << "\t"
+      << ptHi;
   if (fit.valid) {
     out << "\t" << fit.p[0] << "\t" << fit.p[1] << "\t" << fit.p[2];
   } else {
@@ -123,7 +121,8 @@ static void WriteJECLine(std::ofstream &out, double etaLo, double etaHi,
 
 // mirrored |eta| about eta = 0 for |eta| results text file
 static bool WriteAbsEtaTextFile(const TString &path,
-                                const std::vector<FitResult> &fits) {
+                                const std::vector<FitResult> &fits, double ptLo,
+                                double ptHi) {
   std::ofstream out(path.Data());
   if (!out.is_open()) {
     return false;
@@ -131,10 +130,12 @@ static bool WriteAbsEtaTextFile(const TString &path,
   out << kJECHeader << "\n";
   const int nEta = (int)fits.size();
   for (int ieta = nEta - 1; ieta >= 0; ieta--) {
-    WriteJECLine(out, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta], fits[ieta]);
+    WriteJECLine(out, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta], fits[ieta],
+                 ptLo, ptHi);
   }
   for (int ieta = 0; ieta < nEta; ieta++) {
-    WriteJECLine(out, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1], fits[ieta]);
+    WriteJECLine(out, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1], fits[ieta],
+                 ptLo, ptHi);
   }
   out.close();
   return true;
@@ -142,7 +143,8 @@ static bool WriteAbsEtaTextFile(const TString &path,
 
 // full-eta text file, each bin has its own fit
 static bool WriteFullEtaTextFile(const TString &path,
-                                 const std::vector<FitResult> &fits) {
+                                 const std::vector<FitResult> &fits,
+                                 double ptLo, double ptHi) {
   std::ofstream out(path.Data());
   if (!out.is_open()) {
     return false;
@@ -150,7 +152,8 @@ static bool WriteFullEtaTextFile(const TString &path,
   out << kJECHeader << "\n";
   const int nEta = (int)fits.size();
   for (int ieta = 0; ieta < nEta; ieta++) {
-    WriteJECLine(out, kEtaEdges[ieta], kEtaEdges[ieta + 1], fits[ieta]);
+    WriteJECLine(out, kEtaEdges[ieta], kEtaEdges[ieta + 1], fits[ieta], ptLo,
+                 ptHi);
   }
   out.close();
   return true;
@@ -359,6 +362,9 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
   const bool wantFullEta = (cfg.etaModeOutput != "abseta");
 
   BinningConfig bins;
+  // pT fit range and text-file validity: the configured pT_avg slices
+  const double ptLo = bins.ptavgSlices.front().lo;
+  const double ptHi = bins.ptavgSlices.back().hi;
   const int nPt = (int)bins.ptavgSlices.size();
 
   // pT_avg bin edges for corrfinal grid
@@ -515,9 +521,9 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                                {method}) +
             suffix;
         fits[ieta] = FitPtSlices(useMean ? ptMean : ptMid, corr, corrErr,
-                                 graphName, dGraphs);
+                                 graphName, dGraphs, ptLo, ptHi);
         FitResult other = FitPtSlices(useMean ? ptMid : ptMean, corr, corrErr,
-                                      graphName + "_alt", nullptr);
+                                      graphName + "_alt", nullptr, ptLo, ptHi);
         const FitResult &fMean = useMean ? fits[ieta] : other;
         const FitResult &fMid = useMean ? other : fits[ieta];
         for (size_t k = 0; k < slices.size(); k++) {
@@ -557,10 +563,12 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
           textDir + "/" + outputTag + "_" + cone + "_abseta" + suffix + ".txt";
       TString etaTxt =
           textDir + "/" + outputTag + "_" + cone + "_eta" + suffix + ".txt";
-      if (wantAbsEta && !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta)) {
+      if (wantAbsEta &&
+          !WriteAbsEtaTextFile(absEtaTxt, fitsAbsEta, ptLo, ptHi)) {
         std::cerr << "Cannot open output file " << absEtaTxt << "\n";
       }
-      if (wantFullEta && !WriteFullEtaTextFile(etaTxt, fitsFullEta)) {
+      if (wantFullEta &&
+          !WriteFullEtaTextFile(etaTxt, fitsFullEta, ptLo, ptHi)) {
         std::cerr << "Cannot open output file " << etaTxt << "\n";
       }
 
