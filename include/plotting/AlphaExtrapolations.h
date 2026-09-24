@@ -19,7 +19,7 @@
 #include <algorithm>
 
 inline TString AlphaYTitle(bool useJer) {
-  return useJer ? "#frac{(R_{data}/R_{MC})_{#alpha}}{(R_{data}/R_{MC})_{#alpha=0.30}}"
+  return useJer ? "#frac{(#sigma_{A}^{data}/#sigma_{A}^{MC})_{#alpha}}{(#sigma_{A}^{data}/#sigma_{A}^{MC})_{#alpha=0.30}}"
                : "#frac{(R_{MC}/R_{data})_{#alpha}}{(R_{MC}/R_{data})_{#alpha=0.30}}";
 }
 

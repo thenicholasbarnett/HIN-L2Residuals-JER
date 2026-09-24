@@ -2,6 +2,7 @@
 
 #include "toml.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -82,13 +83,18 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   cfg.configPath = configPath;
   cfg.repoRoot = repoRoot;
 
+  cfg.jetIdPath =
+      ResolvePath(doc["paths"]["jet_id"].value_or(std::string{}), repoRoot);
   cfg.vetoMapPath =
       ResolvePath(doc["paths"]["veto_map"].value_or(std::string{}), repoRoot);
   cfg.jsonPath = ResolvePath(
       TString(doc["paths"]["golden_json"].value_or(std::string{}).c_str()),
       repoRoot);
 
-  cfg.vetoMapHist = doc["jet_id"]["veto_map_histogram"].value_or(std::string{});
+  cfg.jetSystem = doc["jet_id"]["system"].value_or(std::string{});
+  cfg.jetPurpose = doc["jet_id"]["purpose"].value_or(std::string{});
+  cfg.jetEventVetoCone =
+      doc["jet_id"]["event_veto_cone"].value_or(std::string{});
 
   cfg.hiTreePath = TString(doc["trees"]["hi"].value_or(std::string{}).c_str());
   cfg.ggTreePath = TString(doc["trees"]["gg"].value_or(std::string{}).c_str());
@@ -142,6 +148,8 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
     }
   }
 
+  cfg.jerMethod = doc["jer_closure"]["method"].value_or(std::string("hybrid"));
+
   for (const auto &v : *doc["binning"]["ptavg_edges"].as_array())
     cfg.ptavgEdges.push_back(v.value_or(0.0f));
     
@@ -160,6 +168,8 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
       doc["step3"]["default_method"].value_or(std::string("gauss")).c_str());
   cfg.etaModeOutput =
       TString(doc["step3"]["eta_mode"].value_or(std::string("both")).c_str());
+  cfg.ptCenter =
+      TString(doc["step3"]["pt_center"].value_or(std::string("mean")).c_str());
 
   if (cfg.jecFilesPerCone.empty())
     throw std::runtime_error("jec.files is empty");
@@ -198,6 +208,22 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
       cfg.etaModeOutput != "eta")
     throw std::runtime_error(
         "step3.eta_mode must be \"both\", \"abseta\", or \"eta\"");
+  if (cfg.ptCenter != "mean" && cfg.ptCenter != "midpoint")
+    throw std::runtime_error("step3.pt_center must be \"mean\" or \"midpoint\"");
+  if (cfg.jerMethod != "hybrid" && cfg.jerMethod != "scaling" &&
+      cfg.jerMethod != "stochastic")
+    throw std::runtime_error(
+        "jer_closure.method must be \"hybrid\", \"scaling\" or \"stochastic\"");
+  if (!cfg.jetEventVetoCone.empty() &&
+      std::find(cfg.coneLabels.begin(), cfg.coneLabels.end(),
+                TString(cfg.jetEventVetoCone.c_str())) == cfg.coneLabels.end())
+    throw std::runtime_error("jet_id.event_veto_cone '" + cfg.jetEventVetoCone +
+                             "' is not one of cones.labels");
+  if (cfg.jetSystem != "pp" && cfg.jetSystem != "ion")
+    throw std::runtime_error("jet_id.system must be \"pp\" or \"ion\"");
+  if (cfg.jetPurpose != "analysis" && cfg.jetPurpose != "calibration")
+    throw std::runtime_error(
+        "jet_id.purpose must be \"analysis\" or \"calibration\"");
 
   return cfg;
 }

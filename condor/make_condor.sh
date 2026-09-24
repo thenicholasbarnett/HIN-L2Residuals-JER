@@ -1,5 +1,9 @@
 #!/bin/bash
-# Submit one runAsymmetry job per input HiForest file.
+# Submit one job per input HiForest file. -format picks what each job
+# produces: this repo's asymmetry sparses (runAsymmetry), JME's dijet-
+# framework inputs (runDijetProfiles: l2l3res Dijet2 profiles + DiJetJERC
+# sparses), or both from the same input, in parallel condor/asymmetry* and
+# condor/profiles* trees.
 #
 # Arguments are JetMET-style "-flag value" (matching the compiled binaries'
 # CLI, external/jetmet/CommandLine.h) or bare boolean "-flag" switches -- no
@@ -9,8 +13,8 @@
 # any argument that isn't a "-flag" at all is an immediate usage error.
 #
 # Usage:
-#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure]
-#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure]
+#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]
+#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]
 #
 # -output dir       : required; absolute EOS/AFS path where output ROOT files are written
 # -alltxt           : bare switch; submit every .txt filelist found in data/txt/ (default off)
@@ -33,6 +37,9 @@
 #                      changes regardless of which directory a filelist lives in. Mutually
 #                      exclusive with -alltxt; exactly one of the two is required.
 # -nosubmit         : bare switch; generate submission files without submitting (default off)
+# -format value     : repo (runAsymmetry only), jme (runDijetProfiles only) or both
+#                      (default). Same event selection and jet corrections either way
+#                      (ForestEventLoop); -jerclosure smears in both.
 # -tag value        : optional label for this pass (e.g. -tag abs_eta, -tag clos_dir_eta).
 #                      Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
 #                      instead of OUTPUT_DIR/condor/asymmetry/<timestamp>, to keep
@@ -65,8 +72,8 @@
 # wildcard) wins, so put a specific override above a broader wildcard if one
 # filelist in a numbered run needs to differ from the rest.
 #
-# Note: the condor Arguments= line generated later in this script (runAsymmetry
-# INPUT OUTPUT MODE CMSSW_SRC) stays positional on purpose -- it's an internal,
+# Note: the condor Arguments= line generated later in this script (INPUT MODE
+# CMSSW_SRC CLOSURE ASYM_OUTPUT PROFILES_OUTPUT, an output "none" = skip) stays positional on purpose -- it's an internal,
 # script-generated contract consumed by runtime_wrapper.sh, never hand-typed,
 # so there's no typo risk to guard against. Only this script's own top-level
 # CLI (what a human actually types) needs named arguments.
@@ -86,8 +93,8 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure]" >&2
-  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure]" >&2
+  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]" >&2
+  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]" >&2
   exit 1
 }
 
@@ -105,6 +112,7 @@ parse_args() {
   RUN_TAG=""
   CONFIG_PATH=""
   JER_CLOSURE=false
+  FORMAT="both"
 
   while [[ $# -gt 0 ]]; do
     arg="$1"
@@ -131,6 +139,14 @@ parse_args() {
         ;;
       JERCLOSURE)
         JER_CLOSURE=true
+        ;;
+      FORMAT)
+        if [[ $# -eq 0 ]]; then
+          echo "ERROR: -format requires a value" >&2
+          usage
+        fi
+        FORMAT="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+        shift
         ;;
       TAG)
         if [[ $# -eq 0 ]]; then
@@ -170,6 +186,18 @@ parse_args() {
     echo "ERROR: -output dir is required" >&2
     usage
   fi
+
+  case "${FORMAT}" in
+    repo | jme | both) ;;
+    *)
+      echo "ERROR: -format must be repo, jme or both, got \"${FORMAT}\"" >&2
+      usage
+      ;;
+  esac
+  WANT_REPO=false
+  WANT_JME=false
+  if [[ "${FORMAT}" != jme ]]; then WANT_REPO=true; fi
+  if [[ "${FORMAT}" != repo ]]; then WANT_JME=true; fi
 
   if [[ "${RUN_TAG}" == */* ]]; then
     echo "ERROR: -tag must not contain '/': ${RUN_TAG}" >&2
@@ -286,11 +314,16 @@ choose_binary() {
     BINARY="${SCRAM_BINARY}"
     LIBRARY=""
   fi
+  PROFILES_BINARY="$(dirname "${BINARY}")/runDijetProfiles"
 
   if [[ ! -f "${BINARY}" ]]; then
     echo "ERROR: no runAsymmetry executable found." >&2
     echo "       For CMake, run: cmake --build build" >&2
     echo "       For SCRAM, put the repo at \$CMSSW_BASE/src/Analysis/HIN-L2Residuals-JER and run: scram b -j4" >&2
+    exit 1
+  fi
+  if [[ "${WANT_JME}" == true && ! -f "${PROFILES_BINARY}" ]]; then
+    echo "ERROR: ${PROFILES_BINARY} not found, rebuild (cmake --build build or scram b)" >&2
     exit 1
   fi
   if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
@@ -356,18 +389,25 @@ resolve_filelists() {
 # it as outdir/condor/<asym_dir_name>/<TODAY>. asymmetry_<TAG> keeps
 # separate passes (e.g. -tag abs_eta vs -tag clos_dir_eta) from landing in
 # the same output tree; plain "asymmetry" when no -tag is given.
+# runDijetProfiles output goes to the parallel outdir/condor/profiles[_<TAG>]/
+# <TODAY> tree, so each can be hadded on its own.
 normalize_output_dir() {
   ASYM_DIR_NAME="asymmetry"
-  if [[ -n "${RUN_TAG}" ]]; then ASYM_DIR_NAME="asymmetry_${RUN_TAG}"; fi
+  PROFILES_DIR_NAME="profiles"
+  if [[ -n "${RUN_TAG}" ]]; then
+    ASYM_DIR_NAME="asymmetry_${RUN_TAG}"
+    PROFILES_DIR_NAME="profiles_${RUN_TAG}"
+  fi
 
   OUTPUT_DIR="${OUTPUT_DIR%/}"
   OUTPUT_DIR="${OUTPUT_DIR%/condor/"${ASYM_DIR_NAME}"}"
   OUTPUT_DIR="${OUTPUT_DIR%/condor}"
+  PROFILES_OUTPUT_DIR="${OUTPUT_DIR}/condor/${PROFILES_DIR_NAME}/${TODAY}"
   OUTPUT_DIR="${OUTPUT_DIR}/condor/${ASYM_DIR_NAME}/${TODAY}"
 }
 
 # Creates WORKDIR and populates it with everything every job in this
-# submission shares: the runtime wrapper, binary/library, jec/veto/json
+# submission shares: the runtime wrapper, binary/library, jec/json
 # data, and the resolved config -- once, not per filelist.
 prepare_submission_sandbox() {
   mkdir -p "${SUBMISSIONS_DIR}"
@@ -379,9 +419,19 @@ prepare_submission_sandbox() {
   # depends on Condor's file transfer delivering the exact stamped bytes
   # to the worker, which was observed to fail in practice.
   cp "${CONDOR_DIR}/runtime_wrapper.sh" runtime_wrapper.sh
-  cp "${BINARY}" runAsymmetry
+  SANDBOX_BINARIES=()
+  if [[ "${WANT_REPO}" == true ]]; then
+    cp "${BINARY}" runAsymmetry
+    SANDBOX_BINARIES+=(runAsymmetry)
+    mkdir -p "${OUTPUT_DIR}"
+  fi
+  if [[ "${WANT_JME}" == true ]]; then
+    cp "${PROFILES_BINARY}" runDijetProfiles
+    SANDBOX_BINARIES+=(runDijetProfiles)
+    mkdir -p "${PROFILES_OUTPUT_DIR}"
+  fi
   if [[ -n "${LIBRARY}" ]]; then cp "${LIBRARY}" libl2residuals.so; fi
-  # Only jec/veto/json are read by the worker (via [paths]/[jec] in
+  # Only jec/json are read by the worker (via [paths]/[jec] in
   # analysis_config.toml, resolved relative to this sandbox's data/) --
   # data/txt/ is read once here on the submit host to build the per-job
   # Arguments= lines below, never by the worker itself, and data/root/
@@ -389,22 +439,21 @@ prepare_submission_sandbox() {
   # never touches at all. Copying the whole data/ directory here used to
   # stage several GB of dead weight into every submission sandbox.
   mkdir -p data
-  for sub in jec veto json; do
+  for sub in jec json; do
     if [[ -d "${DATA_DIR}/${sub}" ]]; then
       cp -r "${DATA_DIR}/${sub}" "data/${sub}"
     fi
   done
   cp "${CONFIG_PATH}" analysis_config.toml
-  chmod +x runtime_wrapper.sh runAsymmetry
-
-  mkdir -p "${OUTPUT_DIR}"
+  chmod +x runtime_wrapper.sh "${SANDBOX_BINARIES[@]}"
 }
 
 # Writes the per-filelist submit file's static header (Universe, Executable,
 # Transfer_Input_Files, ...) -- shared by every job in this filelist, unlike
 # the per-input-file Arguments/Output/Error/Log block appended later.
 write_submit_header() {
-  local submit_file="$1" label="$2"
+  local submit_file="$1" label="$2" transfer="" bin
+  for bin in "${SANDBOX_BINARIES[@]}"; do transfer+="$(pwd)/${bin},"; done
   cat >"${submit_file}" <<EOF
 Universe                = vanilla
 Executable              = $(pwd)/runtime_wrapper.sh
@@ -416,7 +465,7 @@ should_transfer_files   = YES
 when_to_transfer_output = ON_EXIT
 Transfer_Output_Files   = ""
 
-Transfer_Input_Files    = $(pwd)/runAsymmetry${LIBRARY:+,$(pwd)/libl2residuals.so},$(pwd)/data,$(pwd)/analysis_config.toml
+Transfer_Input_Files    = ${transfer}${LIBRARY:+$(pwd)/libl2residuals.so,}$(pwd)/data,$(pwd)/analysis_config.toml
 
 request_cpus            = 1
 
@@ -426,9 +475,9 @@ EOF
 # Appends one job's Arguments/Output/Error/Log/Queue block to the submit
 # file, for a single input HiForest file.
 append_job_to_submit_file() {
-  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6" closure="$7"
+  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6" closure="$7" profiles_file="$8"
   cat >>"${submit_file}" <<EOF
-Arguments = runAsymmetry ${input_file} ${output_file} ${mode} ${CMSSW_SRC_FROM_CONFIG} ${closure}
+Arguments = ${input_file} ${mode} ${CMSSW_SRC_FROM_CONFIG} ${closure} ${output_file} ${profiles_file}
 Output    = $(pwd)/logs/${label}/out/job_${count}.out
 Error     = $(pwd)/logs/${label}/err/job_${count}.err
 Log       = $(pwd)/logs/${label}/log/job_${count}.log
@@ -489,18 +538,25 @@ submit_filelist() {
   while IFS= read -r input_file; do
     [[ -z "${input_file}" ]] && continue
 
-    local output_file="${OUTPUT_DIR}/${label}/output_${count}.root"
-    mkdir -p "${OUTPUT_DIR}/${label}"
+    local output_file="none" profiles_file="none"
+    if [[ "${WANT_REPO}" == true ]]; then
+      output_file="${OUTPUT_DIR}/${label}/output_${count}.root"
+      mkdir -p "${OUTPUT_DIR}/${label}"
+    fi
+    if [[ "${WANT_JME}" == true ]]; then
+      profiles_file="${PROFILES_OUTPUT_DIR}/${label}/output_${count}.root"
+      mkdir -p "${PROFILES_OUTPUT_DIR}/${label}"
+    fi
 
-    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}" "${closure}"
+    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}" "${closure}" "${profiles_file}"
     count=$((count + 1))
     draw_bar "${BAR_COLOR}" "${label}:" "${count}" "${total}"
   done <"${filelist_path}"
 
   printf "\n\n"
 
-  local closure_note=""
-  if [[ "${closure}" == true ]]; then closure_note=" [jer closure]"; fi
+  local closure_note=" [${FORMAT}]"
+  if [[ "${closure}" == true ]]; then closure_note=" [${FORMAT}, jer closure]"; fi
 
   if [[ "${NO_SUBMIT}" == true ]]; then
     echo "  ${label} (${mode})${closure_note}: ${count} jobs → $(pwd)/${submit_file}"
@@ -546,7 +602,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
   echo "Total: ${TOTAL_JOBS} jobs across ${TOTAL_LISTS} filelists"
   echo "Config used: ${CONFIG_PATH} (transferred as analysis_config.toml, also archived in ${WORKDIR})"
   if [[ "${NO_SUBMIT}" == false ]]; then
-    echo "Output directory: ${OUTPUT_DIR}"
+    if [[ "${WANT_REPO}" == true ]]; then echo "Output directory: ${OUTPUT_DIR}"; fi
+    if [[ "${WANT_JME}" == true ]]; then echo "Profiles output directory: ${PROFILES_OUTPUT_DIR}"; fi
   fi
   echo "Working directory: ${WORKDIR}"
 )

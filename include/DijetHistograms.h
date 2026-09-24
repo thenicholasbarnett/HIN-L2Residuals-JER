@@ -10,10 +10,15 @@
 #include "Dijet.h"
 
 // One instance per cone size. Each owns:
-//   hAsym     : 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet
-//   hInclJet  : TH3D (eta, phi, pT), all corrected jets passing cfg.minPt
-//   hTagJet   : TH3D (eta, phi, pT), tag jet of each valid dijet
-//   hProbeJet : TH3D (eta, phi, pT), probe jet of each valid dijet
+//   hAsym      : 4D THnSparse (eta_probe, pT_avg, alpha, A), one fill per valid dijet
+//   hInclJet   : TH3D (eta, phi, pT), all corrected jets passing cfg.minPt --
+//                no jet ID, no veto map (deliberately loose, see FillInclJet)
+//   hInclJetID : TH3D (eta, phi, pT), same as hInclJet but additionally
+//                requires JetSelector::JetSelection (tight jet ID + veto map),
+//                same per-jet cut already applied to lead/sublead/third in
+//                RunAsymmetry.cxx -- still no dijet/trigger-jet-pairing logic
+//   hTagJet    : TH3D (eta, phi, pT), tag jet of each valid dijet
+//   hProbeJet  : TH3D (eta, phi, pT), probe jet of each valid dijet
 //
 // MC-only (Init's isMC flag), parallel to the TH3Ds above, JES/JER inputs:
 //   hInclJetResp/hTagJetResp/hProbeJetResp : 6D THnSparse
@@ -38,6 +43,7 @@ struct ConeHistograms {
 
   THnSparse *hAsym = nullptr;
   TH3D *hInclJet = nullptr;
+  TH3D *hInclJetID = nullptr;
   TH3D *hTagJet = nullptr;
   TH3D *hProbeJet = nullptr;
 
@@ -54,6 +60,8 @@ struct ConeHistograms {
     hAsym->Sumw2();
 
     hInclJet = MakeTH3DEtaPhiPt(prefix + "_incl", kEtaEdges, bins.phi, bins.pt);
+    hInclJetID =
+        MakeTH3DEtaPhiPt(prefix + "_inclid", kEtaEdges, bins.phi, bins.pt);
     hTagJet = MakeTH3DEtaPhiPt(prefix + "_tag", kEtaEdges, bins.phi, bins.pt);
     hProbeJet =
         MakeTH3DEtaPhiPt(prefix + "_probe", kEtaEdges, bins.phi, bins.pt);
@@ -76,6 +84,13 @@ struct ConeHistograms {
 
   void FillInclJet(float corrPt, float jetEta, float jetPhi, float weight) {
     hInclJet->Fill(jetEta, jetPhi, corrPt, weight);
+  }
+
+  // caller has already evaluated JetSelector::JetSelection for this jet --
+  // kept as a separate explicit fill (not folded into FillInclJet) so the
+  // loose hInclJet stays exactly as loose as before
+  void FillInclJetID(float corrPt, float jetEta, float jetPhi, float weight) {
+    hInclJetID->Fill(jetEta, jetPhi, corrPt, weight);
   }
 
   // MC only; refPt<0 (no gen match) drops the jet rather than filling a
@@ -119,6 +134,7 @@ struct ConeHistograms {
       dir->cd();
     WriteAll(hAsym);
     WriteAll(hInclJet);
+    WriteAll(hInclJetID);
     WriteAll(hTagJet);
     WriteAll(hProbeJet);
     WriteAll(hInclJetResp);

@@ -600,41 +600,45 @@ void TestJerSfWriter() {
                                   "abseta JER SF file without throwing");
 
   if (obj) {
-    Check(obj->getDefinition().getFormulaString() == "[0]",
-          "definition formula is [0]");
-    Check(obj->getDefinition().getBinsName().size() == 1 &&
-              obj->getDefinition().getBinsName()[0] == "JetEta",
-          "definition bin variable is JetEta");
+    const auto &bins = obj->getDefinition().getBinsName();
+    Check(bins.size() == 2 && bins[0] == "JetEta" && bins[1] == "JetPt",
+          "definition bin variables are JetEta and JetPt");
+    Check(obj->getDefinition().nVariables() == 0,
+          "definition has no formula variables (plain ScaleFactor grid)");
     Check(obj->getRecords().size() == 36 * 6,
           "record count = 36 eta identities x 6 pT slices");
+    std::ifstream hdr(jerAbsPath.Data());
+    std::string first;
+    std::getline(hdr, first);
+    Check(first.find("ScaleFactor") != std::string::npos,
+          "header keyword is ScaleFactor");
 
-    const JME::JetResolutionObject::Record *found = nullptr;
-    for (const auto &r : obj->getRecords()) {
-      if (r.getBinsRange()[0].is_inside(0.5f) &&
-          r.getVariablesRange()[0].is_inside(137.5f)) {
-        found = &r;
-        break;
+    // lookup by (eta, pT) has to land on the matching pT slice, not the
+    // first slice of the eta bin
+    JME::JetParameters params;
+    params.setJetEta(0.5f).setJetPt(137.5f);
+    const JME::JetResolutionObject::Record *found = obj->getRecord(params);
+    Check(found != nullptr, "getRecord(eta=0.5, pT=137.5) finds a record");
+    if (found) {
+      Check(found->getBinsRange()[1].is_inside(137.5f) &&
+                found->getBinsRange()[1].min > 0.0f,
+            "getRecord picks the pT slice containing 137.5, not the first");
+      Check(found->getParametersValues().size() == 3,
+            "record carries 3 parameters (nominal, down, up)");
+      if (found->getParametersValues().size() == 3) {
+        Check(std::fabs(found->getParametersValues()[0] - 1.02) < 1e-4,
+              "nominal is the JER SF value (1.02)");
+        Check(std::fabs(found->getParametersValues()[1] - 1.01) < 1e-4 &&
+                  std::fabs(found->getParametersValues()[2] - 1.03) < 1e-4,
+              "down/up are SF -/+ its error (1.01, 1.03)");
       }
     }
-    Check(found != nullptr,
-          "a record's eta and pT ranges both contain (eta=0.5, pT=137.5)");
-    if (found) {
-      Check(found->getParametersValues().size() == 2,
-            "record carries 2 parameters (value, unc)");
-      if (found->getParametersValues().size() == 2) {
-        Check(std::fabs(found->getParametersValues()[0] - 1.02) < 1e-4,
-              "first parameter is the JER SF value (1.02)");
-        // unc = error/value, matching the JER s_up/down convention
-        Check(
-            std::fabs(found->getParametersValues()[1] - (0.01 / 1.02)) < 1e-4,
-            "second parameter is the fractional uncertainty unc = error/value");
-      }
-
-      JME::JetParameters params;
-      params.setJetEta(0.5f).setJetPt(137.5f);
-      float sf = obj->evaluateFormula(*found, params);
-      Check(std::fabs(sf - 1.02) < 1e-4,
-            "evaluateFormula() recovers the JER SF value via the [0] formula");
+    // every jet pT gets a record: first slice extended to 0, last to 7000
+    for (float pt : {1.0f, 6000.0f}) {
+      JME::JetParameters p;
+      p.setJetEta(0.5f).setJetPt(pt);
+      std::string msg = "pT " + std::to_string((int)pt) + " is covered by some record";
+      Check(obj->getRecord(p) != nullptr, msg.c_str());
     }
     delete obj;
   }

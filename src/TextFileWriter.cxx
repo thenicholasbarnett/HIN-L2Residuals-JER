@@ -22,6 +22,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <algorithm>
 
 // min pT slices for 3-parameter fit
 static constexpr int kMinSlices = 3;
@@ -155,15 +156,20 @@ static bool WriteFullEtaTextFile(const TString &path,
   return true;
 }
 
-// JER SF text output, via the vendored JME::JetResolutionObject
-// JER SF file is a direct binned grid: one value per (eta bin, pT_avg slice) bin
-// Definition line: "{1 JetEta 1 JetPt [0] Resolution}"
-// 1 bin variable (JetEta), 1 structural variable (JetPt), [0] is JER SF value
-// unc of SF  = error/value, retrievable via record.getParametersValues()[1]
-// JER-smearing convention (s_up/down = sJER * (1 +/- unc))
+// JER SF / PtResolution text output, via the vendored JME::JetResolutionObject
+// direct binned grid: one value per (eta bin, pT slice) cell
+// pT has to be a binning variable -- JetResolutionObject picks a record by its
+// binning variables only, so pT slices written as extra records of one eta bin
+// would all resolve to the first slice
+// SF:           "{2 JetEta JetPt 0 None ScaleFactor}", row values nom down up
+// PtResolution: "{2 JetEta JetPt 1 JetPt [0] Resolution}", [0] is sigma/pT
 struct JerRecord {
   double ptLo, ptHi, value, unc;
 };
+
+// pT reach of the written grid, same as JME's own files
+static constexpr double kJerPtMin = 0.0;
+static constexpr double kJerPtMax = 7000.0;
 
 // JER SF values (eta_probe, pT_avg), skipping slices with no data
 static std::vector<JerRecord>
@@ -185,43 +191,63 @@ CollectJerRecords(int ieta, const std::vector<RangeBin> &ptSlices,
   return out;
 }
 
-// One record line per JerRecord
-// "4" token is 2*nVariables + nParameters
-// 2 for JetPt range, 2 for [value, unc] parameters
-// see JetResolutionObject::Record
-static void AppendJerLines(std::stringstream &buf, double etaLo, double etaHi,
-                           const std::vector<JerRecord> &recs) {
-  for (const auto &r : recs) {
-    buf << etaLo << " " << etaHi << " 4 " << r.ptLo << " " << r.ptHi << " "
-        << r.value << " " << r.unc << "\n";
+// every jet pT lands in some record: first slice down to kJerPtMin, last up
+// to kJerPtMax, gaps from skipped slices filled by the slice below
+static std::vector<JerRecord> CoverPtRange(std::vector<JerRecord> recs) {
+  std::sort(recs.begin(), recs.end(),
+            [](const JerRecord &a, const JerRecord &b) { return a.ptLo < b.ptLo; });
+  for (size_t i = 0; i < recs.size(); i++) {
+    if (i == 0) {
+      recs[i].ptLo = kJerPtMin;
+    }
+    recs[i].ptHi = (i + 1 < recs.size()) ? recs[i + 1].ptLo : kJerPtMax;
+  }
+  return recs;
+}
+
+// "3" token: nominal, down, up (no formula variables)
+static void AppendSfLines(std::stringstream &buf, double etaLo, double etaHi,
+                          const std::vector<JerRecord> &recs) {
+  for (const auto &r : CoverPtRange(recs)) {
+    buf << etaLo << " " << etaHi << " " << r.ptLo << " " << r.ptHi << " 3 "
+        << r.value << " " << r.value * (1.0 - r.unc) << " "
+        << r.value * (1.0 + r.unc) << "\n";
   }
 }
 
-// JER SF temp text file first
-// JME::JetResolutionObject: parses and re-emitts with saveToFile()
+// "4" token: JetPt range (2) + [value, unc] parameters (2)
+static void AppendResLines(std::stringstream &buf, double etaLo, double etaHi,
+                           const std::vector<JerRecord> &recs) {
+  for (const auto &r : CoverPtRange(recs)) {
+    buf << etaLo << " " << etaHi << " " << r.ptLo << " " << r.ptHi << " 4 "
+        << r.ptLo << " " << r.ptHi << " " << r.value << " " << r.unc << "\n";
+  }
+}
+
+// JER SF temp text file first, parsed by JME::JetResolutionObject as a check
 // mirrors abseta cells onto both eta halves
 static bool WriteJerSfTextFile(const TString &path, bool fullEta,
                                const std::vector<RangeBin> &ptSlices,
                                const std::vector<TH1D *> &hSliceJer) {
 
   std::stringstream buf;
-  buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+  buf << "{2 JetEta JetPt 0 None ScaleFactor}\n";
 
   if (fullEta) {
     const int nEta = (int)kEtaEdges.size() - 1;
     for (int ieta = 0; ieta < nEta; ieta++) {
-      AppendJerLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
-                     CollectJerRecords(ieta, ptSlices, hSliceJer));
+      AppendSfLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
+                    CollectJerRecords(ieta, ptSlices, hSliceJer));
     }
   } else {
     const int nEta = (int)kAbsEtaEdges.size() - 1;
     for (int ieta = nEta - 1; ieta >= 0; ieta--) {
-      AppendJerLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
-                     CollectJerRecords(ieta, ptSlices, hSliceJer));
+      AppendSfLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
+                    CollectJerRecords(ieta, ptSlices, hSliceJer));
     }
     for (int ieta = 0; ieta < nEta; ieta++) {
-      AppendJerLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
-                     CollectJerRecords(ieta, ptSlices, hSliceJer));
+      AppendSfLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
+                    CollectJerRecords(ieta, ptSlices, hSliceJer));
     }
   }
 
@@ -234,16 +260,21 @@ static bool WriteJerSfTextFile(const TString &path, bool fullEta,
     tmp << buf.str();
   }
 
+  // parse as a check only: saveToFile() would rewrite the header keyword to
+  // "Resolution", so the buffer itself is what gets written
   bool ok = true;
   try {
     JME::JetResolutionObject obj(tmpPath.Data());
-    obj.saveToFile(path.Data());
   } catch (const std::exception &e) {
     std::cerr << "ERROR building JER SF text file " << path << ": " << e.what()
               << "\n";
     ok = false;
   }
-  gSystem->Unlink(tmpPath);
+  if (ok) {
+    ok = (gSystem->Rename(tmpPath, path) == 0);
+  } else {
+    gSystem->Unlink(tmpPath);
+  }
   return ok;
 }
 
@@ -371,9 +402,11 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
       const int nEta = (int)etaEdges.size() - 1;
       const TString etaMode = L2Name::EtaModeKey(fullEta);
 
-      // one correction histogram per pT slice
+      // one correction histogram per pT slice, plus its data <pT_avg> per
+      // eta bin from the same Step 2 file (nullptr for older Step 2 files)
       std::vector<TH1D *> &hSlice = fullEta ? hSliceFullEta : hSliceAbsEta;
       hSlice.assign(nPt, nullptr);
+      std::vector<TH1D *> hMeanPt(nPt, nullptr);
       int nMissingSlices = 0;
       for (int ip = 0; ip < nPt; ip++) {
         const auto &ptSlice = bins.ptavgSlices[ip];
@@ -385,6 +418,10 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
                                  {etaMode, L2Name::PtKey(ptSlice)}, {method}) +
               suffix;
           hSlice[ip] = FetchIntercept(src, cone, name);
+          hMeanPt[ip] = FetchIntercept(
+              src, cone,
+              L2Name::ObjectName(cone, "ptavg_mean",
+                                 {etaMode, L2Name::PtKey(ptSlice)}, {"data"}));
         }
         if (!hSlice[ip]) {
           nMissingSlices++;
@@ -429,12 +466,28 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
         continue; // JER SF has no pT-dependence fit -- flat grid only
       }
 
-      // pT-dependence fit, one per eta bin
+      // pT-dependence fit, one per eta bin, at the configured pT center;
+      // the other centering is fit too, for the centercomp comparison
+      const bool useMean = (cfg.ptCenter == "mean");
       std::vector<FitResult> &fits = fullEta ? fitsFullEta : fitsAbsEta;
       fits.assign(nEta, FitResult{});
       int nUnityFallback = 0;
+      int nMidpointFallback = 0;
+      // both fits evaluated at each slice's <pT_avg>, x = eta, y = slice
+      TH2D *hFitMean = new TH2D(
+          L2Name::ObjectName(cone, "corrfit_ptmean", {etaMode}, {method}) +
+              suffix,
+          "", nEta, etaEdges.data(), nPt, ptEdges.data());
+      TH2D *hFitMid = new TH2D(
+          L2Name::ObjectName(cone, "corrfit_ptmid", {etaMode}, {method}) +
+              suffix,
+          "", nEta, etaEdges.data(), nPt, ptEdges.data());
+      // fit evaluations, no uncertainty attached
+      hFitMean->Sumw2();
+      hFitMid->Sumw2();
       for (int ieta = 0; ieta < nEta; ieta++) {
-        std::vector<double> ptX, corr, corrErr;
+        std::vector<double> ptMean, ptMid, corr, corrErr;
+        std::vector<int> slices;
         for (int ip = 0; ip < nPt; ip++) {
           if (!hSlice[ip]) {
             continue;
@@ -444,19 +497,53 @@ static void RunTextFileImpl(SourceMode srcMode, TFile *fTrig, TFile *fNoTrig,
           if (v == 0.0 && e == 0.0) {
             continue;
           }
-          ptX.push_back(SliceCenter(bins.ptavgSlices[ip]));
+          const double mid = SliceCenter(bins.ptavgSlices[ip]);
+          double mean = hMeanPt[ip] ? hMeanPt[ip]->GetBinContent(ieta + 1) : 0.0;
+          if (mean <= 0.0) {
+            mean = mid;
+            nMidpointFallback++;
+          }
+          ptMean.push_back(mean);
+          ptMid.push_back(mid);
           corr.push_back(v);
           corrErr.push_back(e > 0.0 ? e : 1e-4);
+          slices.push_back(ip);
         }
         TString graphName =
             L2Name::ObjectName(cone, "ptcorr",
                                {etaMode, L2Name::EtaKey(ieta, fullEta)},
                                {method}) +
             suffix;
-        fits[ieta] = FitPtSlices(ptX, corr, corrErr, graphName, dGraphs);
+        fits[ieta] = FitPtSlices(useMean ? ptMean : ptMid, corr, corrErr,
+                                 graphName, dGraphs);
+        FitResult other = FitPtSlices(useMean ? ptMid : ptMean, corr, corrErr,
+                                      graphName + "_alt", nullptr);
+        const FitResult &fMean = useMean ? fits[ieta] : other;
+        const FitResult &fMid = useMean ? other : fits[ieta];
+        for (size_t k = 0; k < slices.size(); k++) {
+          double x = ptMean[k];
+          if (fMean.valid) {
+            hFitMean->SetBinContent(ieta + 1, slices[k] + 1,
+                                    FitFunc(&x, const_cast<double *>(fMean.p)));
+          }
+          if (fMid.valid) {
+            hFitMid->SetBinContent(ieta + 1, slices[k] + 1,
+                                   FitFunc(&x, const_cast<double *>(fMid.p)));
+          }
+        }
         if (!fits[ieta].valid) {
           nUnityFallback++;
         }
+      }
+      coneDirOut->cd();
+      hFitMean->Write();
+      hFitMid->Write();
+      delete hFitMean;
+      delete hFitMid;
+      if (nMidpointFallback > 0) {
+        std::cerr << cone << " " << etaMode << ": " << nMidpointFallback
+                  << " (eta, pT) points had no <pT_avg> in the Step 2 file "
+                     "(older Step 2 output?) and used the slice midpoint\n";
       }
       if (nUnityFallback > 0) {
         std::cerr << cone << " " << etaMode << ": " << nUnityFallback << "/"
@@ -589,8 +676,8 @@ CollectPtResEtaRecords(TDirectory *dPerEta, const TString &cone, int nEta,
   return etaRecords;
 }
 
-// round-trips an assembled JER-grid buffer through JME::JetResolutionObject,
-// same convention as WriteJerSfTextFile above
+// validates an assembled JER-grid buffer with JME::JetResolutionObject, then
+// writes it, same convention as WriteJerSfTextFile above
 static bool WritePtResolutionFile(const TString &path,
                                   const std::stringstream &buf) {
   TString tmpPath = path + ".tmp";
@@ -601,13 +688,16 @@ static bool WritePtResolutionFile(const TString &path,
   bool ok = true;
   try {
     JME::JetResolutionObject obj(tmpPath.Data());
-    obj.saveToFile(path.Data());
   } catch (const std::exception &ex) {
     std::cerr << "ERROR writing pT resolution file " << path << ": "
               << ex.what() << "\n";
     ok = false;
   }
-  gSystem->Unlink(tmpPath);
+  if (ok) {
+    ok = (gSystem->Rename(tmpPath, path) == 0);
+  } else {
+    gSystem->Unlink(tmpPath);
+  }
   return ok;
 }
 
@@ -661,13 +751,13 @@ void runTextFilePtResolution(TString responseFile, TString outputTag,
         TString path =
             textDir + "/" + outputTag + "_" + cone + "_abseta_ptresolution.txt";
         std::stringstream buf;
-        buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+        buf << "{2 JetEta JetPt 1 JetPt [0] Resolution}\n";
         for (int ieta = nAbsEta - 1; ieta >= 0; ieta--) {
-          AppendJerLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
+          AppendResLines(buf, -kAbsEtaEdges[ieta + 1], -kAbsEtaEdges[ieta],
                          etaRecords[ieta]);
         }
         for (int ieta = 0; ieta < nAbsEta; ieta++) {
-          AppendJerLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
+          AppendResLines(buf, kAbsEtaEdges[ieta], kAbsEtaEdges[ieta + 1],
                          etaRecords[ieta]);
         }
 
@@ -691,9 +781,9 @@ void runTextFilePtResolution(TString responseFile, TString outputTag,
         TString path =
             textDir + "/" + outputTag + "_" + cone + "_eta_ptresolution.txt";
         std::stringstream buf;
-        buf << "{1 JetEta 1 JetPt [0] Resolution}\n";
+        buf << "{2 JetEta JetPt 1 JetPt [0] Resolution}\n";
         for (int ieta = 0; ieta < nFullEta; ieta++) {
-          AppendJerLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
+          AppendResLines(buf, kEtaEdges[ieta], kEtaEdges[ieta + 1],
                          etaRecords[ieta]);
         }
 

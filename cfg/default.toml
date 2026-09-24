@@ -5,8 +5,10 @@
 # pointing L2RESIDUALS_CONFIG at it. 
 
 [paths]
-# Jet veto map and golden JSON are entirely per-run-period. No default exists.
-veto_map = "REQUIRED_SET_ME/path/to/veto_map.root"
+# Jet ID, veto map, and golden JSON are per-run-period. No default exists.
+# Jet ID + veto map: JME correctionlib JSON (unzipped), read by JetSelector.h
+jet_id = "REQUIRED_SET_ME/path/to/jetid_Run3.json"
+veto_map = "REQUIRED_SET_ME/path/to/jetvetomaps_<tag>.json"
 golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 
 [condor]
@@ -41,7 +43,14 @@ threshold = 0.0
 cone = "REQUIRED_SET_ME"
 
 [jet_id]
-veto_map_histogram = "jetvetomap_all"
+# system: "pp" (full AK4CHS TightLeptonVeto) | "ion" (leptonic/EM cuts only)
+# purpose: "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
+system = "REQUIRED_SET_ME"
+purpose = "calibration"
+# JME Run 3 event veto (runAsymmetry): drop the event if any jet of this
+# cone has pT > 15 GeV, tight ID, EMF < 0.9 and sits in the veto map; the
+# maps are derived with AK4 jets. "" = off (per-jet ID + veto only)
+event_veto_cone = "ak4PF"
 
 [cones]
 labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
@@ -60,10 +69,13 @@ files = [
 
 [jer_closure]
 # Only read when runAsymmetry is run with -calibration jer -closure true:
-# MC jets get JER-smeared (hybrid method, JetSmearing.h) before histogramming,
+# MC jets get JER-smeared (JetSmearer.h, method below) before histogramming,
 # to produce the smeared MC input for the JER SF closure check. One text
 # file per cone, same order as cones.labels above -- unset/empty means no
 # JER closure smearing has been derived for this run period yet.
+# smearing method (JetSmearer.h): "hybrid" (JME recommendation, default),
+# "scaling" (gen-matched jets only) or "stochastic" (Gaussian, every jet)
+method = "hybrid"
 resolution_files = [
 ]
 scale_factor_files = [
@@ -93,3 +105,5 @@ default_method = "gauss"
 # other options currently available: doubleGauss | trunc90 | trunc95
 eta_mode = "both"
 # other options currently available: abseta | eta
+# pT-fit x values: "mean" (weighted <pT_avg> per slice, from Step 2) | "midpoint"
+pt_center = "mean"
