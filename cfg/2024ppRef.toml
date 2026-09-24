@@ -1,6 +1,6 @@
 [paths]
 # JetSelector inputs, CMS correctionlib format (JME payloads, unzipped)
-jet_id = "data/json/jetid_Run3.json"
+jet_id = "data/json/jetid.json"
 veto_map = "data/json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json"
 golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 
