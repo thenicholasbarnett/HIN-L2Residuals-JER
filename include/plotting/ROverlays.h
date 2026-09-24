@@ -94,7 +94,7 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         auto [ylo, yhi] = YRange({hRdc, hRmc});
         hRmc->GetXaxis()->SetRangeUser(xMin, xMax);
         hRmc->GetYaxis()->SetRangeUser(ylo, yhi);
-        hRmc->GetYaxis()->SetTitle(kRTitle);
+        hRmc->GetYaxis()->SetTitle(useJer ? "#sigma_{A}" : kRTitle);
         hRmc->GetYaxis()->SetTitleSize(0.040);
         hRmc->GetYaxis()->SetTitleOffset(1.9);
         hRmc->GetYaxis()->SetLabelSize(0.040);
@@ -126,8 +126,8 @@ inline void PlotROverlay(TFile *fIn, const TString &outDir, const TString &cone,
         leg->AddEntry((TObject *)nullptr, CalibMethodLabel(m, useJer), "");
         leg->AddEntry((TObject *)nullptr, ptSl.title, "");
         leg->AddEntry((TObject *)nullptr, aSl.title, "");
-        leg->AddEntry(hRmc, "R_{MC}", "lp");
-        leg->AddEntry(hRdc, "R_{data}", "lp");
+        leg->AddEntry(hRmc, useJer ? "#sigma_{A}^{MC}" : "R_{MC}", "lp");
+        leg->AddEntry(hRdc, useJer ? "#sigma_{A}^{data}" : "R_{data}", "lp");
         leg->Draw();
 
         // ratio pad

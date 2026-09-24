@@ -17,8 +17,16 @@ struct AnalysisConfig {
   // -closure true, to JER-smear MC jets for the JER SF closure check
   std::vector<std::string> jerResolutionFilesPerCone;
   std::vector<std::string> jerScaleFactorFilesPerCone;
+  // "hybrid" (JME default) | "scaling" | "stochastic", JetSmearer.h
+  std::string jerMethod = "hybrid";
+  // JetSelector inputs: correctionlib-format jet ID + veto map JSON
+  std::string jetIdPath;
   std::string vetoMapPath;
-  std::string vetoMapHist;
+  std::string jetSystem;  // "pp" | "ion"
+  // "analysis" (jetvetomap) | "calibration" (jetvetomap_all)
+  std::string jetPurpose;
+  // cone whose jets drive the JME Run 3 event veto in runAsymmetry, "" = off
+  std::string jetEventVetoCone;
   TString jsonPath;
 
   TString hiTreePath;
@@ -46,6 +54,8 @@ struct AnalysisConfig {
 
   TString defaultMethod = "gauss";
   TString etaModeOutput = "both";
+  // Step 3 pT-fit x values: "mean" (weighted <pT_avg> per slice) | "midpoint"
+  TString ptCenter = "mean";
 };
 
 std::string DefaultConfigPath();

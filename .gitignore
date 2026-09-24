@@ -13,7 +13,6 @@ condor/submissions/
 *.root
 *.png
 *.pdf
-!data/veto/*.root
 
 # closure/reprocessing
 cfg/*clos*.toml

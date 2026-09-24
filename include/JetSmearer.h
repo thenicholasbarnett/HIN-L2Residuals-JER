@@ -1,6 +1,10 @@
 #ifndef JETSMEARER_H
 #define JETSMEARER_H
 
+// JetSmearer v1.1
+// smear the width of jet energy responses with just this header
+// Author: Nicholas Shawn Barnett
+
 // USAGE
 // Instantiate JetSmearer per jet cone/collection
 // Construct with JetResolutionObject, CMS JERC txt file format
@@ -8,6 +12,17 @@
 //
 //   JetSmearer smearer("Resolution_AK4PFchs.txt", "ScaleFactor_AK4PFchs.txt");
 //   double smearedPt = smearer.SmearedPt(jet.pt, jet.eta, event.rho, genPt);
+//
+// Method (constructor argument or SetMethod), default Hybrid:
+//   Hybrid     : Scaling for a well-matched gen jet, else Stochastic (JME
+//                recommendation, SmearedJetProducerT)
+//   Scaling    : well-matched jets only, the rest are left unsmeared
+//   Stochastic : Gaussian smearing of every jet, gen match ignored (e.g.
+//                legacy analyses that smeared with a Gaussian only)
+// "Well matched": genPt >= 0 and |recoPt - genPt| < 3 sigma_JER recoPt
+//
+//   JetSmearer gaus("Resolution_AK4PFchs.txt", "ScaleFactor_AK4PFchs.txt",
+//                   JetSmearer::kDefaultSeed, JetSmearing::Method::Stochastic);
 
 #include <algorithm>
 #include <atomic>
@@ -666,11 +681,28 @@ private:
 
 namespace JetSmearing {
 
+enum class Method { Hybrid, Scaling, Stochastic };
+
+// "hybrid" | "scaling" | "stochastic", throws otherwise
+inline Method MethodFromString(const std::string &name) {
+  if (name == "hybrid") {
+    return Method::Hybrid;
+  }
+  if (name == "scaling") {
+    return Method::Scaling;
+  }
+  if (name == "stochastic") {
+    return Method::Stochastic;
+  }
+  throw std::invalid_argument("JetSmearing: unknown method \"" + name +
+                              "\", expected hybrid, scaling or stochastic");
+}
+
 struct Result {
   double smearFactor = 1.0;
   double resolution = 0.0; // sigma_JER used (getResolution() output)
   double scaleFactor = 1.0;
-  bool matched = false;
+  bool matched = false; // scaling method applied
 };
 
 // genPt < 0 is no matched gen jet
@@ -681,7 +713,7 @@ ComputeSmearFactor(double recoPt, double eta, double rho, double genPt,
                    const JetSmearerJME::JetResolutionScaleFactor &resolutionSF,
                    std::mt19937 &rng, Variation variation = Variation::NOMINAL,
                    const std::string &uncertaintySource = "",
-                   double dPtMaxFactor = 3.0) {
+                   double dPtMaxFactor = 3.0, Method method = Method::Hybrid) {
   Result r;
   r.resolution = resolution.getResolution(
       JetSmearerJME::JetParameters().setJetPt(recoPt).setJetEta(eta).setRho(
@@ -690,12 +722,14 @@ ComputeSmearFactor(double recoPt, double eta, double rho, double genPt,
       JetSmearerJME::JetParameters().setJetPt(recoPt).setJetEta(eta), variation,
       uncertaintySource);
 
-  if (genPt >= 0 &&
-      std::abs(recoPt - genPt) < dPtMaxFactor * r.resolution * recoPt) {
+  const bool wellMatched =
+      genPt >= 0 &&
+      std::abs(recoPt - genPt) < dPtMaxFactor * r.resolution * recoPt;
+  if (method != Method::Stochastic && wellMatched) {
     // scaling method
     r.matched = true;
     r.smearFactor = 1.0 + (r.scaleFactor - 1.0) * (recoPt - genPt) / recoPt;
-  } else if (r.scaleFactor > 1.0) {
+  } else if (method != Method::Scaling && r.scaleFactor > 1.0) {
     // stochastic method
     double sigma =
         r.resolution * std::sqrt(r.scaleFactor * r.scaleFactor - 1.0);
@@ -721,9 +755,13 @@ public:
 
   JetSmearer(const std::string &resolutionFile,
              const std::string &scaleFactorFile,
-             std::uint32_t seed = kDefaultSeed)
-      : resolution_(resolutionFile), scaleFactor_(scaleFactorFile), rng_(seed) {
-  }
+             std::uint32_t seed = kDefaultSeed,
+             JetSmearing::Method method = JetSmearing::Method::Hybrid)
+      : resolution_(resolutionFile), scaleFactor_(scaleFactorFile), rng_(seed),
+        method_(method) {}
+
+  void SetMethod(JetSmearing::Method method) { method_ = method; }
+  JetSmearing::Method GetMethod() const { return method_; }
 
   // smear factor, resolution/scale factor used, scaling or stochastic
   // see JetSmearing::Result above
@@ -731,9 +769,9 @@ public:
                             Variation variation = Variation::NOMINAL,
                             const std::string &uncertaintySource = "",
                             double dPtMaxFactor = 3.0) {
-    return JetSmearing::ComputeSmearFactor(recoPt, eta, rho, genPt, resolution_,
-                                           scaleFactor_, rng_, variation,
-                                           uncertaintySource, dPtMaxFactor);
+    return JetSmearing::ComputeSmearFactor(
+        recoPt, eta, rho, genPt, resolution_, scaleFactor_, rng_, variation,
+        uncertaintySource, dPtMaxFactor, method_);
   }
 
   // in: reco jet {pT, eta, rho}, gen matched jet pT
@@ -751,6 +789,7 @@ private:
   JetSmearerJME::JetResolution resolution_;
   JetSmearerJME::JetResolutionScaleFactor scaleFactor_;
   std::mt19937 rng_;
+  JetSmearing::Method method_;
 };
 
 #endif

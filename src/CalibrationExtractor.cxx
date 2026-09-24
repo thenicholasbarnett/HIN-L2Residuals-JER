@@ -184,7 +184,7 @@ static GaussResult FitCrystalBall(TH1D *h, const ResidualFitControls &controls) 
 
 // truncation logic (FindTruncBins/TruncMeanInRange) shared via Truncation.h
 
-// A (avg or sigma) → R
+// <A> → R (JEC only; JER uses the width ratio directly)
 static double ToR(double A) { return (1.0 + A) / (1.0 - A); }
 static double ToRErr(double A, double dA) {
   return dA * 2.0 / ((1.0 - A) * (1.0 - A));
@@ -244,7 +244,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
   TGraphErrors *gr =
       new TGraphErrors(n, x.data(), y.data(), ex.data(), ey.data());
   gr->SetName(gname);
-  gr->SetTitle(useJer ? ";#alpha threshold;R_{data}/R_{MC}"
+  gr->SetTitle(useJer ? ";#alpha threshold;#sigma_{A}^{data}/#sigma_{A}^{MC}"
                       : ";#alpha threshold;R_{MC}/R_{data}");
   gr->SetMarkerStyle(20);
   gr->SetMarkerColor(color);
@@ -311,7 +311,7 @@ static ExtrapResult FitAndExtrapolate(const std::vector<RPoint> &pts,
       TGraphErrors *grn =
           new TGraphErrors(nfit, xn.data(), yn.data(), exn.data(), eyn.data());
       grn->SetName(gnorm);
-      grn->SetTitle(useJer ? ";#alpha threshold;R_{data}/R_{MC} (k_{FSR})"
+      grn->SetTitle(useJer ? ";#alpha threshold;#sigma_{A}^{data}/#sigma_{A}^{MC} (k_{FSR})"
                           : ";#alpha threshold;R_{MC}/R_{data} (k_{FSR})");
       grn->SetMarkerStyle(20);
       grn->SetMarkerColor(color);
@@ -479,8 +479,10 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         double alphaX = aSlice.hi;
 
         // accumulate alpha bins
-        // L2Res/JEC=fed mean/meanErr, JER(SF)=fed sigma/sigmaErr
-        // R=(1+x)/(1-x)
+        // JEC: fed mean/meanErr, R = (1+<A>)/(1-<A>), factor R_MC/R_data
+        // JER: fed sigma/sigmaErr, factor is the width ratio sigma_A data/MC
+        // itself -- pushing a width through (1+x)/(1-x) gives ~1+2(sd-sm),
+        // not sd/sm, and squeezes the SF toward 1
         auto accumulate =
             [&](std::vector<std::vector<std::vector<std::vector<RPoint>>>>
                     &rptsOut,
@@ -503,14 +505,17 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
               }
               if (outsideConfiguredRange)
                 return;
-              double Rd = ToR(Ad), Rm = ToR(Am);
-              double eRd = ToRErr(Ad, eAd), eRm = ToRErr(Am, eAm);
-              if (std::abs(Rd) < 1e-6)
+              // JER stores sigma_A itself in the R_data/R_mc slots
+              double Rd = doJER ? Ad : ToR(Ad);
+              double Rm = doJER ? Am : ToR(Am);
+              double eRd = doJER ? eAd : ToRErr(Ad, eAd);
+              double eRm = doJER ? eAm : ToRErr(Am, eAm);
+              if (std::abs(Rd) < 1e-6 || std::abs(Rm) < 1e-6)
                 return;
               // JEC: R_MC/R_data, applied by multiplying DATA (data*ratio=MC
-              // target). JER: R_data/R_MC instead -- we smear MC, not data,
+              // target). JER: data/MC instead -- we smear MC, not data,
               // so the factor must invert or the correction runs backwards
-              // (see CLAUDE.md's JER SF sign-convention note).
+              // (MC * MC/data would move MC away from data, not onto it).
               double ratio = doJER ? Rd / Rm : Rm / Rd;
               double eRatio = ratio * TMath::Sqrt((eRd / Rd) * (eRd / Rd) +
                                                   (eRm / Rm) * (eRm / Rm));
@@ -584,6 +589,48 @@ static void ExtractAndFit(THnSparse *hData, THnSparse *hMC, const TString &cone,
         delete hRdJer[m][ia][ip];
         delete hRmJer[m][ia][ip];
       }
+    }
+  }
+
+  // weighted mean pT_avg per (pT slice, eta bin), same alpha < alphaFitHi
+  // selection as the extraction -- Step 3 fits against these, not midpoints
+  for (int ipt = 0; ipt < nPt; ipt++) {
+    const auto &ptSlice = bins.ptavgSlices[ipt];
+    const TString ptKey = L2Name::PtKey(ptSlice);
+    for (int s = 0; s < 2; s++) {
+      THnSparse *h = (s == 0) ? hData : hMC;
+      const char *sample = (s == 0) ? "data" : "mc";
+      h->GetAxis(kPtAvgAxis)->SetRangeUser(ptSlice.lo, ptSlice.hi);
+      h->GetAxis(kAlphaAxis)->SetRangeUser(0.0, controls.alphaFitHi);
+      TH2D *h2;
+      {
+        TDirectory::TContext nodir(nullptr);
+        h2 = h->Projection(kPtAvgAxis, kEtaAxis);
+      }
+      TH1D *hMean = new TH1D(
+          L2Name::ObjectName(cone, "ptavg_mean", {etaMode, ptKey}, {sample}),
+          "", (int)etaEdges.size() - 1, etaEdges.data());
+      hMean->GetXaxis()->SetTitle(nameSuffix.IsNull() ? "|#eta|" : "#eta");
+      hMean->GetYaxis()->SetTitle("#LTp_{T,avg}#GT [GeV]");
+      for (int ieta = 0; ieta < nEta; ieta++) {
+        TH1D *py;
+        {
+          TDirectory::TContext nodir(nullptr);
+          py = h2->ProjectionY(Form("%s_py%d", hMean->GetName(), ieta),
+                               ieta + 1, ieta + 1);
+        }
+        if (py->Integral() > 0) {
+          hMean->SetBinContent(ieta + 1, py->GetMean());
+          hMean->SetBinError(ieta + 1, py->GetMeanError());
+        }
+        delete py;
+      }
+      dOut->cd();
+      hMean->Write();
+      delete hMean;
+      delete h2;
+      ResetRange(h, kPtAvgAxis);
+      ResetRange(h, kAlphaAxis);
     }
   }
 
