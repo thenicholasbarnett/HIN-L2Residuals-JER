@@ -14,15 +14,10 @@
 #include "AnalysisConfig.h"
 
 #include <cstdint>
-#include <random>
 #include <stdexcept>
 #include <string>
 
 static constexpr float kVzCut = 15.0f;
-
-// matches SmearedJetProducerT.h's default "seed" fillDescriptions value --
-// no reason to diverge, this is purely for reproducible smearing draws
-static constexpr std::uint32_t kJerClosureSeed = 37428479;
 
 RunMode ParseRunMode(const TString &modeFlag) {
   if (modeFlag == "mc") {
@@ -52,7 +47,6 @@ struct ForestEventLoop::Impl {
   std::vector<JetCorrector> jecs;
   std::vector<JetSmearerJME::JetResolution> jerResolution;
   std::vector<JetSmearerJME::JetResolutionScaleFactor> jerScaleFactor;
-  std::mt19937 jerRng{kJerClosureSeed};
   JetSmearing::Method jerMethod = JetSmearing::Method::Hybrid;
   std::unique_ptr<JetSelector> js;
   std::unique_ptr<JSON_handler> dcs;
@@ -311,7 +305,7 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
       for (int j = 0; j < jets_[c].reco.nref; j++) {
         JetSmearing::Result sm = JetSmearing::ComputeSmearFactor(
             corrPt_[c][j], jets_[c].reco.eta[j], event_.rho, jets_[c].ref.pt[j],
-            m.jerResolution[c], m.jerScaleFactor[c], m.jerRng,
+            (std::int64_t)event_.event, m.jerResolution[c], m.jerScaleFactor[c],
             Variation::NOMINAL, "", 3.0, m.jerMethod);
         corrPt_[c][j] =
             (float)JetSmearing::SmearedPt(corrPt_[c][j], sm.smearFactor);

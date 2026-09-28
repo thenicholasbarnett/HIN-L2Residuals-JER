@@ -17,7 +17,7 @@ struct AnalysisConfig {
   // -closure true, to JER-smear MC jets for the JER SF closure check
   std::vector<std::string> jerResolutionFilesPerCone;
   std::vector<std::string> jerScaleFactorFilesPerCone;
-  // "hybrid" (JME default) | "scaling" | "stochastic", JetSmearer.h
+  // "hybrid" (JME default) | "jme" | "scaling" | "stochastic", JetSmearer.h
   std::string jerMethod = "hybrid";
   // JetSelector inputs: correctionlib-format jet ID + veto map JSON
   std::string jetIdPath;

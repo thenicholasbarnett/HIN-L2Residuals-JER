@@ -210,10 +210,10 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
         "step3.eta_mode must be \"both\", \"abseta\", or \"eta\"");
   if (cfg.ptCenter != "mean" && cfg.ptCenter != "midpoint")
     throw std::runtime_error("step3.pt_center must be \"mean\" or \"midpoint\"");
-  if (cfg.jerMethod != "hybrid" && cfg.jerMethod != "scaling" &&
-      cfg.jerMethod != "stochastic")
-    throw std::runtime_error(
-        "jer_closure.method must be \"hybrid\", \"scaling\" or \"stochastic\"");
+  if (cfg.jerMethod != "hybrid" && cfg.jerMethod != "jme" &&
+      cfg.jerMethod != "scaling" && cfg.jerMethod != "stochastic")
+    throw std::runtime_error("jer_closure.method must be \"hybrid\", \"jme\", "
+                             "\"scaling\" or \"stochastic\"");
   if (!cfg.jetEventVetoCone.empty() &&
       std::find(cfg.coneLabels.begin(), cfg.coneLabels.end(),
                 TString(cfg.jetEventVetoCone.c_str())) == cfg.coneLabels.end())
