@@ -7,7 +7,7 @@
 [paths]
 # Jet ID, veto map, and golden JSON are per-run-period. No default exists.
 # Jet ID + veto map: JME correctionlib JSON (unzipped), read by JetSelector.h
-jet_id = "REQUIRED_SET_ME/path/to/jetid_Run3.json"
+jet_id = "REQUIRED_SET_ME/path/to/jetid.json"
 veto_map = "REQUIRED_SET_ME/path/to/jetvetomaps_<tag>.json"
 golden_json = "REQUIRED_SET_ME/path/to/golden.json"
 

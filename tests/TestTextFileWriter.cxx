@@ -200,7 +200,8 @@ void TestFileStructure() {
 
   if (!absLines.empty()) {
     Check(absLines.front().npar == 5, "Npar = 5");
-    Check(std::fabs(absLines.front().ptLo - 40.0) < kEps, "pT_lo = 40");
+    // text-file pT validity = the configured pT_avg slice range (30-1000)
+    Check(std::fabs(absLines.front().ptLo - 30.0) < kEps, "pT_lo = 30");
     Check(std::fabs(absLines.front().ptHi - 1000.0) < kEps, "pT_hi = 1000");
   }
 
