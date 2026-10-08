@@ -3,7 +3,8 @@
 # produces: this repo's asymmetry sparses (runAsymmetry), JME's dijet-
 # framework inputs (runDijetProfiles: l2l3res Dijet2 profiles + DiJetJERC
 # sparses), or both from the same input, in parallel condor/asymmetry* and
-# condor/profiles* trees.
+# condor/profiles* trees. -format population runs runPopulation alone, into
+# condor/population*.
 #
 # Arguments are JetMET-style "-flag value" (matching the compiled binaries'
 # CLI, external/jetmet/CommandLine.h) or bare boolean "-flag" switches -- no
@@ -13,8 +14,8 @@
 # any argument that isn't a "-flag" at all is an immediate usage error.
 #
 # Usage:
-#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]
-#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]
+#   bash condor/make_condor.sh -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both|population]
+#   bash condor/make_condor.sh -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both|population]
 #
 # -output dir       : required; absolute EOS/AFS path where output ROOT files are written
 # -alltxt           : bare switch; submit every .txt filelist found in data/txt/ (default off)
@@ -40,6 +41,8 @@
 # -format value     : repo (runAsymmetry only), jme (runDijetProfiles only) or both
 #                      (default). Same event selection and jet corrections either way
 #                      (ForestEventLoop); -jerclosure smears in both.
+#                      population = runPopulation only (jet ID / veto map / event
+#                      veto sparse), no -jerclosure.
 # -tag value        : optional label for this pass (e.g. -tag abs_eta, -tag clos_dir_eta).
 #                      Output goes to OUTPUT_DIR/condor/asymmetry_<value>/<timestamp>
 #                      instead of OUTPUT_DIR/condor/asymmetry/<timestamp>, to keep
@@ -73,7 +76,7 @@
 # filelist in a numbered run needs to differ from the rest.
 #
 # Note: the condor Arguments= line generated later in this script (INPUT MODE
-# CMSSW_SRC CLOSURE ASYM_OUTPUT PROFILES_OUTPUT, an output "none" = skip) stays positional on purpose -- it's an internal,
+# CMSSW_SRC CLOSURE ASYM_OUTPUT PROFILES_OUTPUT POPULATION_OUTPUT, an output "none" = skip) stays positional on purpose -- it's an internal,
 # script-generated contract consumed by runtime_wrapper.sh, never hand-typed,
 # so there's no typo risk to guard against. Only this script's own top-level
 # CLI (what a human actually types) needs named arguments.
@@ -93,8 +96,8 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]" >&2
-  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both]" >&2
+  echo "Usage: $0 -output dir -alltxt -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both|population]" >&2
+  echo "       $0 -output dir -filelists a.txt b.txt ... -config path [-nosubmit] [-tag value] [-jerclosure] [-format repo|jme|both|population]" >&2
   exit 1
 }
 
@@ -188,16 +191,22 @@ parse_args() {
   fi
 
   case "${FORMAT}" in
-    repo | jme | both) ;;
+    repo | jme | both | population) ;;
     *)
-      echo "ERROR: -format must be repo, jme or both, got \"${FORMAT}\"" >&2
+      echo "ERROR: -format must be repo, jme, both or population, got \"${FORMAT}\"" >&2
       usage
       ;;
   esac
   WANT_REPO=false
   WANT_JME=false
-  if [[ "${FORMAT}" != jme ]]; then WANT_REPO=true; fi
-  if [[ "${FORMAT}" != repo ]]; then WANT_JME=true; fi
+  WANT_POP=false
+  if [[ "${FORMAT}" == repo || "${FORMAT}" == both ]]; then WANT_REPO=true; fi
+  if [[ "${FORMAT}" == jme || "${FORMAT}" == both ]]; then WANT_JME=true; fi
+  if [[ "${FORMAT}" == population ]]; then WANT_POP=true; fi
+  if [[ "${WANT_POP}" == true && "${JER_CLOSURE}" == true ]]; then
+    echo "ERROR: -jerclosure does not apply to -format population" >&2
+    exit 1
+  fi
 
   if [[ "${RUN_TAG}" == */* ]]; then
     echo "ERROR: -tag must not contain '/': ${RUN_TAG}" >&2
@@ -315,6 +324,7 @@ choose_binary() {
     LIBRARY=""
   fi
   PROFILES_BINARY="$(dirname "${BINARY}")/runDijetProfiles"
+  POPULATION_BINARY="$(dirname "${BINARY}")/runPopulation"
 
   if [[ ! -f "${BINARY}" ]]; then
     echo "ERROR: no runAsymmetry executable found." >&2
@@ -324,6 +334,10 @@ choose_binary() {
   fi
   if [[ "${WANT_JME}" == true && ! -f "${PROFILES_BINARY}" ]]; then
     echo "ERROR: ${PROFILES_BINARY} not found, rebuild (cmake --build build or scram b)" >&2
+    exit 1
+  fi
+  if [[ "${WANT_POP}" == true && ! -f "${POPULATION_BINARY}" ]]; then
+    echo "ERROR: ${POPULATION_BINARY} not found, rebuild (cmake --build build or scram b)" >&2
     exit 1
   fi
   if [[ -n "${LIBRARY}" && ! -f "${LIBRARY}" ]]; then
@@ -390,19 +404,23 @@ resolve_filelists() {
 # separate passes (e.g. -tag abs_eta vs -tag clos_dir_eta) from landing in
 # the same output tree; plain "asymmetry" when no -tag is given.
 # runDijetProfiles output goes to the parallel outdir/condor/profiles[_<TAG>]/
-# <TODAY> tree, so each can be hadded on its own.
+# <TODAY> tree, so each can be hadded on its own; runPopulation likewise to
+# outdir/condor/population[_<TAG>]/<TODAY>.
 normalize_output_dir() {
   ASYM_DIR_NAME="asymmetry"
   PROFILES_DIR_NAME="profiles"
+  POPULATION_DIR_NAME="population"
   if [[ -n "${RUN_TAG}" ]]; then
     ASYM_DIR_NAME="asymmetry_${RUN_TAG}"
     PROFILES_DIR_NAME="profiles_${RUN_TAG}"
+    POPULATION_DIR_NAME="population_${RUN_TAG}"
   fi
 
   OUTPUT_DIR="${OUTPUT_DIR%/}"
   OUTPUT_DIR="${OUTPUT_DIR%/condor/"${ASYM_DIR_NAME}"}"
   OUTPUT_DIR="${OUTPUT_DIR%/condor}"
   PROFILES_OUTPUT_DIR="${OUTPUT_DIR}/condor/${PROFILES_DIR_NAME}/${TODAY}"
+  POPULATION_OUTPUT_DIR="${OUTPUT_DIR}/condor/${POPULATION_DIR_NAME}/${TODAY}"
   OUTPUT_DIR="${OUTPUT_DIR}/condor/${ASYM_DIR_NAME}/${TODAY}"
 }
 
@@ -429,6 +447,11 @@ prepare_submission_sandbox() {
     cp "${PROFILES_BINARY}" runDijetProfiles
     SANDBOX_BINARIES+=(runDijetProfiles)
     mkdir -p "${PROFILES_OUTPUT_DIR}"
+  fi
+  if [[ "${WANT_POP}" == true ]]; then
+    cp "${POPULATION_BINARY}" runPopulation
+    SANDBOX_BINARIES+=(runPopulation)
+    mkdir -p "${POPULATION_OUTPUT_DIR}"
   fi
   if [[ -n "${LIBRARY}" ]]; then cp "${LIBRARY}" libl2residuals.so; fi
   # Only jec/json are read by the worker (via [paths]/[jec] in
@@ -475,9 +498,9 @@ EOF
 # Appends one job's Arguments/Output/Error/Log/Queue block to the submit
 # file, for a single input HiForest file.
 append_job_to_submit_file() {
-  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6" closure="$7" profiles_file="$8"
+  local submit_file="$1" label="$2" mode="$3" count="$4" input_file="$5" output_file="$6" closure="$7" profiles_file="$8" population_file="$9"
   cat >>"${submit_file}" <<EOF
-Arguments = ${input_file} ${mode} ${CMSSW_SRC_FROM_CONFIG} ${closure} ${output_file} ${profiles_file}
+Arguments = ${input_file} ${mode} ${CMSSW_SRC_FROM_CONFIG} ${closure} ${output_file} ${profiles_file} ${population_file}
 Output    = $(pwd)/logs/${label}/out/job_${count}.out
 Error     = $(pwd)/logs/${label}/err/job_${count}.err
 Log       = $(pwd)/logs/${label}/log/job_${count}.log
@@ -538,7 +561,7 @@ submit_filelist() {
   while IFS= read -r input_file; do
     [[ -z "${input_file}" ]] && continue
 
-    local output_file="none" profiles_file="none"
+    local output_file="none" profiles_file="none" population_file="none"
     if [[ "${WANT_REPO}" == true ]]; then
       output_file="${OUTPUT_DIR}/${label}/output_${count}.root"
       mkdir -p "${OUTPUT_DIR}/${label}"
@@ -547,8 +570,12 @@ submit_filelist() {
       profiles_file="${PROFILES_OUTPUT_DIR}/${label}/output_${count}.root"
       mkdir -p "${PROFILES_OUTPUT_DIR}/${label}"
     fi
+    if [[ "${WANT_POP}" == true ]]; then
+      population_file="${POPULATION_OUTPUT_DIR}/${label}/output_${count}.root"
+      mkdir -p "${POPULATION_OUTPUT_DIR}/${label}"
+    fi
 
-    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}" "${closure}" "${profiles_file}"
+    append_job_to_submit_file "${submit_file}" "${label}" "${mode}" "${count}" "${input_file}" "${output_file}" "${closure}" "${profiles_file}" "${population_file}"
     count=$((count + 1))
     draw_bar "${BAR_COLOR}" "${label}:" "${count}" "${total}"
   done <"${filelist_path}"
@@ -604,6 +631,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/draw_bar.sh"
   if [[ "${NO_SUBMIT}" == false ]]; then
     if [[ "${WANT_REPO}" == true ]]; then echo "Output directory: ${OUTPUT_DIR}"; fi
     if [[ "${WANT_JME}" == true ]]; then echo "Profiles output directory: ${PROFILES_OUTPUT_DIR}"; fi
+    if [[ "${WANT_POP}" == true ]]; then echo "Population output directory: ${POPULATION_OUTPUT_DIR}"; fi
   fi
   echo "Working directory: ${WORKDIR}"
 )

@@ -22,7 +22,7 @@ RunMode ParseRunMode(const TString &modeFlag);
 // runDijetProfiles): opens the forest, binds branches, and applies the
 // event selection
 //   |vz| < 15 cm, PV filter (data), golden JSON (data),
-//   trigger-cone nref >= 2, HLT bit + plateau cut (triggered)
+//   trigger-cone nref >= minNRef, HLT bit + plateau cut (triggered)
 // then corrects every jet (JEC chain, plus JER smearing for the MC closure)
 // and pT-orders each cone. Next() only stops on events that passed.
 class ForestEventLoop {
@@ -32,7 +32,7 @@ public:
 
   // throws std::runtime_error on bad config or input
   ForestEventLoop(const TString &input, RunMode mode, Long64_t maxEvents = -1,
-                  bool jerClosure = false);
+                  bool jerClosure = false, Int_t minNRef = 2);
   ~ForestEventLoop();
 
   bool Next();
@@ -49,6 +49,9 @@ public:
 
   // tight jet ID and outside the veto map
   bool GoodJet(size_t c, int j) const;
+  // the two halves of GoodJet
+  bool PassesJetID(size_t c, int j) const;
+  bool InVetoRegion(size_t c, int j) const;
   // JME Run 3 event veto (JetSelector::VetoEvent) on cone c's corrected jets:
   // any jet with pT > 15, tight ID, EMF < 0.9 inside the veto map
   bool EventVetoed(size_t c) const;
@@ -64,6 +67,7 @@ private:
 
   RunMode mode_;
   bool jerClosure_;
+  Int_t minNRef_;
   Long64_t entry_ = -1;
   Long64_t nLoop_ = 0;
 

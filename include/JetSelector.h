@@ -2,32 +2,38 @@
 #define JETSELECTOR_H
 
 // JetSelector v1.0
-// jet ID + jet veto maps from CMS correctionlib JSON with just this header
-// Author: Nicholas Shawn Barnett
+// Apply jet ID and jet veto maps from JSON
+// Authored by Nicholas Shawn Barnett
 
 // USAGE
-// Instantiate JetSelector once, with the collision system
-// Construct with jet ID + jet veto map JSON files, CMS correctionlib format
-// Call .JetSelection(...) per jet to drop bad jets, or .VetoEvent(...) once
-// per event, with the forest arrays, to drop the whole event
 //
-//   JetSelector js(JetSelector::System::pp, "json/jetid_Run3.json",
+// Instantiate JetSelector for collision system
+// JetSelector::System::Ion for PbPb, OO, NeNe, etc.
+//
+//   JetSelector js(JetSelector::System::pp, 
+//                  "json/jetid.json", 
 //                  "json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json");
-//   if (!js.JetSelection(jteta[i], jtphi[i], jtPfCHF[i], jtPfNHF[i],
-//                        jtPfCEF[i], jtPfNEF[i], jtPfMUF[i], jtPfCHM[i],
-//                        jtPfNHM[i], jtPfCEM[i], jtPfNEM[i], jtPfMUM[i])) {
+//
+// Skip jets that fail jet ID or veto map
+//
+//   if (js.VetoJet(jteta[i], jtphi[i], 
+//                  jtPfCHF[i], jtPfNHF[i], jtPfCEF[i], jtPfNEF[i], jtPfMUF[i], 
+//                  jtPfCHM[i], jtPfNHM[i], jtPfCEM[i], jtPfNEM[i], jtPfMUM[i])) {
 //     continue;
 //   }
 //
-//   if (js.VetoEvent(nref, ptCorr, jteta, jtphi, jtPfCHF, jtPfNHF, jtPfCEF,
-//                    jtPfNEF, jtPfMUF, jtPfCHM, jtPfNHM, jtPfCEM, jtPfNEM,
-//                    jtPfMUM)) {
+// JME recommendation: Skip events containing jets > 15 GeV passing ID in a vetoed region
+//
+//   if (js.VetoEvent(nref, ptCorr, jteta, jtphi, 
+//                    jtPfCHF, jtPfNHF, jtPfCEF, jtPfNEF, jtPfMUF, 
+//                    jtPfCHM, jtPfNHM, jtPfCEM, jtPfNEM, jtPfMUM)) {
 //     continue;
 //   }
 //
-// Calibration work uses the strictest veto map:
+// Calibration work uses stricter veto map
 //
-//   JetSelector js(JetSelector::System::pp, "json/jetid_Run3.json",
+//   JetSelector js(JetSelector::System::pp, 
+//                  "json/jetid.json",
 //                  "json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json",
 //                  JetSelector::Purpose::Calibration);
 
@@ -41,7 +47,7 @@
 #include <utility>
 #include <vector>
 
-// minimal JSON reader, enough for correctionlib files
+// minimal JSON reader for correctionlib format
 namespace JetSelectorJSON {
 
 struct Value {
@@ -561,7 +567,8 @@ public:
     return id_.Evaluate(in) != 0.0;
   }
 
-  bool IsVeto(double eta, double phi) const {
+  // jet lies in a vetoed region of the map
+  bool InVetoRegion(double eta, double phi) const {
     std::vector<JetSelectorCorrection::Input> in(veto_.inputNames.size());
     in[vetoType_].string = vetoMapType_;
     in[vetoEta_].number = eta;
@@ -569,12 +576,13 @@ public:
     return veto_.Evaluate(in) != 0.0;
   }
 
-  // per jet: passes ID and outside vetoed regions
-  bool JetSelection(double eta, double phi, double CHF, double NHF, double CEF,
-                    double NEF, double MUF, int CHM, int NHM, int CEM, int NEM,
-                    int MUM) const {
-    return PassesID(eta, CHF, NHF, CEF, NEF, MUF, CHM, NHM, CEM, NEM, MUM) &&
-           !IsVeto(eta, phi);
+  // per jet: true if the jet should be dropped, i.e. fails the ID or lies in
+  // a vetoed region
+  bool VetoJet(double eta, double phi, double CHF, double NHF, double CEF,
+               double NEF, double MUF, int CHM, int NHM, int CEM, int NEM,
+               int MUM) const {
+    return !PassesID(eta, CHF, NHF, CEF, NEF, MUF, CHM, NHM, CEM, NEM, MUM) ||
+           InVetoRegion(eta, phi);
   }
 
   // per event: true if this jet should veto the whole event, i.e. all of
@@ -582,7 +590,7 @@ public:
   //   passes the jet ID (leptonic-only in Ion mode)
   //   CEF + NEF < kEventVetoMaxEMF (0.9), not an electron/photon
   //   inside a vetoed region of the map
-  // Run 3 recommendation, call for every jet, reject event on any true
+  // Run 3 JME recommendation, call for every jet, reject event on any true
   bool VetoEvent(double pt, double eta, double phi, double CHF, double NHF,
                  double CEF, double NEF, double MUF, int CHM, int NHM, int CEM,
                  int NEM, int MUM) const {
@@ -595,7 +603,7 @@ public:
     if (!PassesID(eta, CHF, NHF, CEF, NEF, MUF, CHM, NHM, CEM, NEM, MUM)) {
       return false;
     }
-    return IsVeto(eta, phi);
+    return InVetoRegion(eta, phi);
   }
 
   // whole event: forest-style arrays of n jets, true if any jet vetoes it
@@ -670,7 +678,7 @@ private:
     vetoEta_ = veto_.Index("eta");
     vetoPhi_ = veto_.Index("phi");
 
-    // fail at construction, not on the first jet
+    // fail at construction, not on first jet
     const auto &keys = veto_.root.keys;
     if (veto_.root.kind != JetSelectorCorrection::Node::Kind::Category ||
         std::find(keys.begin(), keys.end(), vetoMapType_) == keys.end()) {

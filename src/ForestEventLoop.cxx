@@ -68,8 +68,10 @@ struct ForestEventLoop::Impl {
 };
 
 ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
-                                 Long64_t maxEvents, bool jerClosure)
-    : impl_(std::make_unique<Impl>()), mode_(mode), jerClosure_(jerClosure) {
+                                 Long64_t maxEvents, bool jerClosure,
+                                 Int_t minNRef)
+    : impl_(std::make_unique<Impl>()), mode_(mode), jerClosure_(jerClosure),
+      minNRef_(minNRef) {
 
   const AnalysisConfig &cfg = Config();
   Impl &m = *impl_;
@@ -282,7 +284,7 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
   for (size_t c = 0; c < nCones; c++) {
     m.jetTrees[c]->GetEntry(i);
   }
-  if (jets_[m.trigConeIdx].reco.nref < 2) {
+  if (jets_[m.trigConeIdx].reco.nref < minNRef_) {
     return false;
   }
 
@@ -324,6 +326,9 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
       return false;
     }
     const size_t t = m.trigConeIdx;
+    if (sorted_[t].lead == -1) {
+      return false;
+    }
     if (hltJ80_ == 1 && corrPt_[t][sorted_[t].lead] <= m.hltJ80Thresh) {
       return false;
     }
@@ -334,10 +339,22 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
 
 bool ForestEventLoop::GoodJet(size_t c, int j) const {
   const auto &r = jets_[c].reco;
-  return impl_->js->JetSelection(r.eta[j], r.phi[j], r.pf.CHF[j], r.pf.NHF[j],
-                                 r.pf.CEF[j], r.pf.NEF[j], r.pf.MUF[j],
-                                 r.pf.CHM[j], r.pf.NHM[j], r.pf.CEM[j],
-                                 r.pf.NEM[j], r.pf.MUM[j]);
+  return !impl_->js->VetoJet(r.eta[j], r.phi[j], r.pf.CHF[j], r.pf.NHF[j],
+                             r.pf.CEF[j], r.pf.NEF[j], r.pf.MUF[j], r.pf.CHM[j],
+                             r.pf.NHM[j], r.pf.CEM[j], r.pf.NEM[j],
+                             r.pf.MUM[j]);
+}
+
+bool ForestEventLoop::PassesJetID(size_t c, int j) const {
+  const auto &r = jets_[c].reco;
+  return impl_->js->PassesID(r.eta[j], r.pf.CHF[j], r.pf.NHF[j], r.pf.CEF[j],
+                             r.pf.NEF[j], r.pf.MUF[j], r.pf.CHM[j], r.pf.NHM[j],
+                             r.pf.CEM[j], r.pf.NEM[j], r.pf.MUM[j]);
+}
+
+bool ForestEventLoop::InVetoRegion(size_t c, int j) const {
+  const auto &r = jets_[c].reco;
+  return impl_->js->InVetoRegion(r.eta[j], r.phi[j]);
 }
 
 bool ForestEventLoop::EventVetoed(size_t c) const {

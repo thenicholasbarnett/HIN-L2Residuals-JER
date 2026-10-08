@@ -1,0 +1,47 @@
+# runPopulation: AK4 only, every jet in the forest
+
+[paths]
+jet_id = "data/json/jetid_Run3.json"
+veto_map = "data/json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[condor]
+[condor.filelist_modes]
+"filelist_HiForest_2024ppref_DATA_HP*" = "triggered"
+"filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
+filelist_HiForest_2024ppref_MC = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+filter = "pprimaryVertexFilter"
+jets = [ "ak4PFJetAnalyzer/t" ]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[jet_id]
+system = "pp"
+# "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
+purpose = "analysis"
+event_veto_cone = "ak4PF"
+
+[cones]
+labels = [ "ak4PF" ]
+
+[jec]
+files = [
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
+]
+
+[cuts]
+# no cut on top of the forest's raw pT > 10 GeV
+min_jet_pt = 0.0
+
+[binning]
+# unused by runPopulation, the config loader asks for it
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
