@@ -11,7 +11,7 @@
 // Call .JetSelection(...) per jet to drop bad jets, or .VetoEvent(...) once
 // per event, with the forest arrays, to drop the whole event
 //
-//   JetSelector js(JetSelector::System::pp, "json/jetid_Run3.json",
+//   JetSelector js(JetSelector::System::pp, "json/jetid.json",
 //                  "json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json");
 //   if (!js.JetSelection(jteta[i], jtphi[i], jtPfCHF[i], jtPfNHF[i],
 //                        jtPfCEF[i], jtPfNEF[i], jtPfMUF[i], jtPfCHM[i],
@@ -27,7 +27,7 @@
 //
 // Calibration work uses the strictest veto map:
 //
-//   JetSelector js(JetSelector::System::pp, "json/jetid_Run3.json",
+//   JetSelector js(JetSelector::System::pp, "json/jetid.json",
 //                  "json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json",
 //                  JetSelector::Purpose::Calibration);
 
