@@ -1,0 +1,126 @@
+[paths]
+# JetSelector inputs, CMS correctionlib format (JME payloads, unzipped)
+jet_id = "data/json/jetid.json"
+veto_map = "data/json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[condor]
+# Maps each data/txt/*.txt filelist (basename, no extension) to a run mode:
+# triggered | non-triggered | mc. make_condor.sh looks up each filelist it
+# would submit here; comment out (or omit) an entry to skip submitting jobs
+# for that filelist without moving or renaming the file. The physical dataset
+# name (HP0, ZB0, ...) is free-form; only the mapped mode matters.
+[condor.filelist_modes]
+"filelist_HiForest_2024ppref_DATA_HP*" = "triggered"
+"filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
+filelist_HiForest_2024ppref_MC = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+# Primary vertex filter branch, read from the skim tree (data only).
+filter = "pprimaryVertexFilter"
+jets = [
+    "ak2PFJetAnalyzer/t",
+    "ak3PFJetAnalyzer/t",
+    "ak4PFJetAnalyzer/t",
+    "ak5PFJetAnalyzer/t",
+    "ak6PFJetAnalyzer/t",
+]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[jet_id]
+# system: "pp" (full AK4CHS TightLeptonVeto) | "ion" (leptonic/EM cuts only)
+# purpose: "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
+system = "pp"
+purpose = "calibration"
+# JME Run 3 event veto (runAsymmetry): drop the event if any jet of this
+# cone has pT > 15 GeV, tight ID, EMF < 0.9 and sits in the veto map; the
+# maps are derived with AK4 jets. "" = off (per-jet ID + veto only)
+event_veto_cone = "ak4PF"
+
+[cones]
+labels = [ "ak2PF", "ak3PF", "ak4PF", "ak5PF", "ak6PF" ]
+
+[jec]
+# Chain applied in order, per cone -- L1FastJet before L2Relative, matching
+# the real correction sequence (L1 removes pileup offset, L2Relative flattens
+# the eta/pT response). Applied unconditionally to both data and MC, same as
+# L2Relative alone was before. To run without L1 (e.g. an era with no derived
+# L1FastJet yet), just drop the first entry from each cone's list.
+files = [
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK2PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK2PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK3PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK3PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK5PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK5PFchs.txt" ],
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK6PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK6PFchs.txt" ],
+]
+# L2Residual closure input, JME l2l3res-multijet jets-only DB on the v110
+# profiles (local/checks/JMEL2ResToStep2.C + runTextFile, 2026-10-10): applied to
+# data only, after the chain above
+residual_files = [
+    [ "data/jec/preliminary/L2Residual_jme_v110_ak2PF_eta_norm.txt" ],
+    [ "data/jec/preliminary/L2Residual_jme_v110_ak3PF_eta_norm.txt" ],
+    [ "data/jec/preliminary/L2Residual_jme_v110_ak4PF_eta_norm.txt" ],
+    [ "data/jec/preliminary/L2Residual_jme_v110_ak5PF_eta_norm.txt" ],
+    [ "data/jec/preliminary/L2Residual_jme_v110_ak6PF_eta_norm.txt" ],
+]
+
+[jer_closure]
+# Only read when runAsymmetry is run with -calibration jer -closure true:
+# MC jets get JER-smeared (JetSmearer.h, method below) before histogramming,
+# to produce the smeared MC input for the JER SF closure check. One text
+# file per cone, same order as cones.labels above -- unset/empty means no
+# JER closure smearing has been derived for this run period yet.
+# smearing method (JetSmearer.h): "hybrid" (JME recommendation, default),
+# "jme" (correctionlib JERSmear: scaling for any ref* match, no pT
+# window), "scaling" (gen-matched jets only) or "stochastic" (Gaussian,
+# every jet)
+method = "hybrid"
+resolution_files = [
+    "data/jec/preliminary/JER_ptresolution_ak2PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak3PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak4PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak5PF_abseta_ptresolution.txt",
+    "data/jec/preliminary/JER_ptresolution_ak6PF_abseta_ptresolution.txt",
+]
+scale_factor_files = [
+    "data/jec/preliminary/JER_SF_ak2PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak3PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak4PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak5PF_abseta_jer_norm.txt",
+    "data/jec/preliminary/JER_SF_ak6PF_abseta_jer_norm.txt",
+]
+
+[cuts]
+min_jet_pt = 10.0
+dphi = 2.7
+max_abs_a = 0.7
+min_entries_per_bin = 100
+residual_gaus_fit_half_width = 0.5
+residual_alpha_fit_hi = 0.31
+# Gaussian fit window: [1-x, 1+x] around the pT_reco/pT_gen response,
+# analogous to residual_gaus_fit_half_width above (centered at 0, not 1).
+# Used both by runPlotting's response_dist QA guide curve and, since the
+# Gauss/doubleGauss/crystalball extraction methods, as the initial
+# peak-locate window in runResponse's JES/JER extraction (ResponseExtractor.cxx)
+# -- the trunc90/trunc95 methods don't use this, they read the fraction of
+# the integral directly (hardcoded, matching Step 2's own trunc90/trunc95).
+response_gaus_fit_half_width = 0.3
+
+[binning]
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]
+
+[step3]
+default_method = "trunc95"
+# other options currently available: gauss | doubleGauss | trunc90 | crystalball
+eta_mode = "eta"
+# other options currently available: abseta | eta
+# pT-fit x values: "mean" (weighted <pT_avg> per slice, from Step 2) | "midpoint"
+pt_center = "mean"
