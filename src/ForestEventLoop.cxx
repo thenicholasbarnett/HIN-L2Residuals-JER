@@ -5,7 +5,7 @@
 #include "TSystem.h"
 #include "TTree.h"
 
-#include "jetcorrector/JetCorrector.h"
+#include "JetCorrector.h"
 #include "JetSelector.h"
 #include "json_handler/JSON_handler.h"
 #include "JetSmearer.h"
