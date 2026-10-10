@@ -5,7 +5,11 @@
 #include "TSystem.h"
 #include "TTree.h"
 
+// SCRAM builds with -Werror=sign-compare; header kept as in the HIN jets repo
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-compare"
 #include "JetCorrector.h"
+#pragma GCC diagnostic pop
 #include "JetSelector.h"
 #include "json_handler/JSON_handler.h"
 #include "JetSmearer.h"
