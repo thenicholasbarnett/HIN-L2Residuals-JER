@@ -5,7 +5,7 @@
 #include "TSystem.h"
 #include "TTree.h"
 
-#include "jetcorrector/JetCorrector.h"
+#include "JetCorrector.h"
 #include "JetSelector.h"
 #include "json_handler/JSON_handler.h"
 #include "JetSmearer.h"
@@ -14,15 +14,10 @@
 #include "AnalysisConfig.h"
 
 #include <cstdint>
-#include <random>
 #include <stdexcept>
 #include <string>
 
 static constexpr float kVzCut = 15.0f;
-
-// matches SmearedJetProducerT.h's default "seed" fillDescriptions value --
-// no reason to diverge, this is purely for reproducible smearing draws
-static constexpr std::uint32_t kJerClosureSeed = 37428479;
 
 RunMode ParseRunMode(const TString &modeFlag) {
   if (modeFlag == "mc") {
@@ -52,7 +47,6 @@ struct ForestEventLoop::Impl {
   std::vector<JetCorrector> jecs;
   std::vector<JetSmearerJME::JetResolution> jerResolution;
   std::vector<JetSmearerJME::JetResolutionScaleFactor> jerScaleFactor;
-  std::mt19937 jerRng{kJerClosureSeed};
   JetSmearing::Method jerMethod = JetSmearing::Method::Hybrid;
   std::unique_ptr<JetSelector> js;
   std::unique_ptr<JSON_handler> dcs;
@@ -74,8 +68,10 @@ struct ForestEventLoop::Impl {
 };
 
 ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
-                                 Long64_t maxEvents, bool jerClosure)
-    : impl_(std::make_unique<Impl>()), mode_(mode), jerClosure_(jerClosure) {
+                                 Long64_t maxEvents, bool jerClosure,
+                                 Int_t minNRef)
+    : impl_(std::make_unique<Impl>()), mode_(mode), jerClosure_(jerClosure),
+      minNRef_(minNRef) {
 
   const AnalysisConfig &cfg = Config();
   Impl &m = *impl_;
@@ -288,7 +284,7 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
   for (size_t c = 0; c < nCones; c++) {
     m.jetTrees[c]->GetEntry(i);
   }
-  if (jets_[m.trigConeIdx].reco.nref < 2) {
+  if (jets_[m.trigConeIdx].reco.nref < minNRef_) {
     return false;
   }
 
@@ -311,7 +307,7 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
       for (int j = 0; j < jets_[c].reco.nref; j++) {
         JetSmearing::Result sm = JetSmearing::ComputeSmearFactor(
             corrPt_[c][j], jets_[c].reco.eta[j], event_.rho, jets_[c].ref.pt[j],
-            m.jerResolution[c], m.jerScaleFactor[c], m.jerRng,
+            (std::int64_t)event_.event, m.jerResolution[c], m.jerScaleFactor[c],
             Variation::NOMINAL, "", 3.0, m.jerMethod);
         corrPt_[c][j] =
             (float)JetSmearing::SmearedPt(corrPt_[c][j], sm.smearFactor);
@@ -330,6 +326,9 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
       return false;
     }
     const size_t t = m.trigConeIdx;
+    if (sorted_[t].lead == -1) {
+      return false;
+    }
     if (hltJ80_ == 1 && corrPt_[t][sorted_[t].lead] <= m.hltJ80Thresh) {
       return false;
     }
@@ -340,10 +339,22 @@ bool ForestEventLoop::SelectEntry(Long64_t i) {
 
 bool ForestEventLoop::GoodJet(size_t c, int j) const {
   const auto &r = jets_[c].reco;
-  return impl_->js->JetSelection(r.eta[j], r.phi[j], r.pf.CHF[j], r.pf.NHF[j],
-                                 r.pf.CEF[j], r.pf.NEF[j], r.pf.MUF[j],
-                                 r.pf.CHM[j], r.pf.NHM[j], r.pf.CEM[j],
-                                 r.pf.NEM[j], r.pf.MUM[j]);
+  return !impl_->js->VetoJet(r.eta[j], r.phi[j], r.pf.CHF[j], r.pf.NHF[j],
+                             r.pf.CEF[j], r.pf.NEF[j], r.pf.MUF[j], r.pf.CHM[j],
+                             r.pf.NHM[j], r.pf.CEM[j], r.pf.NEM[j],
+                             r.pf.MUM[j]);
+}
+
+bool ForestEventLoop::PassesJetID(size_t c, int j) const {
+  const auto &r = jets_[c].reco;
+  return impl_->js->PassesID(r.eta[j], r.pf.CHF[j], r.pf.NHF[j], r.pf.CEF[j],
+                             r.pf.NEF[j], r.pf.MUF[j], r.pf.CHM[j], r.pf.NHM[j],
+                             r.pf.CEM[j], r.pf.NEM[j], r.pf.MUM[j]);
+}
+
+bool ForestEventLoop::InVetoRegion(size_t c, int j) const {
+  const auto &r = jets_[c].reco;
+  return impl_->js->InVetoRegion(r.eta[j], r.phi[j]);
 }
 
 bool ForestEventLoop::EventVetoed(size_t c) const {

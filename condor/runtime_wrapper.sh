@@ -1,12 +1,12 @@
 #!/bin/bash -l
 # Executed on each Condor worker node
-# Sets up the CMSSW ROOT environment, then runs runAsymmetry and/or
-# runDijetProfiles on the same input (an output of "none" skips that binary).
+# Sets up the CMSSW ROOT environment, then runs runAsymmetry, runDijetProfiles
+# and/or runPopulation on the same input (an output of "none" skips that binary).
 
 set -euo pipefail
 
-if [[ $# -ne 6 ]]; then
-  echo "Usage: $0 INPUT MODE CMSSW_SRC CLOSURE ASYM_OUTPUT PROFILES_OUTPUT" >&2
+if [[ $# -ne 7 ]]; then
+  echo "Usage: $0 INPUT MODE CMSSW_SRC CLOSURE ASYM_OUTPUT PROFILES_OUTPUT POPULATION_OUTPUT" >&2
   exit 1
 fi
 
@@ -16,6 +16,7 @@ CMSSW_SRC="$3"
 CLOSURE="$4"
 ASYM_OUTPUT="$5"
 PROFILES_OUTPUT="$6"
+POPULATION_OUTPUT="$7"
 START_DIR="$(pwd)"
 
 if [[ -z "${CMSSW_SRC}" ]]; then
@@ -36,6 +37,7 @@ export LD_LIBRARY_PATH="./${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 echo "Input:  ${INPUT}"
 echo "Asymmetry output: ${ASYM_OUTPUT}"
 echo "Profiles output:  ${PROFILES_OUTPUT}"
+echo "Population output: ${POPULATION_OUTPUT}"
 echo "Mode:   ${MODE}"
 echo "Closure: ${CLOSURE}"
 
@@ -51,4 +53,8 @@ fi
 if [[ "${PROFILES_OUTPUT}" != none ]]; then
   chmod +x runDijetProfiles
   ./runDijetProfiles -input "${INPUT}" -output "${PROFILES_OUTPUT}" -mode "${MODE}" -config "${START_DIR}/analysis_config.toml" "${CLOSURE_ARGS[@]}"
+fi
+if [[ "${POPULATION_OUTPUT}" != none ]]; then
+  chmod +x runPopulation
+  ./runPopulation -input "${INPUT}" -output "${POPULATION_OUTPUT}" -mode "${MODE}" -config "${START_DIR}/analysis_config.toml"
 fi

@@ -1,6 +1,6 @@
 [paths]
 # JetSelector inputs, CMS correctionlib format (JME payloads, unzipped)
-jet_id = "data/json/jetid_Run3.json"
+jet_id = "data/json/jetid.json"
 veto_map = "data/json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json"
 golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
 
@@ -69,7 +69,9 @@ files = [
 # file per cone, same order as cones.labels above -- unset/empty means no
 # JER closure smearing has been derived for this run period yet.
 # smearing method (JetSmearer.h): "hybrid" (JME recommendation, default),
-# "scaling" (gen-matched jets only) or "stochastic" (Gaussian, every jet)
+# "jme" (correctionlib JERSmear: scaling for any ref* match, no pT
+# window), "scaling" (gen-matched jets only) or "stochastic" (Gaussian,
+# every jet)
 method = "hybrid"
 resolution_files = [
     "data/jec/preliminary/JER_ptresolution_ak2PF_abseta_ptresolution.txt",

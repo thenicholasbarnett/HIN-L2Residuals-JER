@@ -12,3 +12,4 @@
 <bin name="runPlotting" file="runPlotting.cc"/>
 <bin name="runResponse" file="runResponse.cc"/>
 <bin name="runDijetProfiles" file="runDijetProfiles.cc"/>
+<bin name="runPopulation" file="runPopulation.cc"/>
