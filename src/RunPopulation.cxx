@@ -94,6 +94,44 @@ THnSparse *BookStages(const TString &name, const std::vector<Double_t> &ptEdges,
   return h;
 }
 
+// MC response after each correction stage, for JES (mean) and JER (width):
+// (|eta reco|, gen pT, raw / gen, forest jtpt / gen, L1 / gen, L1 +
+// L2Relative / gen, final / gen, passes jet ID + veto map + event veto),
+// final = + JER smearing when configured. Every gen-matched PF jet; gen pT
+// from the forest's own match (ref), the one the smearing uses. Binned in gen
+// pT, not reco, against the falling-spectrum migration bias
+THnSparse *BookResponseStages(const TString &name, bool smeared) {
+  const int nPt = 40;
+  const double ptLo = 5.0;
+  const double ptHi = 1000.0;
+  std::vector<Double_t> ptEdges(nPt + 1);
+  for (int i = 0; i <= nPt; i++) {
+    ptEdges[i] = ptLo * TMath::Power(ptHi / ptLo, (double)i / nPt);
+  }
+  const AxisBins resp = {100, 0.0, 2.0, ""};
+  THnSparse *h = MakeTHnSparse<THnSparseD>(
+      name, "",
+      {{52, 0.0, 5.2, "|#eta^{reco}|"},
+       {nPt, (Float_t)ptLo, (Float_t)ptHi, "p_{T}^{gen} (GeV)"},
+       resp,
+       resp,
+       resp,
+       resp,
+       resp,
+       {2, 0.0, 2.0, "passes jet ID + veto map + event veto"}});
+  h->GetAxis(1)->Set(nPt, ptEdges.data());
+  const char *titles[5] = {
+      "raw p_{T} / p_{T}^{gen}", "forest p_{T} / p_{T}^{gen}",
+      "L1 p_{T} / p_{T}^{gen}", "L1 + L2Relative p_{T} / p_{T}^{gen}",
+      smeared ? "L1 + L2Relative + smeared p_{T} / p_{T}^{gen}"
+              : "L1 + L2Relative p_{T} / p_{T}^{gen}"};
+  for (int a = 0; a < 5; a++) {
+    h->GetAxis(a + 2)->SetTitle(titles[a]);
+  }
+  h->Sumw2();
+  return h;
+}
+
 // gen or calo jets: position and pT of the jet itself, jet ID from the
 // matched PF jet (fails when unmatched); isGen: the jets are gen jets
 void FillMatched(THnSparse *h, const ForestEventLoop &loop, size_t c, int n,
@@ -174,6 +212,12 @@ void runPopulation(TString input, TString output, TString modeFlag,
   THnSparse *hStages = BookStages(cone + "_stages", ptEdges, loop.IsMC());
   // the jet selection, for the plot legends
   hStages->SetTitle("veto map + event veto");
+  THnSparse *hResp = loop.IsMC()
+                         ? BookResponseStages(cone + "_response_stages", smear)
+                         : nullptr;
+  if (hResp) {
+    hResp->SetTitle("veto map + event veto");
+  }
 
   // event loop
   while (loop.Next()) {
@@ -200,6 +244,24 @@ void runPopulation(TString input, TString output, TString modeFlag,
                              1.0,
                              (Double_t)genMatch[j]};
       h->Fill(x, weight);
+
+      // gen-matched jets (forest ref, refpt < 0 = no match), selection as a
+      // flag
+      const auto &ref = loop.JetsIn(c).ref;
+      if (hResp && ref.pt[j] > 0) {
+        const double g = ref.pt[j];
+        const bool pass =
+            eventPass && loop.PassesJetID(c, j) && !loop.InVetoRegion(c, j);
+        const Double_t xr[8] = {TMath::Abs(reco.eta[j]),
+                                g,
+                                reco.rawpt[j] / g,
+                                reco.pt[j] / g,
+                                loop.StagePt(c, j, 1) / g,
+                                loop.StagePt(c, j, 2) / g,
+                                corrPt[j] / g,
+                                (Double_t)pass};
+        hResp->Fill(xr, weight);
+      }
 
       if (!eventPass || loop.InVetoRegion(c, j)) {
         continue;
@@ -232,6 +294,9 @@ void runPopulation(TString input, TString output, TString modeFlag,
   fo->cd();
   h->Write();
   hStages->Write();
+  if (hResp) {
+    hResp->Write();
+  }
   hCalo->Write();
   if (hGen) {
     hGen->Write();
