@@ -215,9 +215,6 @@ void runPopulation(TString input, TString output, TString modeFlag,
   THnSparse *hResp = loop.IsMC()
                          ? BookResponseStages(cone + "_response_stages", smear)
                          : nullptr;
-  if (hResp) {
-    hResp->SetTitle("veto map + event veto");
-  }
 
   // event loop
   while (loop.Next()) {
