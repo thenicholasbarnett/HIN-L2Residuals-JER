@@ -73,7 +73,8 @@ THnSparse *BookPopulation(const TString &name, const char *ptTitle,
 
 // PF jet pT after each correction stage: (eta, raw, forest jtpt, L1, L1 +
 // L2Relative, final), final = + L2Residual in data, + JER smearing in MC,
-// whichever the config provides
+// whichever the config provides. Jets outside the veto map in events that
+// pass the event veto only
 THnSparse *BookStages(const TString &name, const std::vector<Double_t> &ptEdges,
                       bool isMC) {
   const int nPt = (int)ptEdges.size() - 1;
@@ -171,6 +172,8 @@ void runPopulation(TString input, TString output, TString modeFlag,
                                 : nullptr;
 
   THnSparse *hStages = BookStages(cone + "_stages", ptEdges, loop.IsMC());
+  // the jet selection, for the plot legends
+  hStages->SetTitle("veto map + event veto");
 
   // event loop
   while (loop.Next()) {
@@ -198,6 +201,9 @@ void runPopulation(TString input, TString output, TString modeFlag,
                              (Double_t)genMatch[j]};
       h->Fill(x, weight);
 
+      if (!eventPass || loop.InVetoRegion(c, j)) {
+        continue;
+      }
       const Double_t xs[6] = {
           reco.eta[j],           reco.rawpt[j],         reco.pt[j],
           loop.StagePt(c, j, 1), loop.StagePt(c, j, 2), corrPt[j]};
