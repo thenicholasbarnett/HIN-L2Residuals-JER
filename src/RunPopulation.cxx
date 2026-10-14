@@ -21,12 +21,30 @@ namespace {
 constexpr double kConeR = 0.4;
 constexpr float kConeArea = (float)(TMath::Pi() * kConeR * kConeR);
 // gen and calo jets take the jet ID decision of the PF jet within
-// kMatchDRFraction * R, closest pairs first, no PF jet used twice
+// kMatchDRFraction * R, closest pairs first, no PF jet used twice; the gen
+// match of PF and calo jets uses the same definition
 constexpr double kMatchDRFraction = 0.5;
 
+// per jet: matched to a gen jet (MC), all false in data
+std::vector<bool> GenMatched(const ForestEventLoop &loop, size_t c, int n,
+                             const Float_t *eta, const Float_t *phi) {
+  std::vector<bool> out(n, false);
+  if (!loop.IsMC()) {
+    return out;
+  }
+  const auto &gen = loop.JetsIn(c).gen;
+  const std::vector<int> match =
+      JetSmearing::Match(n, eta, phi, gen.n, gen.eta, gen.phi, kConeR,
+                         JetSmearing::Mode::OneToOne, kMatchDRFraction);
+  for (int j = 0; j < n; j++) {
+    out[j] = match[j] >= 0;
+  }
+  return out;
+}
+
 // (eta, phi, pT, passes jet ID, outside veto map, event not vetoed, leading
-// jet, matched PF jet), same layout for every collection; PF jets are their
-// own match
+// jet, matched PF jet, matched gen jet), same layout for every collection;
+// PF and gen jets are their own matches, nothing is gen matched in data
 THnSparse *BookPopulation(const TString &name, const char *ptTitle,
                           const std::vector<Double_t> &ptEdges) {
   const int nPt = (int)ptEdges.size() - 1;
@@ -40,6 +58,7 @@ THnSparse *BookPopulation(const TString &name, const char *ptTitle,
        flag,
        flag,
        flag,
+       flag,
        flag});
   h->GetAxis(2)->Set(nPt, ptEdges.data());
   h->GetAxis(3)->SetTitle("passes jet ID");
@@ -47,6 +66,7 @@ THnSparse *BookPopulation(const TString &name, const char *ptTitle,
   h->GetAxis(5)->SetTitle("event not vetoed");
   h->GetAxis(6)->SetTitle("leading jet");
   h->GetAxis(7)->SetTitle("matched PF jet");
+  h->GetAxis(8)->SetTitle("matched gen jet");
   h->Sumw2();
   return h;
 }
@@ -74,14 +94,16 @@ THnSparse *BookStages(const TString &name, const std::vector<Double_t> &ptEdges,
 }
 
 // gen or calo jets: position and pT of the jet itself, jet ID from the
-// matched PF jet (fails when unmatched)
+// matched PF jet (fails when unmatched); isGen: the jets are gen jets
 void FillMatched(THnSparse *h, const ForestEventLoop &loop, size_t c, int n,
                  const Float_t *pt, const Float_t *eta, const Float_t *phi,
-                 double minPt, bool eventPass, float weight) {
+                 double minPt, bool eventPass, float weight, bool isGen) {
   const auto &reco = loop.JetsIn(c).reco;
   const std::vector<int> match =
       JetSmearing::Match(n, eta, phi, reco.nref, reco.eta, reco.phi, kConeR,
                          JetSmearing::Mode::OneToOne, kMatchDRFraction);
+  const std::vector<bool> genMatch =
+      isGen ? std::vector<bool>(n, true) : GenMatched(loop, c, n, eta, phi);
   int lead = -1;
   for (int j = 0; j < n; j++) {
     if (lead < 0 || pt[j] > pt[lead]) {
@@ -93,14 +115,15 @@ void FillMatched(THnSparse *h, const ForestEventLoop &loop, size_t c, int n,
       continue;
     }
     const bool matched = match[j] >= 0;
-    const Double_t x[8] = {eta[j],
+    const Double_t x[9] = {eta[j],
                            phi[j],
                            pt[j],
                            (Double_t)(matched && loop.PassesJetID(c, match[j])),
                            (Double_t)!loop.InVetoRegion(eta[j], phi[j]),
                            (Double_t)eventPass,
                            (Double_t)(j == lead),
-                           (Double_t)matched};
+                           (Double_t)matched,
+                           (Double_t)genMatch[j]};
     h->Fill(x, weight);
   }
 }
@@ -157,19 +180,22 @@ void runPopulation(TString input, TString output, TString modeFlag,
     const float *corrPt = loop.CorrPt(c);
     const int lead = loop.Sorted(c).lead;
     const bool eventPass = !loop.EventVetoed(c);
+    const std::vector<bool> genMatch =
+        GenMatched(loop, c, reco.nref, reco.eta, reco.phi);
 
     for (int j = 0; j < reco.nref; j++) {
       if (corrPt[j] < cfg.minJetPt) {
         continue;
       }
-      const Double_t x[8] = {reco.eta[j],
+      const Double_t x[9] = {reco.eta[j],
                              reco.phi[j],
                              corrPt[j],
                              (Double_t)loop.PassesJetID(c, j),
                              (Double_t)!loop.InVetoRegion(c, j),
                              (Double_t)eventPass,
                              (Double_t)(j == lead),
-                             1.0};
+                             1.0,
+                             (Double_t)genMatch[j]};
       h->Fill(x, weight);
 
       const Double_t xs[6] = {
@@ -187,11 +213,11 @@ void runPopulation(TString input, TString output, TString modeFlag,
           loop.CorrectPt(c, calo.pt[j], calo.eta[j], calo.phi[j], kConeArea);
     }
     FillMatched(hCalo, loop, c, calo.n, caloPt.data(), calo.eta, calo.phi,
-                cfg.minJetPt, eventPass, weight);
+                cfg.minJetPt, eventPass, weight, false);
     if (hGen) {
       const auto &gen = loop.JetsIn(c).gen;
       FillMatched(hGen, loop, c, gen.n, gen.pt, gen.eta, gen.phi, cfg.minJetPt,
-                  eventPass, weight);
+                  eventPass, weight, true);
     }
   }
 
