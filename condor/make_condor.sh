@@ -586,9 +586,9 @@ submit_filelist() {
   if [[ "${closure}" == true ]]; then closure_note=" [${FORMAT}, jer closure]"; fi
 
   if [[ "${NO_SUBMIT}" == true ]]; then
-    echo "  ${label} (${mode})${closure_note}: ${count} jobs → $(pwd)/${submit_file}"
+    echo "  ${label}${closure_note}: ${count} jobs → $(pwd)/${submit_file}"
   else
-    echo "  Submitting ${label} (${mode})${closure_note}: ${count} jobs..."
+    echo "  Submitting ${label}${closure_note}: ${count} jobs..."
     condor_submit "${submit_file}"
   fi
 
