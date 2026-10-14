@@ -45,6 +45,10 @@ TFile *CreateOutputFile(const TString &path) {
 
 struct ForestEventLoop::Impl {
   std::vector<JetCorrector> jecs;
+  // jecChains[c] = files of jecs[c]; stageJecs[c][k] = its first k + 1
+  // files, built on first use
+  std::vector<std::vector<std::string>> jecChains;
+  std::vector<std::vector<JetCorrector>> stageJecs;
   std::vector<JetSmearerJME::JetResolution> jerResolution;
   std::vector<JetSmearerJME::JetResolutionScaleFactor> jerScaleFactor;
   JetSmearing::Method jerMethod = JetSmearing::Method::Hybrid;
@@ -69,9 +73,9 @@ struct ForestEventLoop::Impl {
 
 ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
                                  Long64_t maxEvents, bool jerClosure,
-                                 Int_t minNRef)
+                                 Int_t minNRef, bool readCalo)
     : impl_(std::make_unique<Impl>()), mode_(mode), jerClosure_(jerClosure),
-      minNRef_(minNRef) {
+      minNRef_(minNRef), readCalo_(readCalo) {
 
   const AnalysisConfig &cfg = Config();
   Impl &m = *impl_;
@@ -115,6 +119,7 @@ ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
       }
     }
     m.jecs.emplace_back(chain);
+    m.jecChains.push_back(chain);
   }
 
   // JER SF closure: MC jets get smeared (JetSmearer.h) using previously
@@ -199,7 +204,7 @@ ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
   SetBranches(m.evtTree, event_.BranchMap(isMC));
   SetBranches(m.ggTree, event_.RhoBranchMap());
   for (size_t c = 0; c < nCones; c++) {
-    SetBranches(m.jetTrees[c], jets_[c].BranchMap(isMC));
+    SetBranches(m.jetTrees[c], jets_[c].BranchMap(isMC, readCalo_));
   }
   if (mode != RunMode::MC) {
     SetBranches(m.skimTree, filters_.BranchMap(cfg.filterBranch));
@@ -345,6 +350,50 @@ bool ForestEventLoop::GoodJet(size_t c, int j) const {
                              r.pf.MUM[j]);
 }
 
+size_t ForestEventLoop::NJecLevels(size_t c) const {
+  return impl_->jecChains[c].size();
+}
+
+float ForestEventLoop::StagePt(size_t c, int j, size_t nLevels) const {
+  Impl &m = *impl_;
+  const auto &r = jets_[c].reco;
+  if (nLevels == 0) {
+    return r.rawpt[j];
+  }
+  if (m.stageJecs.empty()) {
+    m.stageJecs.resize(m.jecChains.size());
+    for (size_t i = 0; i < m.jecChains.size(); i++) {
+      const auto &chain = m.jecChains[i];
+      m.stageJecs[i].reserve(chain.size());
+      for (size_t k = 0; k < chain.size(); k++) {
+        m.stageJecs[i].emplace_back(
+            std::vector<std::string>(chain.begin(), chain.begin() + k + 1));
+      }
+    }
+  }
+  if (nLevels > m.stageJecs[c].size()) {
+    nLevels = m.stageJecs[c].size();
+  }
+  JetCorrector &jec = m.stageJecs[c][nLevels - 1];
+  jec.SetJetPT(r.rawpt[j]);
+  jec.SetJetEta(r.eta[j]);
+  jec.SetJetPhi(r.phi[j]);
+  jec.SetJetArea(r.area[j]);
+  jec.SetRho(event_.rho);
+  return (float)jec.GetCorrectedPT();
+}
+
+float ForestEventLoop::CorrectPt(size_t c, float rawPt, float eta, float phi,
+                                 float area) const {
+  JetCorrector &jec = impl_->jecs[c];
+  jec.SetJetPT(rawPt);
+  jec.SetJetEta(eta);
+  jec.SetJetPhi(phi);
+  jec.SetJetArea(area);
+  jec.SetRho(event_.rho);
+  return (float)jec.GetCorrectedPT();
+}
+
 bool ForestEventLoop::PassesJetID(size_t c, int j) const {
   const auto &r = jets_[c].reco;
   return impl_->js->PassesID(r.eta[j], r.pf.CHF[j], r.pf.NHF[j], r.pf.CEF[j],
@@ -355,6 +404,10 @@ bool ForestEventLoop::PassesJetID(size_t c, int j) const {
 bool ForestEventLoop::InVetoRegion(size_t c, int j) const {
   const auto &r = jets_[c].reco;
   return impl_->js->InVetoRegion(r.eta[j], r.phi[j]);
+}
+
+bool ForestEventLoop::InVetoRegion(double eta, double phi) const {
+  return impl_->js->InVetoRegion(eta, phi);
 }
 
 bool ForestEventLoop::EventVetoed(size_t c) const {

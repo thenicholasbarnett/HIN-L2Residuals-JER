@@ -45,14 +45,24 @@ template <Int_t MAXNREF> struct JetStruct {
     Float_t phi[MAXNREF];
   } ref;
 
-  // gen jets
+  // gen jets, pT ordered, independent of the reco jets
   struct GenMomenta {
+    Int_t n = 0;
     Float_t pt[MAXNREF];
     Float_t eta[MAXNREF];
     Float_t phi[MAXNREF];
   } gen;
 
-  std::vector<std::pair<TString, void *>> BranchMap(bool isMC) {
+  // calo jets stored in the PF jet tree (raw pT, AK4, forest cut 20 GeV)
+  struct CaloMomenta {
+    Int_t n = 0;
+    Float_t pt[MAXNREF];
+    Float_t eta[MAXNREF];
+    Float_t phi[MAXNREF];
+  } calo;
+
+  std::vector<std::pair<TString, void *>> BranchMap(bool isMC,
+                                                    bool withCalo = false) {
     std::vector<std::pair<TString, void *>> map = {
         {"nref", &reco.nref},     {"rawpt", reco.rawpt},
         {"jtpt", reco.pt},        {"jteta", reco.eta},
@@ -71,9 +81,18 @@ template <Int_t MAXNREF> struct JetStruct {
                                 {"refpt", ref.pt},
                                 {"refeta", ref.eta},
                                 {"refphi", ref.phi},
+                                {"ngen", &gen.n},
                                 {"genpt", gen.pt},
                                 {"geneta", gen.eta},
                                 {"genphi", gen.phi},
+                            });
+    }
+    if (withCalo) {
+      map.insert(map.end(), {
+                                {"ncalo", &calo.n},
+                                {"calopt", calo.pt},
+                                {"caloeta", calo.eta},
+                                {"calophi", calo.phi},
                             });
     }
     return map;

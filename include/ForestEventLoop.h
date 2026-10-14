@@ -32,7 +32,8 @@ public:
 
   // throws std::runtime_error on bad config or input
   ForestEventLoop(const TString &input, RunMode mode, Long64_t maxEvents = -1,
-                  bool jerClosure = false, Int_t minNRef = 2);
+                  bool jerClosure = false, Int_t minNRef = 2,
+                  bool readCalo = false);
   ~ForestEventLoop();
 
   bool Next();
@@ -45,6 +46,14 @@ public:
   float Weight() const { return event_.w; }
   const Jets &JetsIn(size_t c) const { return jets_[c]; }
   const float *CorrPt(size_t c) const { return corrPt_[c].data(); }
+  // files in cone c's JEC chain as applied in this mode (L2Residual counted
+  // for data when configured)
+  size_t NJecLevels(size_t c) const;
+  // reco jet j after the first nLevels files of that chain (0 = raw)
+  float StagePt(size_t c, int j, size_t nLevels) const;
+  // cone c's JEC chain on any jet of this event (no smearing)
+  float CorrectPt(size_t c, float rawPt, float eta, float phi,
+                  float area) const;
   const SortedJets &Sorted(size_t c) const { return sorted_[c]; }
 
   // tight jet ID and outside the veto map
@@ -52,6 +61,8 @@ public:
   // the two halves of GoodJet
   bool PassesJetID(size_t c, int j) const;
   bool InVetoRegion(size_t c, int j) const;
+  // veto map at any position (gen and calo jets)
+  bool InVetoRegion(double eta, double phi) const;
   // JME Run 3 event veto (JetSelector::VetoEvent) on cone c's corrected jets:
   // any jet with pT > 15, tight ID, EMF < 0.9 inside the veto map
   bool EventVetoed(size_t c) const;
@@ -68,6 +79,7 @@ private:
   RunMode mode_;
   bool jerClosure_;
   Int_t minNRef_;
+  bool readCalo_;
   Long64_t entry_ = -1;
   Long64_t nLoop_ = 0;
 

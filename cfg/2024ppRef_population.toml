@@ -37,6 +37,21 @@ labels = [ "ak4PF" ]
 files = [
     [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
 ]
+# data only, after the chain above. Leave out for no L2Residual
+residual_files = [
+    [ "data/jec/preliminary/L2Residual_jme_fineeta4_v110_ak4PF_eta_norm.txt" ],
+]
+
+# MC only: jets are smeared when these are given. Leave the section out for
+# no smearing
+[jer_closure]
+method = "hybrid"
+resolution_files = [
+    "data/jec/preliminary/ptres_v110_ak4PF_eta_ptresolution.txt",
+]
+scale_factor_files = [
+    "data/jec/preliminary/2024ppref_V4_sf_dijetjerc_fineeta4_v110_ak4PF_eta_jer_norm.txt",
+]
 
 [cuts]
 # no cut on top of the forest's raw pT > 10 GeV
