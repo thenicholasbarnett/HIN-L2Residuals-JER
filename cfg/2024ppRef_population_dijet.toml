@@ -1,0 +1,71 @@
+# runPopulation: AK4 only, every jet in events with a central leading jet
+# and a subleading jet (see [population])
+
+[paths]
+jet_id = "data/json/jetid.json"
+veto_map = "data/json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json"
+golden_json = "data/json/Cert_Collisions2024_ppref_387474_387721_golden.json"
+
+[condor]
+[condor.filelist_modes]
+"filelist_HiForest_2024ppref_DATA_HP*" = "triggered"
+"filelist_HiForest_2024ppref_DATA_ZB*" = "non-triggered"
+filelist_HiForest_2024ppref_MC = "mc"
+
+[trees]
+hi = "hiEvtAnalyzer/HiTree"
+gg = "ggHiNtuplizer/EventTree"
+skim = "skimanalysis/HltTree"
+trigger = "hltanalysis/HltTree"
+filter = "pprimaryVertexFilter"
+jets = [ "ak4PFJetAnalyzer/t" ]
+
+[trigger]
+branch = "HLT_AK4PFJet80_v8"
+threshold = 100.0
+cone = "ak4PF"
+
+[jet_id]
+system = "pp"
+# "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
+purpose = "calibration"
+event_veto_cone = "ak4PF"
+
+[cones]
+labels = [ "ak4PF" ]
+
+[jec]
+files = [
+    [ "data/jec/JRA_2024_ppRef_L1FastJet_AK4PFchs.txt", "data/jec/JRA_2024_ppRef_L2Relative_AK4PFchs.txt" ],
+]
+# data only, after the chain above. Leave out for no L2Residual
+residual_files = [
+    [ "data/jec/preliminary/L2Residual_jme_fineeta4_v110_ak4PF_eta_norm.txt" ],
+]
+
+# MC only: jets are smeared when these are given. Leave the section out for
+# no smearing
+[jer_closure]
+method = "hybrid"
+resolution_files = [
+    "data/jec/preliminary/ptres_v110_ak4PF_eta_ptresolution.txt",
+]
+scale_factor_files = [
+    "data/jec/preliminary/2024ppref_V4_sf_dijetjerc_fineeta4_v110_ak4PF_eta_jer_norm.txt",
+]
+
+# event selection on the two leading corrected AK4 PF jets (no jet ID);
+# leave a key out for no cut
+[population]
+lead_pt_min = 50.0
+sublead_pt_min = 30.0
+lead_abs_eta_max = 1.0
+sublead_abs_eta_max = 2.0
+
+[cuts]
+# no cut on top of the forest's raw pT > 10 GeV
+min_jet_pt = 0.0
+
+[binning]
+# unused by runPopulation, the config loader asks for it
+ptavg_edges = [ 30, 70, 100, 175, 250, 500, 1000 ]

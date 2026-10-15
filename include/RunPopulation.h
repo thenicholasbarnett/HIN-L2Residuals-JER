@@ -4,9 +4,9 @@
 #include "TString.h"
 #include "Rtypes.h"
 
-// one 7D THnSparse of every jet of the first configured cone:
-// (eta, phi, corrected pT, passes jet ID, outside veto map, event not vetoed,
-// leading jet)
+// jet populations of the first configured cone (PF, calo, gen in MC), its
+// correction stages and the MC response per stage; MC pT-hat spikes dropped,
+// optional leading / subleading jet cuts from the config's [population]
 void runPopulation(TString input, TString output, TString modeFlag = "triggered",
                    Long64_t maxEvents = -1);
 

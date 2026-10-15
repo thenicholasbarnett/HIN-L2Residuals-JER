@@ -163,6 +163,12 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
   cfg.responseGausFitHalfWidth =
       doc["cuts"]["response_gaus_fit_half_width"].value_or(0.3);
 
+  cfg.popLeadPtMin = doc["population"]["lead_pt_min"].value_or(0.0f);
+  cfg.popSubleadPtMin = doc["population"]["sublead_pt_min"].value_or(0.0f);
+  cfg.popLeadAbsEtaMax = doc["population"]["lead_abs_eta_max"].value_or(-1.0f);
+  cfg.popSubleadAbsEtaMax =
+      doc["population"]["sublead_abs_eta_max"].value_or(-1.0f);
+
   // Step 3 output selection
   cfg.defaultMethod = TString(
       doc["step3"]["default_method"].value_or(std::string("gauss")).c_str());

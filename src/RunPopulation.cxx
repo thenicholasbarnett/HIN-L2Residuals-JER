@@ -24,6 +24,61 @@ constexpr float kConeArea = (float)(TMath::Pi() * kConeR * kConeR);
 // kMatchDRFraction * R, closest pairs first, no PF jet used twice; the gen
 // match of PF and calo jets uses the same definition
 constexpr double kMatchDRFraction = 0.5;
+// MC pT-hat spike cut factor, as DiJetJERC's (runDijetProfiles)
+constexpr double kSpikeFactor = 1.5;
+
+// MC pT-hat spikes: DiJetJERC's cut (leading gen jet < 1.5 pthat or leading
+// jet < 1.5 leading gen jet), plus a leading jet without a forest gen match
+// above 1.5 pthat -- pileup overlay in a low pthat event, which JME drops with
+// Pileup_pthatmax > pthat (not in the forest)
+bool IsSpike(const ForestEventLoop &loop, size_t c) {
+  const int lead = loop.Sorted(c).lead;
+  if (lead < 0) {
+    return false;
+  }
+  const auto &jets = loop.JetsIn(c);
+  const double pthat = loop.Event().pthat;
+  const double pt1 = loop.CorrPt(c)[lead];
+  double gen1 = 0.0;
+  for (int j = 0; j < jets.gen.n; j++) {
+    gen1 = TMath::Max(gen1, (double)jets.gen.pt[j]);
+  }
+  if (!(gen1 < kSpikeFactor * pthat || pt1 < kSpikeFactor * gen1)) {
+    return true;
+  }
+  return jets.ref.pt[lead] < 0 && pt1 > kSpikeFactor * pthat;
+}
+
+// leading and subleading corrected jets (no jet ID) against the config's
+// [population] cuts
+bool PassesDijetCuts(const ForestEventLoop &loop, size_t c,
+                     const AnalysisConfig &cfg) {
+  const auto &s = loop.Sorted(c);
+  const auto &reco = loop.JetsIn(c).reco;
+  const float *pt = loop.CorrPt(c);
+  const bool cutLead = cfg.popLeadPtMin > 0 || cfg.popLeadAbsEtaMax >= 0;
+  const bool cutSublead =
+      cfg.popSubleadPtMin > 0 || cfg.popSubleadAbsEtaMax >= 0;
+  if (cutLead) {
+    if (s.lead < 0 || pt[s.lead] <= cfg.popLeadPtMin) {
+      return false;
+    }
+    if (cfg.popLeadAbsEtaMax >= 0 &&
+        TMath::Abs(reco.eta[s.lead]) >= cfg.popLeadAbsEtaMax) {
+      return false;
+    }
+  }
+  if (cutSublead) {
+    if (s.sublead < 0 || pt[s.sublead] <= cfg.popSubleadPtMin) {
+      return false;
+    }
+    if (cfg.popSubleadAbsEtaMax >= 0 &&
+        TMath::Abs(reco.eta[s.sublead]) >= cfg.popSubleadAbsEtaMax) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // per jet: matched to a gen jet (MC), all false in data
 std::vector<bool> GenMatched(const ForestEventLoop &loop, size_t c, int n,
@@ -218,6 +273,13 @@ void runPopulation(TString input, TString output, TString modeFlag,
 
   // event loop
   while (loop.Next()) {
+
+    if (loop.IsMC() && IsSpike(loop, c)) {
+      continue;
+    }
+    if (!PassesDijetCuts(loop, c, cfg)) {
+      continue;
+    }
 
     const float weight = loop.Weight();
     const auto &reco = loop.JetsIn(c).reco;

@@ -52,6 +52,13 @@ struct AnalysisConfig {
   double residualAlphaFitHi = 0.31;
   double responseGausFitHalfWidth = 0.3;
 
+  // runPopulation event selection on the two leading corrected jets of the
+  // first cone; pT 0 / |eta| < 0 = no cut
+  float popLeadPtMin = 0.0f;
+  float popSubleadPtMin = 0.0f;
+  float popLeadAbsEtaMax = -1.0f;
+  float popSubleadAbsEtaMax = -1.0f;
+
   TString defaultMethod = "gauss";
   TString etaModeOutput = "both";
   // Step 3 pT-fit x values: "mean" (weighted <pT_avg> per slice) | "midpoint"
