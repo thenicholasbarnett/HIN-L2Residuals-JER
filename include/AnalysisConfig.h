@@ -23,8 +23,9 @@ struct AnalysisConfig {
   std::string jetIdPath;
   std::string vetoMapPath;
   std::string jetSystem;  // "pp" | "ion"
-  // "analysis" (jetvetomap) | "calibration" (jetvetomap_all)
-  std::string jetPurpose;
+  // veto map type in the veto map JSON, "" = JetSelector's default
+  // (jetvetomap_all)
+  std::string jetVetoMap;
   // cone whose jets drive the JME Run 3 event veto in runAsymmetry, "" = off
   std::string jetEventVetoCone;
   TString jsonPath;

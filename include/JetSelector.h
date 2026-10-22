@@ -30,12 +30,9 @@
 //     continue;
 //   }
 //
-// Calibration work uses stricter veto map
+// Veto map type defaults to jetvetomap_all, pick another one by name
 //
-//   JetSelector js(JetSelector::System::pp, 
-//                  "json/jetid.json",
-//                  "json/jetvetomaps_Summer24Prompt24_RunBCDEFGHI_V1.json",
-//                  JetSelector::Purpose::Calibration);
+//   js.SetVetoMap("jetvetomap");
 
 #include <algorithm>
 #include <cmath>
@@ -525,25 +522,32 @@ struct Correction {
 class JetSelector {
 public:
   enum class System { pp, Ion };
-  enum class Purpose { Analysis, Calibration };
 
   // Run 3 AK4 CHS recommendations, cms-jme-jmar/jerc docs
   static constexpr const char *kIDKey = "AK4CHS_TightLeptonVeto";
-  static constexpr const char *kAnalysisMap = "jetvetomap";
-  static constexpr const char *kCalibrationMap = "jetvetomap_all";
+  static constexpr const char *kDefaultVetoMap = "jetvetomap_all";
 
   // Run 3 event veto minimal jet selection
   static constexpr double kEventVetoMinPt = 15.0;
   static constexpr double kEventVetoMaxEMF = 0.9;
 
   JetSelector(System system, const std::string &jetIDFile,
-              const std::string &vetoMapFile,
-              Purpose purpose = Purpose::Analysis)
-      : system_(system), purpose_(purpose),
-        vetoMapType_(purpose == Purpose::Calibration ? kCalibrationMap
-                                                     : kAnalysisMap) {
+              const std::string &vetoMapFile)
+      : system_(system) {
     LoadJetID(jetIDFile);
     LoadVetoMap(vetoMapFile);
+    SetVetoMap(kDefaultVetoMap);
+  }
+
+  // veto map type by name, e.g. "jetvetomap" or "jetvetomap_all"
+  void SetVetoMap(const std::string &type) {
+    const auto &keys = veto_.root.keys;
+    if (veto_.root.kind != JetSelectorCorrection::Node::Kind::Category ||
+        std::find(keys.begin(), keys.end(), type) == keys.end()) {
+      throw std::runtime_error("JetSelector: veto map type '" + type +
+                               "' not found in " + vetoMapFile_);
+    }
+    vetoMapType_ = type;
   }
 
   // multiplicities in forest convention, summed like pat::Jet
@@ -622,13 +626,12 @@ public:
   }
 
   System GetSystem() const { return system_; }
-  Purpose GetPurpose() const { return purpose_; }
   const std::string &VetoMapTag() const { return veto_.name; }
   const std::string &VetoMapType() const { return vetoMapType_; }
 
 private:
   System system_;
-  Purpose purpose_;
+  std::string vetoMapFile_;
   std::string vetoMapType_;
 
   JetSelectorCorrection::Correction id_;
@@ -677,14 +680,7 @@ private:
     vetoType_ = veto_.Index("type");
     vetoEta_ = veto_.Index("eta");
     vetoPhi_ = veto_.Index("phi");
-
-    // fail at construction, not on first jet
-    const auto &keys = veto_.root.keys;
-    if (veto_.root.kind != JetSelectorCorrection::Node::Kind::Category ||
-        std::find(keys.begin(), keys.end(), vetoMapType_) == keys.end()) {
-      throw std::runtime_error("JetSelector: veto map type '" + vetoMapType_ +
-                               "' not found in " + path);
-    }
+    vetoMapFile_ = path;
   }
 };
 

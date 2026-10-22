@@ -92,7 +92,7 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
       repoRoot);
 
   cfg.jetSystem = doc["jet_id"]["system"].value_or(std::string{});
-  cfg.jetPurpose = doc["jet_id"]["purpose"].value_or(std::string{});
+  cfg.jetVetoMap = doc["jet_id"]["veto_map"].value_or(std::string{});
   cfg.jetEventVetoCone =
       doc["jet_id"]["event_veto_cone"].value_or(std::string{});
 
@@ -227,9 +227,6 @@ AnalysisConfig LoadAnalysisConfig(const std::string &path) {
                              "' is not one of cones.labels");
   if (cfg.jetSystem != "pp" && cfg.jetSystem != "ion")
     throw std::runtime_error("jet_id.system must be \"pp\" or \"ion\"");
-  if (cfg.jetPurpose != "analysis" && cfg.jetPurpose != "calibration")
-    throw std::runtime_error(
-        "jet_id.purpose must be \"analysis\" or \"calibration\"");
 
   return cfg;
 }

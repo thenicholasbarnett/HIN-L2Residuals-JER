@@ -8,11 +8,13 @@
 
 #include "Binning.h"
 #include "ForestEventLoop.h"
+#include "JetSelector.h"
 #include "JetSmearer.h"
 #include "Utilities.h"
 
 #include "AnalysisConfig.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace {
@@ -26,6 +28,75 @@ constexpr float kConeArea = (float)(TMath::Pi() * kConeR * kConeR);
 constexpr double kMatchDRFraction = 0.5;
 // MC pT-hat spike cut factor, as DiJetJERC's (runDijetProfiles)
 constexpr double kSpikeFactor = 1.5;
+
+// the two Run 3 veto map types, every population sparse carries both
+const char *const kMapTypes[2] = {"jetvetomap", "jetvetomap_all"};
+// best-guess selection (stages sparses): jetvetomap_all, event veto at
+// p_T^veto JetSelector::kEventVetoMinPt (15 GeV)
+constexpr int kBestMap = 1;
+
+// one JetSelector per map type, same jet ID JSON as the event loop; the ID is
+// taken from the loop, these only evaluate the maps
+struct VetoMaps {
+  std::vector<JetSelector> js;
+
+  explicit VetoMaps(const AnalysisConfig &cfg) {
+    for (const char *type : kMapTypes) {
+      js.emplace_back(cfg.jetSystem == "ion" ? JetSelector::System::Ion
+                                             : JetSelector::System::pp,
+                      cfg.jetIdPath, cfg.vetoMapPath);
+      js.back().SetVetoMap(type);
+    }
+  }
+
+  bool Outside(int m, double eta, double phi) const {
+    return !js[m].InVetoRegion(eta, phi);
+  }
+};
+
+// p_T^veto per map: highest corrected pT among the event's jets that would
+// veto it (jet ID, EMF < 0.9, inside the map), 0 when there is none. The
+// event passes a veto threshold T when p_T^veto <= T (JetSelector::VetoEvent,
+// T = 15 GeV)
+std::vector<double> VetoPt(const ForestEventLoop &loop, size_t c,
+                           const VetoMaps &maps) {
+  const auto &reco = loop.JetsIn(c).reco;
+  const float *corrPt = loop.CorrPt(c);
+  std::vector<double> out(maps.js.size(), 0.0);
+  for (int j = 0; j < reco.nref; j++) {
+    if (reco.pf.CEF[j] + reco.pf.NEF[j] >= JetSelector::kEventVetoMaxEMF) {
+      continue;
+    }
+    if (!loop.PassesJetID(c, j)) {
+      continue;
+    }
+    for (size_t m = 0; m < maps.js.size(); m++) {
+      if (corrPt[j] > out[m] && !maps.Outside(m, reco.eta[j], reco.phi[j])) {
+        out[m] = corrPt[j];
+      }
+    }
+  }
+  return out;
+}
+
+bool PassesEventVeto(const std::vector<double> &vetoPt) {
+  return vetoPt[kBestMap] <= JetSelector::kEventVetoMinPt;
+}
+
+// the best-guess selection, as a title for the plot legends
+const char *kBestSelection =
+    "jet ID + jetvetomap_all + p_{T}^{veto} < 15 GeV";
+
+// p_T^veto axis: the population pT edges plus 15 GeV, so the default event
+// veto is a bin edge; 0 (no vetoing jet) lands in the underflow
+std::vector<Double_t> VetoPtEdges(const std::vector<Double_t> &ptEdges) {
+  std::vector<Double_t> e = ptEdges;
+  const double cut = JetSelector::kEventVetoMinPt;
+  if (std::find(e.begin(), e.end(), cut) == e.end()) {
+    e.insert(std::upper_bound(e.begin(), e.end(), cut), cut);
+  }
+  return e;
+}
 
 // MC pT-hat spikes: DiJetJERC's cut (leading gen jet < 1.5 pthat or leading
 // jet < 1.5 leading gen jet), plus a leading jet without a forest gen match
@@ -97,13 +168,21 @@ std::vector<bool> GenMatched(const ForestEventLoop &loop, size_t c, int n,
   return out;
 }
 
-// (eta, phi, pT, passes jet ID, outside veto map, event not vetoed, leading
-// jet, matched PF jet, matched gen jet), same layout for every collection;
-// PF and gen jets are their own matches, nothing is gen matched in data
+// (eta, phi, pT, passes jet ID, outside jetvetomap, outside jetvetomap_all,
+// p_T^veto jetvetomap, p_T^veto jetvetomap_all, leading jet, matched PF jet,
+// matched gen jet), same layout for every collection; PF and gen jets are
+// their own matches, nothing is gen matched in data. pT is the fully
+// corrected one: the selection effect at the best-guess calibration
+constexpr int kNPopAxes = 11;
+
 THnSparse *BookPopulation(const TString &name, const char *ptTitle,
                           const std::vector<Double_t> &ptEdges) {
   const int nPt = (int)ptEdges.size() - 1;
+  const std::vector<Double_t> vEdges = VetoPtEdges(ptEdges);
+  const int nV = (int)vEdges.size() - 1;
   const AxisBins flag = {2, 0.0, 2.0, ""};
+  const AxisBins veto = {nV, (Float_t)vEdges.front(), (Float_t)vEdges.back(),
+                         ""};
   THnSparse *h = MakeTHnSparse<THnSparseD>(
       name, "",
       {{104, -5.2, 5.2, "#eta"},
@@ -112,24 +191,30 @@ THnSparse *BookPopulation(const TString &name, const char *ptTitle,
        flag,
        flag,
        flag,
+       veto,
+       veto,
        flag,
        flag,
        flag});
   h->GetAxis(2)->Set(nPt, ptEdges.data());
   h->GetAxis(3)->SetTitle("passes jet ID");
-  h->GetAxis(4)->SetTitle("outside veto map");
-  h->GetAxis(5)->SetTitle("event not vetoed");
-  h->GetAxis(6)->SetTitle("leading jet");
-  h->GetAxis(7)->SetTitle("matched PF jet");
-  h->GetAxis(8)->SetTitle("matched gen jet");
+  h->GetAxis(4)->SetTitle("outside jetvetomap");
+  h->GetAxis(5)->SetTitle("outside jetvetomap_all");
+  h->GetAxis(6)->Set(nV, vEdges.data());
+  h->GetAxis(6)->SetTitle("p_{T}^{veto} jetvetomap (GeV)");
+  h->GetAxis(7)->Set(nV, vEdges.data());
+  h->GetAxis(7)->SetTitle("p_{T}^{veto} jetvetomap_all (GeV)");
+  h->GetAxis(8)->SetTitle("leading jet");
+  h->GetAxis(9)->SetTitle("matched PF jet");
+  h->GetAxis(10)->SetTitle("matched gen jet");
   h->Sumw2();
   return h;
 }
 
 // PF jet pT after each correction stage: (eta, raw, forest jtpt, L1, L1 +
 // L2Relative, final), final = + L2Residual in data, + JER smearing in MC,
-// whichever the config provides. Jets outside the veto map in events that
-// pass the event veto only
+// whichever the config provides. Best-guess selection only (kBestSelection):
+// the calibration effect at the best-guess selection
 THnSparse *BookStages(const TString &name, const std::vector<Double_t> &ptEdges,
                       bool isMC) {
   const int nPt = (int)ptEdges.size() - 1;
@@ -151,29 +236,36 @@ THnSparse *BookStages(const TString &name, const std::vector<Double_t> &ptEdges,
 
 // MC response after each correction stage, for JES (mean) and JER (width):
 // (|eta reco|, gen pT, raw / gen, forest jtpt / gen, L1 / gen, L1 +
-// L2Relative / gen, final / gen, passes jet ID + veto map + event veto),
-// final = + JER smearing when configured. Every gen-matched PF jet; gen pT
-// from the forest's own match (ref), the one the smearing uses. Binned in gen
-// pT, not reco, against the falling-spectrum migration bias
-THnSparse *BookResponseStages(const TString &name, bool smeared) {
-  const int nPt = 40;
+// L2Relative / gen, final / gen), final = + JER smearing when configured.
+// Gen-matched PF jets passing the best-guess selection; gen pT from the
+// forest's own match (ref), the one the smearing uses. Binned in gen pT, not
+// reco, against the falling-spectrum migration bias
+const int kNRespPt = 40;
+
+std::vector<Double_t> RespPtEdges() {
   const double ptLo = 5.0;
   const double ptHi = 1000.0;
-  std::vector<Double_t> ptEdges(nPt + 1);
-  for (int i = 0; i <= nPt; i++) {
-    ptEdges[i] = ptLo * TMath::Power(ptHi / ptLo, (double)i / nPt);
+  std::vector<Double_t> e(kNRespPt + 1);
+  for (int i = 0; i <= kNRespPt; i++) {
+    e[i] = ptLo * TMath::Power(ptHi / ptLo, (double)i / kNRespPt);
   }
+  return e;
+}
+
+THnSparse *BookResponseStages(const TString &name, bool smeared) {
+  const int nPt = kNRespPt;
+  const std::vector<Double_t> ptEdges = RespPtEdges();
   const AxisBins resp = {100, 0.0, 2.0, ""};
   THnSparse *h = MakeTHnSparse<THnSparseD>(
       name, "",
       {{52, 0.0, 5.2, "|#eta^{reco}|"},
-       {nPt, (Float_t)ptLo, (Float_t)ptHi, "p_{T}^{gen} (GeV)"},
+       {nPt, (Float_t)ptEdges.front(), (Float_t)ptEdges.back(),
+        "p_{T}^{gen} (GeV)"},
        resp,
        resp,
        resp,
        resp,
-       resp,
-       {2, 0.0, 2.0, "passes jet ID + veto map + event veto"}});
+       resp});
   h->GetAxis(1)->Set(nPt, ptEdges.data());
   const char *titles[5] = {
       "raw p_{T} / p_{T}^{gen}", "forest p_{T} / p_{T}^{gen}",
@@ -187,11 +279,49 @@ THnSparse *BookResponseStages(const TString &name, bool smeared) {
   return h;
 }
 
+// MC final response against the selection, for JES and JER per selection:
+// (|eta reco|, gen pT, final / gen, passes jet ID, outside jetvetomap,
+// outside jetvetomap_all, p_T^veto jetvetomap, p_T^veto jetvetomap_all).
+// Every gen-matched PF jet: the selection effect at the best-guess
+// calibration
+THnSparse *BookResponseSelection(const TString &name, bool smeared,
+                                 const std::vector<Double_t> &vEdges) {
+  const std::vector<Double_t> ptEdges = RespPtEdges();
+  const int nV = (int)vEdges.size() - 1;
+  const AxisBins flag = {2, 0.0, 2.0, ""};
+  const AxisBins veto = {nV, (Float_t)vEdges.front(), (Float_t)vEdges.back(),
+                         ""};
+  THnSparse *h = MakeTHnSparse<THnSparseD>(
+      name, "",
+      {{52, 0.0, 5.2, "|#eta^{reco}|"},
+       {kNRespPt, (Float_t)ptEdges.front(), (Float_t)ptEdges.back(),
+        "p_{T}^{gen} (GeV)"},
+       {100, 0.0, 2.0,
+        smeared ? "L1 + L2Relative + smeared p_{T} / p_{T}^{gen}"
+                : "L1 + L2Relative p_{T} / p_{T}^{gen}"},
+       flag,
+       flag,
+       flag,
+       veto,
+       veto});
+  h->GetAxis(1)->Set(kNRespPt, ptEdges.data());
+  h->GetAxis(3)->SetTitle("passes jet ID");
+  h->GetAxis(4)->SetTitle("outside jetvetomap");
+  h->GetAxis(5)->SetTitle("outside jetvetomap_all");
+  h->GetAxis(6)->Set(nV, vEdges.data());
+  h->GetAxis(6)->SetTitle("p_{T}^{veto} jetvetomap (GeV)");
+  h->GetAxis(7)->Set(nV, vEdges.data());
+  h->GetAxis(7)->SetTitle("p_{T}^{veto} jetvetomap_all (GeV)");
+  h->Sumw2();
+  return h;
+}
+
 // gen or calo jets: position and pT of the jet itself, jet ID from the
 // matched PF jet (fails when unmatched); isGen: the jets are gen jets
 void FillMatched(THnSparse *h, const ForestEventLoop &loop, size_t c, int n,
                  const Float_t *pt, const Float_t *eta, const Float_t *phi,
-                 double minPt, bool eventPass, float weight, bool isGen) {
+                 double minPt, const VetoMaps &maps,
+                 const std::vector<double> &vetoPt, float weight, bool isGen) {
   const auto &reco = loop.JetsIn(c).reco;
   const std::vector<int> match =
       JetSmearing::Match(n, eta, phi, reco.nref, reco.eta, reco.phi, kConeR,
@@ -209,15 +339,18 @@ void FillMatched(THnSparse *h, const ForestEventLoop &loop, size_t c, int n,
       continue;
     }
     const bool matched = match[j] >= 0;
-    const Double_t x[9] = {eta[j],
-                           phi[j],
-                           pt[j],
-                           (Double_t)(matched && loop.PassesJetID(c, match[j])),
-                           (Double_t)!loop.InVetoRegion(eta[j], phi[j]),
-                           (Double_t)eventPass,
-                           (Double_t)(j == lead),
-                           (Double_t)matched,
-                           (Double_t)genMatch[j]};
+    const Double_t x[kNPopAxes] = {
+        eta[j],
+        phi[j],
+        pt[j],
+        (Double_t)(matched && loop.PassesJetID(c, match[j])),
+        (Double_t)maps.Outside(0, eta[j], phi[j]),
+        (Double_t)maps.Outside(1, eta[j], phi[j]),
+        vetoPt[0],
+        vetoPt[1],
+        (Double_t)(j == lead),
+        (Double_t)matched,
+        (Double_t)genMatch[j]};
     h->Fill(x, weight);
   }
 }
@@ -238,6 +371,7 @@ void runPopulation(TString input, TString output, TString modeFlag,
   const bool smear =
       mode == RunMode::MC && !cfg.jerScaleFactorFilesPerCone.empty();
   ForestEventLoop loop(input, mode, maxEvents, smear, 0, true);
+  const VetoMaps maps(cfg);
 
   // first configured cone only (ak4PF in cfg/2024ppRef_population.toml)
   const size_t c = 0;
@@ -266,10 +400,17 @@ void runPopulation(TString input, TString output, TString modeFlag,
 
   THnSparse *hStages = BookStages(cone + "_stages", ptEdges, loop.IsMC());
   // the jet selection, for the plot legends
-  hStages->SetTitle("veto map + event veto");
+  hStages->SetTitle(kBestSelection);
   THnSparse *hResp = loop.IsMC()
                          ? BookResponseStages(cone + "_response_stages", smear)
                          : nullptr;
+  if (hResp) {
+    hResp->SetTitle(kBestSelection);
+  }
+  THnSparse *hRespSel =
+      loop.IsMC() ? BookResponseSelection(cone + "_response_selection", smear,
+                                          VetoPtEdges(ptEdges))
+                  : nullptr;
 
   // event loop
   while (loop.Next()) {
@@ -285,7 +426,8 @@ void runPopulation(TString input, TString output, TString modeFlag,
     const auto &reco = loop.JetsIn(c).reco;
     const float *corrPt = loop.CorrPt(c);
     const int lead = loop.Sorted(c).lead;
-    const bool eventPass = !loop.EventVetoed(c);
+    const std::vector<double> vetoPt = VetoPt(loop, c, maps);
+    const bool eventPass = PassesEventVeto(vetoPt);
     const std::vector<bool> genMatch =
         GenMatched(loop, c, reco.nref, reco.eta, reco.phi);
 
@@ -293,37 +435,51 @@ void runPopulation(TString input, TString output, TString modeFlag,
       if (corrPt[j] < cfg.minJetPt) {
         continue;
       }
-      const Double_t x[9] = {reco.eta[j],
-                             reco.phi[j],
-                             corrPt[j],
-                             (Double_t)loop.PassesJetID(c, j),
-                             (Double_t)!loop.InVetoRegion(c, j),
-                             (Double_t)eventPass,
-                             (Double_t)(j == lead),
-                             1.0,
-                             (Double_t)genMatch[j]};
+      const bool id = loop.PassesJetID(c, j);
+      const bool outside[2] = {maps.Outside(0, reco.eta[j], reco.phi[j]),
+                               maps.Outside(1, reco.eta[j], reco.phi[j])};
+      const Double_t x[kNPopAxes] = {reco.eta[j],
+                                     reco.phi[j],
+                                     corrPt[j],
+                                     (Double_t)id,
+                                     (Double_t)outside[0],
+                                     (Double_t)outside[1],
+                                     vetoPt[0],
+                                     vetoPt[1],
+                                     (Double_t)(j == lead),
+                                     1.0,
+                                     (Double_t)genMatch[j]};
       h->Fill(x, weight);
 
-      // gen-matched jets (forest ref, refpt < 0 = no match), selection as a
-      // flag
+      // gen-matched jets (forest ref, refpt < 0 = no match)
       const auto &ref = loop.JetsIn(c).ref;
+      const bool best = id && outside[kBestMap] && eventPass;
+      if (hRespSel && ref.pt[j] > 0) {
+        const double g = ref.pt[j];
+        const Double_t xs[8] = {TMath::Abs(reco.eta[j]),
+                                g,
+                                corrPt[j] / g,
+                                (Double_t)id,
+                                (Double_t)outside[0],
+                                (Double_t)outside[1],
+                                vetoPt[0],
+                                vetoPt[1]};
+        hRespSel->Fill(xs, weight);
+      }
+
+      if (!best) {
+        continue;
+      }
       if (hResp && ref.pt[j] > 0) {
         const double g = ref.pt[j];
-        const bool pass =
-            eventPass && loop.PassesJetID(c, j) && !loop.InVetoRegion(c, j);
-        const Double_t xr[8] = {TMath::Abs(reco.eta[j]),
+        const Double_t xr[7] = {TMath::Abs(reco.eta[j]),
                                 g,
                                 reco.rawpt[j] / g,
                                 reco.pt[j] / g,
                                 loop.StagePt(c, j, 1) / g,
                                 loop.StagePt(c, j, 2) / g,
-                                corrPt[j] / g,
-                                (Double_t)pass};
+                                corrPt[j] / g};
         hResp->Fill(xr, weight);
-      }
-
-      if (!eventPass || loop.InVetoRegion(c, j)) {
-        continue;
       }
       const Double_t xs[6] = {
           reco.eta[j],           reco.rawpt[j],         reco.pt[j],
@@ -340,11 +496,11 @@ void runPopulation(TString input, TString output, TString modeFlag,
           loop.CorrectPt(c, calo.pt[j], calo.eta[j], calo.phi[j], kConeArea);
     }
     FillMatched(hCalo, loop, c, calo.n, caloPt.data(), calo.eta, calo.phi,
-                cfg.minJetPt, eventPass, weight, false);
+                cfg.minJetPt, maps, vetoPt, weight, false);
     if (hGen) {
       const auto &gen = loop.JetsIn(c).gen;
       FillMatched(hGen, loop, c, gen.n, gen.pt, gen.eta, gen.phi, cfg.minJetPt,
-                  eventPass, weight, true);
+                  maps, vetoPt, weight, true);
     }
   }
 
@@ -355,6 +511,9 @@ void runPopulation(TString input, TString output, TString modeFlag,
   hStages->Write();
   if (hResp) {
     hResp->Write();
+  }
+  if (hRespSel) {
+    hRespSel->Write();
   }
   hCalo->Write();
   if (hGen) {

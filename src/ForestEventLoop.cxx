@@ -145,9 +145,10 @@ ForestEventLoop::ForestEventLoop(const TString &input, RunMode mode,
   m.js = std::make_unique<JetSelector>(
       cfg.jetSystem == "ion" ? JetSelector::System::Ion
                              : JetSelector::System::pp,
-      cfg.jetIdPath, cfg.vetoMapPath,
-      cfg.jetPurpose == "analysis" ? JetSelector::Purpose::Analysis
-                                   : JetSelector::Purpose::Calibration);
+      cfg.jetIdPath, cfg.vetoMapPath);
+  if (!cfg.jetVetoMap.empty()) {
+    m.js->SetVetoMap(cfg.jetVetoMap);
+  }
   if (mode != RunMode::MC) {
     m.dcs = std::make_unique<JSON_handler>(cfg.jsonPath.Data());
   }

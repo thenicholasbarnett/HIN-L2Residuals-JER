@@ -37,9 +37,10 @@ cone = "ak4PF"
 
 [jet_id]
 # system: "pp" (full AK4CHS TightLeptonVeto) | "ion" (leptonic/EM cuts only)
-# purpose: "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
+# veto_map: map type in the veto map JSON, "jetvetomap" | "jetvetomap_all"
+# (strictest, the default when omitted)
 system = "pp"
-purpose = "calibration"
+veto_map = "jetvetomap_all"
 # JME Run 3 event veto (runAsymmetry): drop the event if any jet of this
 # cone has pT > 15 GeV, tight ID, EMF < 0.9 and sits in the veto map; the
 # maps are derived with AK4 jets. "" = off (per-jet ID + veto only)

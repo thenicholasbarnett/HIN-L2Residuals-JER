@@ -28,7 +28,7 @@ cone = "ak4PF"
 [jet_id]
 system = "pp"
 # "analysis" (jetvetomap) | "calibration" (jetvetomap_all, strictest)
-purpose = "calibration"
+veto_map = "jetvetomap_all"
 event_veto_cone = "ak4PF"
 
 [cones]
